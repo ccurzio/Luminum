@@ -67,7 +67,7 @@ fn main() {
 	let port = matches.value_of("port").unwrap_or("4988");
 	let debug = matches.is_present("debug");
 
-	// Check if debug output should be enabled
+	// Start the thing
 	dbout(debug,0,format!("Starting Luminum Server Daemon v{}...",VER).as_str());
 
 	// Figure out location on disk
@@ -206,6 +206,8 @@ fn contains_no_numbers(variable: &str) -> bool {
 	!re.is_match(variable)
 	}
 
+// Debug Output
+// This could be WAY more efficient
 fn dbout(debug: bool, outlvl: i32, output: &str) {
 	let dateformat = StrftimeItems::new("%Y-%m-%d %H:%M:%S");
 	let current_datetime = Local::now();
