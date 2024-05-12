@@ -1,12 +1,12 @@
 # Luminum
 **Autonomous Endpoint Security &amp; Management**  
-by Christopher R. Curzio
+Christopher R. Curzio
 
 ## Introduction
-Welcome to the Luminum project. Luminum is intended to be an open-source autonomous endpoint security and management system. With a focus on security and high performance with a small overall footprint, Luminum is being developed primarily in the [Rust Programming Language](https://www.rust-lang.org/). 
+Welcome to the Luminum project. Luminum is intended to be an open-source autonomous endpoint security and management system with a focus on security and high performance with a small overall footprint. Luminum is being developed primarily in the [Rust Programming Language](https://www.rust-lang.org/). 
 
 ## Capabilities
-Keep in mind that Luminum is still in the initial development stages, so it doesn't really do anything yet. But the goal is to provide a range of endpoint security and management functionality through server and client module components.
+Keep in mind that Luminum is still in the initial development stages, so it doesn't really do anything yet. But the goal is to provide a range of extensible endpoint security and management functionality through the base server/client software plus modular components.
 
 Core features:
 - **Rapid Data Retrieval:** Luminum allows administrators and users to quickly pull information from endpoints simply by constructing questions. You ask the environment for information, and any endpoints with relevent information will answer your questions.
@@ -24,8 +24,8 @@ The current planned modules include:
 The server component is currently set up to be packaged properly for Debian Linux. The endpoint client will run on a range of operating systems and platforms including Linux (Debian, CentOS/Red Hat, Slackware, etc.), Windows, and macOS. AIX support is also planned (eventually). 
 
 ## Development
-Right now I'm working on this thing by myself, but I certainly welcome community support from anyone who wants to chip in. There's no real timeline or roadmap beyond what's included here, however the goal is to provide a secure, complete, and robust endpoint security and management solution that can scale from the smallest home networks up to the largest enterprise networks. 
+Right now I'm working on this thing by myself, but I certainly welcome community support from anyone who wants to chip in. There's no real timeline or roadmap beyond what's included here, however the goal is to provide a secure, complete, lightweight, and robust endpoint security and management solution that can scale from the smallest home networks up to the largest enterprise networks. 
 
 ## About
-- **Luminum:** The name comes from both the chemical element Aluminum (Al) - a strong yet lightweight metal, as well as the concept of shining light into dark areas, or "illuminate." Which is always what decent technology teams want to do with their infrastructure. 
+- **Luminum:** The name comes from both the chemical element Aluminum (Al) - a strong yet lightweight metal, as well as the concept of shining light into dark areas, or to "illuminate." Which is always what decent technology teams should want to do with their infrastructure. 
 - **ccurzio:** My name is Christopher Curzio. I'm originally from New York City, but I currently live in the Atlanta area. I've been a security engineer for around 25 years. I love my current job and I bang on computer machines in a security capacity for a great little company you may have heard of called American Express. Please note that *neither American Express nor any of its subsidiaries are affiliated with the Luminum project in any way, shape, or form.* I develop Luminum entirely in my free time using my own personal equipment. Lord knows I have more than enough in the way of computers and network gear to handle it. I'm a Mac guy for my day-to-day, but when it comes to servers I'm first and foremost a Slackware Linux guy - though I have warmed up a lot to Debian over the past few years. I also write code stuff for iOS. (Are you a film photographer by any chance? Maybe check out [MetaLog](https://apps.apple.com/us/app/metalog/id1475309518) if you're so inclined.)
