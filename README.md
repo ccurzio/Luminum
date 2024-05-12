@@ -16,6 +16,7 @@ Core features:
 
 The current planned modules include:
 - **Query:** The core module of the system which allows administrators and users to retrieve data frome endpoints
+- **Delivery:** Automatically send result data to various logging, reporting, and communication systems
 - **Discovery:** Performs network scanning from the server as well as endpoints to discover devices and running services
 - **Integrity:** Provides file integrity monitoring on endpoints
 - **Inventory:** Allows administrators to compile a full inventory of both network-connected devices as well as software installed on those devices
