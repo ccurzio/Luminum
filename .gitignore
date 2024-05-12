@@ -12,3 +12,16 @@ Cargo.lock
 
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
+
+# Finalized Binaries
+bin/Luminum-Server
+bin/Luminum-Client
+
+# Encryption Stuff
+*.key
+*.crt
+*.pfx
+
+# Wrapped Packages
+*.deb
+*.txz
