@@ -1,0 +1,5 @@
+#!/bin/sh
+#
+# Luminum Client Pre-Installation Script
+
+echo "JERRY! HELLO!"

@@ -1,0 +1,9 @@
+Package: Luminum-Client
+Version: 0.0.1
+Section: base
+Priority: optional
+Architecture: amd64
+Depends: gnupg (>= 2.2.40), perl (>= 5.36.0), cron (>= 3.0), openssl (>= 3.0.11), libssh2-1 (>= 1.10.0), openssh-client (>= 9.2), sqlite3 (>= 3.40.1)
+Maintainer: Christopher R. Curzio <ccurzio@accipiter.org>
+Description: Luminum is an autonomous endpoint security and 
+ management platform.
