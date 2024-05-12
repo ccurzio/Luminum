@@ -15,7 +15,7 @@ Core features:
 - **Web Interface:** Luminum Server provides an intuitive web interface for endpoint and server configuration and management. 
 
 The current planned modules include:
-- **Query:** The core module of the system which allows administrators and users to retrieve data frome endpoints
+- **Query:** The core module of the system which allows administrators and users to retrieve data from endpoints
 - **Delivery:** Automatically send result data to various logging, reporting, and communication systems
 - **Discovery:** Performs network scanning from the server as well as endpoints to discover devices and running services
 - **Integrity:** Provides file integrity monitoring on endpoints
