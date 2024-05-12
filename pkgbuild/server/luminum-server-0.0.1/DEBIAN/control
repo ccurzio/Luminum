@@ -3,7 +3,7 @@ Version: 0.0.1
 Section: base
 Priority: optional
 Architecture: amd64
-Depends: gnupg (>= 2.2.40), libapache2-mod-authnz-external (>= 3.3.2), openssl (>= 3.0.11), sqlite3 (>= 3.40.1), mariadb-server (>= 10.11.6)
+Depends: gnupg (>= 2.2.40), openssl (>= 3.0.11), sqlite3 (>= 3.40.1), mariadb-server (>= 10.11.6)
 Maintainer: Christopher R. Curzio <ccurzio@accipiter.org>
 Description: Luminum is an autonomous endpoint security and 
  management platform.
