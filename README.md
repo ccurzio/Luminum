@@ -21,7 +21,7 @@ The current planned modules include:
 - **Inventory:** Allows administrators to compile a full inventory of both network-connected devices as well as software installed on those devices
 - **Policy:** Enforcement of endpoint security and system management policies
 
-The server component is currently set up to be packaged properly for Debian Linux. The endpoint client will run on a range of operating systems and platforms including Linux (Debian, CentOS/Red Hat/Slackware, etc.), Windows, and macOS. AIX support is also planned (eventually). 
+The server component is currently set up to be packaged properly for Debian Linux. The endpoint client will run on a range of operating systems and platforms including Linux (Debian, CentOS/Red Hat, Slackware, etc.), Windows, and macOS. AIX support is also planned (eventually). 
 
 ## Development
 Right now I'm working on this thing by myself, but I certainly welcome community support from anyone who wants to chip in. There's no real timeline or roadmap beyond what's included here, however the goal is to provide a secure, complete, and robust endpoint security and management solution that can scale from the smallest home networks up to the largest enterprise networks. 
