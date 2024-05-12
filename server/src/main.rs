@@ -207,32 +207,21 @@ fn contains_no_numbers(variable: &str) -> bool {
 	}
 
 // Debug Output
-// This could be WAY more efficient
 fn dbout(debug: bool, outlvl: i32, output: &str) {
 	let dateformat = StrftimeItems::new("%Y-%m-%d %H:%M:%S");
 	let current_datetime = Local::now();
 	let formatted_datetime = current_datetime.format_with_items(dateformat).to_string();
+	let mut etype = String::new();
 
 	if debug {
-		if outlvl == 0 {
-			println!("{} [{}] {}",formatted_datetime,"PROC".cyan(),output);
-			}
-		else if outlvl == 1 {
-			println!("{} [{}] {}",formatted_datetime,"FAIL".red(),output);
-			}
-		else if outlvl == 2 {
-			println!("{} [{}] {}",formatted_datetime,"WARN".yellow(),output);
-			}
-		else if outlvl == 3 {
-			println!("{} [{}] {}",formatted_datetime," OK ".green(),output);
-			}
-		else if outlvl == 4 {
-			println!("{} [{}] {}",formatted_datetime,"INFO",output);
-			}
+		if outlvl == 0 { etype = "PROC".cyan().to_string(); }
+		else if outlvl == 1 { etype = "FAIL".red().to_string(); }
+		else if outlvl == 2 { etype = "WARN".yellow().to_string(); }
+		else if outlvl == 3 { etype = " OK ".green().to_string(); }
+		else if outlvl == 4 { etype = "INFO".to_string(); }
+		println!("{} [{}] {}",formatted_datetime,etype,output);
 		}
 	else {
-		if outlvl == 1 {
-			println!("{}",output);
-			}
+		if outlvl == 1 { println!("{}",output); }
 		}
 	}
