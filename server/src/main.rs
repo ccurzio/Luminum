@@ -62,7 +62,7 @@ fn main() {
 	// Set variables based on command-line arguments or use defaults
 	let cert_file = matches.value_of("certificate").unwrap_or("/opt/luminum/LuminumServer/conf/luminum.crt");
 	let key_file = matches.value_of("key").unwrap_or("/opt/luminum/LuminumServer/conf/luminum.key");
-	let identity_file = matches.value_of("identity").unwrap_or("/opt/luminum/LuminumServer/conf/identity.pfx");
+	let identity_file = matches.value_of("identity").unwrap_or("/opt/luminum/LuminumServer/conf/luminum.pfx");
 	let address = matches.value_of("address").unwrap_or("127.0.0.1");
 	let port = matches.value_of("port").unwrap_or("4988");
 	let debug = matches.is_present("debug");
@@ -149,6 +149,7 @@ fn main() {
 		r.store(false, Ordering::SeqCst);
 		println!();
 		dbout(debug,0,"BREAK");
+		dbout(debug,0,format!("Terminating Server Listener Process.").as_str());
 		process::exit(1);
 		}).expect("Error creating break handler");
 
