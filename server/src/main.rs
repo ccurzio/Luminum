@@ -75,7 +75,10 @@ fn main() {
 	let setup = matches.is_present("setup");
 	let debug = matches.is_present("debug");
 
-	if setup { daemonsetup(); }
+	if setup {
+		if fs::metadata("/opt/luminum/LuminumServer/conf/server.conf.db").is_err() { daemonsetup(); }
+		else { dbout(debug,1,format!("Server configuration already exists. Aborting.").as_str()); }
+		}
 
 	// Startup
 	dbout(debug,0,format!("Starting Luminum Server Daemon v{}...",VER).as_str());
