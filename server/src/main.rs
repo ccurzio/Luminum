@@ -4,6 +4,7 @@ use native_tls::{Identity, TlsAcceptor};
 use std::env;
 use std::fs;
 use std::net::{TcpListener, SocketAddr, TcpStream};
+use std::io;
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -12,6 +13,7 @@ use clap::{Arg, App};
 use regex::Regex;
 use colored::Colorize;
 use rusqlite::{params, Connection, Result};
+use std::net::Ipv4Addr;
 
 extern crate regex;
 
@@ -229,9 +231,26 @@ fn contains_no_numbers(variable: &str) -> bool {
 
 // Daemon Setup
 fn daemonsetup() {
-	println!("JERRY! HELLO!");
+	let mut ipaddr = String::new();
+	println!("Luminum Server Daemon Configuration\n");
+
+	print!("Enter server IP address: ");
+
+	io::stdout().flush().unwrap();
+	io::stdin()
+		.read_line(&mut ipaddr)
+		.expect("Error reading user input");
+	let ipaddr = ipaddr.trim();
+
+	if (!is_valid_ipv4_address(ipaddr)) { println!("Invalid IP address."); }
+	else { println!("Value: {}", ipaddr); }
 	process::exit(0);
 	}
+
+// IPv4 Address Validation
+fn is_valid_ipv4_address(ip: &str) -> bool {
+    ip.parse::<Ipv4Addr>().is_ok()
+}
 
 // Debug Output
 fn dbout(debug: bool, outlvl: i32, output: &str) {
