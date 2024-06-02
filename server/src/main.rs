@@ -20,8 +20,8 @@ use rusqlite::{params, Connection, Result};
 use std::net::Ipv4Addr;
 use std::net::Ipv6Addr;
 use openssl::rsa::Rsa;
-use openssl::pkey::{PKey, Private};
-use openssl::symm::{Cipher, encrypt};
+use openssl::pkey::PKey;
+use openssl::symm::Cipher;
 use openssl::error::ErrorStack;
 
 const VER: &str = "0.0.1";
@@ -323,8 +323,8 @@ fn generate_private_key(ui_keypass: &str) -> Result<(), ErrorStack> {
 
 	let mut keyfile = File::create(DKPATH).expect("Could not create file");
 
-	let pub_key: Vec<u8> = pkey.public_key_to_pem().unwrap();
-	let prv_key: Vec<u8> = pkey.private_key_to_pem_pkcs8().unwrap();
+	//let pub_key: Vec<u8> = pkey.public_key_to_pem().unwrap();
+	//let prv_key: Vec<u8> = pkey.private_key_to_pem_pkcs8().unwrap();
 	let encrypted_key = pkey.private_key_to_pem_pkcs8_passphrase(Cipher::aes_256_cbc(), ui_keypass.as_bytes()).expect("Failed to encrypt private key");
 	keyfile.write_all(str::from_utf8(encrypted_key.as_slice()).unwrap().as_bytes()).expect("Could not write key data to file");
 
@@ -350,14 +350,3 @@ fn dbout(debug: bool, outlvl: i32, output: &str) {
 		if outlvl == 1 { println!("{}",output); }
 		}
 	}
-
-fn pad_or_truncate(data: &[u8], length: usize) -> Vec<u8> {
-    let mut padded_data = Vec::with_capacity(length);
-    if data.len() >= length {
-        padded_data.extend_from_slice(&data[..length]);
-    } else {
-        padded_data.extend_from_slice(data);
-        padded_data.resize(length, 0); // Pad with null bytes
-    }
-    padded_data
-}
