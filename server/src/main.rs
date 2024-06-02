@@ -227,6 +227,7 @@ fn contains_no_numbers(variable: &str) -> bool {
 // Daemon Setup
 fn daemonsetup() {
 	println!("JERRY! HELLO!");
+	process::exit(0);
 	}
 
 // Debug Output
