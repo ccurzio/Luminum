@@ -14,6 +14,7 @@ use regex::Regex;
 use colored::Colorize;
 use rusqlite::{params, Connection, Result};
 use std::net::Ipv4Addr;
+use std::net::Ipv6Addr;
 
 extern crate regex;
 
@@ -242,7 +243,7 @@ fn daemonsetup() {
 		.expect("Error reading user input");
 	let ipaddr = ipaddr.trim();
 
-	if (!is_valid_ipv4_address(ipaddr)) { println!("Invalid IP address."); }
+	if (!is_valid_ipv4_address(ipaddr) && !is_valid_ipv6_address(ipaddr)) { println!("Invalid IP address."); }
 	else { println!("Value: {}", ipaddr); }
 	process::exit(0);
 	}
@@ -250,6 +251,11 @@ fn daemonsetup() {
 // IPv4 Address Validation
 fn is_valid_ipv4_address(ip: &str) -> bool {
     ip.parse::<Ipv4Addr>().is_ok()
+}
+
+// IPv6 Address Validation
+fn is_valid_ipv6_address(ip: &str) -> bool {
+    ip.parse::<Ipv6Addr>().is_ok()
 }
 
 // Debug Output
