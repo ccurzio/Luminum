@@ -11,6 +11,7 @@ use std::process;
 use clap::{Arg, App};
 use regex::Regex;
 use colored::Colorize;
+use rusqlite::{params, Connection, Result};
 
 extern crate regex;
 
@@ -20,7 +21,7 @@ fn main() {
 	// Parse command-line arguments
 	let matches = App::new("Luminum Server Daemon")
 		.version(VER)
-		.author("Christopher R. Curzio")
+		.author("Christopher R. Curzio <ccurzio@accipiter.org>")
 	.arg(Arg::with_name("certificate")
 		.short('c')
 		.long("certificate")
@@ -39,18 +40,24 @@ fn main() {
 		.value_name("IDENTITY_FILE")
 		.help("Specifies the path to the identity file")
 		.takes_value(true))
-	.arg(Arg::with_name("port")
-		.short('p')
-		.long("port")
-		.value_name("PORT")
-		.help("Specifies the network data port to use")
-		.takes_value(true))
 	.arg(Arg::with_name("address")
 		.short('a')
 		.long("address")
 		.value_name("ADDRESS")
 		.help("Specifies the network IP address to bind to")
 		.takes_value(true))
+	.arg(Arg::with_name("port")
+		.short('p')
+		.long("port")
+		.value_name("PORT")
+		.help("Specifies the network data port to use")
+		.takes_value(true))
+	.arg(Arg::with_name("setup")
+		.short('s')
+		.long("setup")
+		.value_name("SETUP")
+		.help("Set daemon configuration parameters")
+		.takes_value(false))
 	.arg(Arg::with_name("debug")
 		.short('d')
 		.long("debug")
@@ -64,11 +71,21 @@ fn main() {
 	let key_file = matches.value_of("key").unwrap_or("/opt/luminum/LuminumServer/conf/luminum.key");
 	let identity_file = matches.value_of("identity").unwrap_or("/opt/luminum/LuminumServer/conf/luminum.pfx");
 	let address = matches.value_of("address").unwrap_or("127.0.0.1");
-	let port = matches.value_of("port").unwrap_or("4988");
+	let port = matches.value_of("port").unwrap_or("10465");
+	let setup = matches.is_present("setup");
 	let debug = matches.is_present("debug");
 
-	// Start the thing
+	if setup { daemonsetup(); }
+
+	// Startup
 	dbout(debug,0,format!("Starting Luminum Server Daemon v{}...",VER).as_str());
+	if fs::metadata("/opt/luminum/LuminumServer/conf/server.conf.db").is_ok() {
+		let confconn = Connection::open("/opt/luminum/LuminumServer/conf/server.conf.db");
+		}
+	else {
+		dbout(debug,1,format!("Configuration database not found. (Run with --setup)").as_str());
+		process::exit(1);
+		}
 
 	// Figure out location on disk
 	match env::current_exe() {
@@ -96,7 +113,7 @@ fn main() {
 		process::exit(1);
 		}
 	else {
-		dbout(debug,3,format!("Certificate loaded: {}",cert_file).as_str());
+		dbout(debug,3,format!("Using certificate: {}",cert_file).as_str());
 		}
 
 	if !file_exists(key_file) {
@@ -104,7 +121,7 @@ fn main() {
 		return;
 		}
 	else {
-		dbout(debug,3,format!("Private key loaded: {}",key_file).as_str());
+		dbout(debug,3,format!("Using private key: {}",key_file).as_str());
 		}
 
 	if !file_exists(identity_file) {
@@ -112,14 +129,14 @@ fn main() {
 		return;
 		}
 	else {
-		dbout(debug,3,format!("Identity loaded: {}",identity_file).as_str());
+		dbout(debug,3,format!("Using identity: {}",identity_file).as_str());
 		}
 
 	// Load TLS certificate, private key, and identity files
 	let identity = match Identity::from_pkcs12(&fs::read(identity_file).unwrap(), "PASSWORD_GOES_HERE") {
 		Ok(identity) => identity,
 		Err(err) => {
-			eprintln!("Error loading TLS identity: {}", err);
+			dbout(debug,1,format!("Error loading TLS identity: {}", err).as_str());
 			return;
 			}
 		};
@@ -128,7 +145,7 @@ fn main() {
 	let acceptor = match TlsAcceptor::new(identity) {
 		Ok(acceptor) => acceptor,
 		Err(err) => {
-			eprintln!("Error creating TLS handler: {}", err);
+			dbout(debug,1,format!("Error creating TLS handler: {}", err).as_str());
 			return;
 			}
 		};
@@ -137,7 +154,7 @@ fn main() {
 	let listener = match TcpListener::bind(addr) {
 		Ok(listener) => listener,
 		Err(err) => {
-			eprintln!("Failed to bind to port {port}: {}", err);
+			dbout(debug,1,format!("Failed to bind to port {port}: {}", err).as_str());
 			return;
 			}
 		};
@@ -149,7 +166,7 @@ fn main() {
 		r.store(false, Ordering::SeqCst);
 		println!();
 		dbout(debug,0,"BREAK");
-		dbout(debug,0,format!("Terminating Server Listener Process.").as_str());
+		dbout(debug,0,format!("Terminating Luminum Server Daemon.").as_str());
 		process::exit(1);
 		}).expect("Error creating break handler");
 
@@ -164,7 +181,7 @@ fn main() {
 				let tls_stream = match acceptor.accept(stream) {
 					Ok(stream) => stream,
 					Err(err) => {
-						eprintln!("Error accepting TLS connection: {}", err);
+						dbout(debug,2,format!("Error accepting TLS connection: {}", err).as_str());
 						continue;
 						}
 					};
@@ -175,7 +192,7 @@ fn main() {
 			Err(err) => { dbout(debug,2,format!("Error accepting connection: {}", err).as_str()); }
 			}
 		}
-	println!("Luminum server listener stopped.");
+	dbout(debug,0,format!("Luminum server daemon stopped.").as_str());
 	}
 
 fn handle_client(mut stream: native_tls::TlsStream<TcpStream>) {
@@ -205,6 +222,11 @@ fn file_exists(path: &str) -> bool {
 fn contains_no_numbers(variable: &str) -> bool {
 	let re = Regex::new(r"\d").unwrap();
 	!re.is_match(variable)
+	}
+
+// Daemon Setup
+fn daemonsetup() {
+	println!("JERRY! HELLO!");
 	}
 
 // Debug Output
