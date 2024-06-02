@@ -232,19 +232,55 @@ fn contains_no_numbers(variable: &str) -> bool {
 
 // Daemon Setup
 fn daemonsetup() {
-	let mut ipaddr = String::new();
 	println!("Luminum Server Daemon Configuration\n");
 
-	print!("Enter server IP address: ");
+	let mut address = String::new();
+	let port: u16;
 
-	io::stdout().flush().unwrap();
-	io::stdin()
-		.read_line(&mut ipaddr)
-		.expect("Error reading user input");
-	let ipaddr = ipaddr.trim();
+	loop {
+		let mut ui_address = String::new();
+		print!("Enter server IP address: ");
+		io::stdout().flush().unwrap();
 
-	if (!is_valid_ipv4_address(ipaddr) && !is_valid_ipv6_address(ipaddr)) { println!("Invalid IP address."); }
-	else { println!("Value: {}", ipaddr); }
+		io::stdin()
+			.read_line(&mut ui_address)
+			.expect("Error reading user input");
+		let ui_address = ui_address.trim();
+
+		if is_valid_ipv4_address(ui_address) || is_valid_ipv6_address(ui_address) {
+			address = ui_address.to_string();
+			break;
+			}
+		else {
+			println!("Invalid IP address: {}\n", ui_address);
+			}
+		}
+
+	loop {
+		let default_port: u16 = 10465;
+		let mut ui_port = String::new();
+
+		print!("Enter server port [{}]: ",default_port);
+		io::stdout().flush().unwrap();
+
+		io::stdin().read_line(&mut ui_port).unwrap();
+		let ui_port = ui_port.trim();
+		let num = if ui_port.is_empty() { default_port }
+		else {
+			match ui_port.parse::<u16>() {
+				Ok(num) if num >= 1 && num <= 65535 => num,
+				_ => {
+					println!("Invalid port: {}\n", ui_port);
+					continue;
+					}
+				}
+			};
+		port = num;
+		break;
+		}
+
+	println!("Server IP address: {}", address);
+	println!("Server Port: {}", port);
 	process::exit(0);
 	}
 
