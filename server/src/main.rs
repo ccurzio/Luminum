@@ -1,24 +1,34 @@
+extern crate regex;
+extern crate base64;
+
 use chrono::Local;
 use chrono::format::strftime::StrftimeItems;
 use native_tls::{Identity, TlsAcceptor};
 use std::env;
-use std::fs;
-use std::net::{TcpListener, SocketAddr, TcpStream};
-use std::io;
-use std::io::{Read, Write};
+use std::str;
+use std::fs::{self, File};
+use std::io::{self, Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::process;
+use std::net::{TcpListener, SocketAddr, TcpStream};
 use clap::{Arg, App};
 use regex::Regex;
 use colored::Colorize;
+use rpassword;
 use rusqlite::{params, Connection, Result};
 use std::net::Ipv4Addr;
 use std::net::Ipv6Addr;
-
-extern crate regex;
+use openssl::rsa::Rsa;
+use openssl::pkey::{PKey, Private};
+use openssl::symm::{Cipher, encrypt};
+use openssl::error::ErrorStack;
 
 const VER: &str = "0.0.1";
+const DKPATH: &str = "/opt/luminum/LuminumServer/conf/luminum.key";
+const DCPATH: &str = "/opt/luminum/LuminumServer/conf/luminum.crt";
+const DIPATH: &str = "/opt/luminum/LuminumServer/conf/luminum.pfx";
+const DPORT: u16 = 10465;
 
 fn main() {
 	// Parse command-line arguments
@@ -70,9 +80,9 @@ fn main() {
 	.get_matches();
 
 	// Set variables based on command-line arguments or use defaults
-	let cert_file = matches.value_of("certificate").unwrap_or("/opt/luminum/LuminumServer/conf/luminum.crt");
-	let key_file = matches.value_of("key").unwrap_or("/opt/luminum/LuminumServer/conf/luminum.key");
-	let identity_file = matches.value_of("identity").unwrap_or("/opt/luminum/LuminumServer/conf/luminum.pfx");
+	let key_file = matches.value_of("key").unwrap_or(DKPATH);
+	let cert_file = matches.value_of("certificate").unwrap_or(DCPATH);
+	let identity_file = matches.value_of("identity").unwrap_or(DIPATH);
 	let address = matches.value_of("address").unwrap_or("127.0.0.1");
 	let port = matches.value_of("port").unwrap_or("10465");
 	let setup = matches.is_present("setup");
@@ -236,6 +246,7 @@ fn daemonsetup() {
 
 	let mut address = String::new();
 	let port: u16;
+	let mut passphrase = String::new();
 
 	loop {
 		let mut ui_address = String::new();
@@ -257,18 +268,17 @@ fn daemonsetup() {
 		}
 
 	loop {
-		let default_port: u16 = 10465;
 		let mut ui_port = String::new();
 
-		print!("Enter server port [{}]: ",default_port);
+		print!("Enter server port [{}]: ",DPORT);
 		io::stdout().flush().unwrap();
 
 		io::stdin().read_line(&mut ui_port).unwrap();
 		let ui_port = ui_port.trim();
-		let num = if ui_port.is_empty() { default_port }
+		let num = if ui_port.is_empty() { DPORT }
 		else {
 			match ui_port.parse::<u16>() {
-				Ok(num) if num >= 1 && num <= 65535 => num,
+				Ok(num) if num >= 1 => num,
 				_ => {
 					println!("Invalid port: {}\n", ui_port);
 					continue;
@@ -279,20 +289,47 @@ fn daemonsetup() {
 		break;
 		}
 
+	if fs::metadata(DKPATH).is_err() {
+		println!("\nServer private key does not exist. Creating...");
+		let keypass = rpassword::read_password_from_tty(Some("Enter passphrase for private key: ")).expect("Error reading passphrase input");
+		let _ = generate_private_key(keypass.as_str());
+		passphrase = keypass;
+		}
+
+	if fs::metadata(DCPATH).is_err() {
+		println!("No cert");
+		}
+
 	println!("Server IP address: {}", address);
 	println!("Server Port: {}", port);
+	println!("Private Key Passphrase: {}", passphrase);
 	process::exit(0);
 	}
 
 // IPv4 Address Validation
 fn is_valid_ipv4_address(ip: &str) -> bool {
-    ip.parse::<Ipv4Addr>().is_ok()
-}
+	ip.parse::<Ipv4Addr>().is_ok()
+	}
 
 // IPv6 Address Validation
 fn is_valid_ipv6_address(ip: &str) -> bool {
-    ip.parse::<Ipv6Addr>().is_ok()
-}
+	ip.parse::<Ipv6Addr>().is_ok()
+	}
+
+// Create Private Key File
+fn generate_private_key(ui_keypass: &str) -> Result<(), ErrorStack> {
+	let rsa = Rsa::generate(2048).unwrap();
+	let pkey = PKey::from_rsa(rsa).unwrap();
+
+	let mut keyfile = File::create(DKPATH).expect("Could not create file");
+
+	let pub_key: Vec<u8> = pkey.public_key_to_pem().unwrap();
+	let prv_key: Vec<u8> = pkey.private_key_to_pem_pkcs8().unwrap();
+	let encrypted_key = pkey.private_key_to_pem_pkcs8_passphrase(Cipher::aes_256_cbc(), ui_keypass.as_bytes()).expect("Failed to encrypt private key");
+	keyfile.write_all(str::from_utf8(encrypted_key.as_slice()).unwrap().as_bytes()).expect("Could not write key data to file");
+
+	Ok(())
+	}
 
 // Debug Output
 fn dbout(debug: bool, outlvl: i32, output: &str) {
@@ -313,3 +350,14 @@ fn dbout(debug: bool, outlvl: i32, output: &str) {
 		if outlvl == 1 { println!("{}",output); }
 		}
 	}
+
+fn pad_or_truncate(data: &[u8], length: usize) -> Vec<u8> {
+    let mut padded_data = Vec::with_capacity(length);
+    if data.len() >= length {
+        padded_data.extend_from_slice(&data[..length]);
+    } else {
+        padded_data.extend_from_slice(data);
+        padded_data.resize(length, 0); // Pad with null bytes
+    }
+    padded_data
+}
