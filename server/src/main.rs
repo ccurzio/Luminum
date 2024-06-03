@@ -1,3 +1,4 @@
+extern crate short_crypt;
 extern crate regex;
 extern crate base64;
 
@@ -16,6 +17,7 @@ use clap::{Arg, App};
 use regex::Regex;
 use colored::Colorize;
 use rpassword;
+use short_crypt::ShortCrypt;
 use rusqlite::{params, Connection, Result};
 use std::net::Ipv4Addr;
 use std::net::Ipv6Addr;
@@ -23,9 +25,15 @@ use openssl::rsa::Rsa;
 use openssl::pkey::PKey;
 use openssl::symm::Cipher;
 use openssl::error::ErrorStack;
+use openssl::x509::{X509NameBuilder, X509};
+use openssl::asn1::Asn1Time;
+use openssl::nid::Nid;
 
 const VER: &str = "0.0.1";
+const CFGKEY: &str = "config_encryption_password";
+const CFGPATH: &str = "/opt/luminum/LuminumServer/conf/server.conf.db";
 const DKPATH: &str = "/opt/luminum/LuminumServer/conf/luminum.key";
+const DPPATH: &str = "/opt/luminum/LuminumServer/conf/luminum.pub";
 const DCPATH: &str = "/opt/luminum/LuminumServer/conf/luminum.crt";
 const DIPATH: &str = "/opt/luminum/LuminumServer/conf/luminum.pfx";
 const DPORT: u16 = 10465;
@@ -89,14 +97,14 @@ fn main() {
 	let debug = matches.is_present("debug");
 
 	if setup {
-		if fs::metadata("/opt/luminum/LuminumServer/conf/server.conf.db").is_err() { daemonsetup(); }
+		if fs::metadata(CFGPATH).is_err() { daemonsetup(); }
 		else { dbout(debug,1,format!("Server configuration already exists. Aborting.").as_str()); }
 		}
 
 	// Startup
 	dbout(debug,0,format!("Starting Luminum Server Daemon v{}...",VER).as_str());
-	if fs::metadata("/opt/luminum/LuminumServer/conf/server.conf.db").is_ok() {
-		let confconn = Connection::open("/opt/luminum/LuminumServer/conf/server.conf.db");
+	if fs::metadata(CFGPATH).is_ok() {
+		let confconn = Connection::open(CFGPATH).expect("Error: Could not open configuration database.");
 		}
 	else {
 		dbout(debug,1,format!("Configuration database not found. (Run with --setup)").as_str());
@@ -242,7 +250,8 @@ fn contains_no_numbers(variable: &str) -> bool {
 
 // Daemon Setup
 fn daemonsetup() {
-	println!("Luminum Server Daemon Configuration\n");
+	println!("Luminum Server Daemon\nby Christopher R. Curzio <ccurzio@accipiter.org>\n");
+	println!("Daemon Configuration\n--------------------");
 
 	let mut address = String::new();
 	let port: u16;
@@ -290,19 +299,44 @@ fn daemonsetup() {
 		}
 
 	if fs::metadata(DKPATH).is_err() {
-		println!("\nServer private key does not exist. Creating...");
-		let keypass = rpassword::read_password_from_tty(Some("Enter passphrase for private key: ")).expect("Error reading passphrase input");
-		let _ = generate_private_key(keypass.as_str());
-		passphrase = keypass;
+		println!("\nServer key pair does not exist. Creating...");
+		loop {
+			let keypass = rpassword::read_password_from_tty(Some("Enter passphrase for private key: ")).expect("Error reading passphrase input");
+			let vkeypass = rpassword::read_password_from_tty(Some("Verify passphrase: ")).expect("Error reading verify passphrase input");
+			if keypass != vkeypass {
+				println!("Error: Passphrase mismatch\n");
+				continue;
+				}
+			else {
+				let _ = generate_private_key(keypass.as_str());
+				passphrase = keypass;
+				break;
+				}
+			}
+		println!("Wrote private key: {}",DKPATH);
+		println!("Wrote public key: {}",DPPATH);
 		}
 
 	if fs::metadata(DCPATH).is_err() {
-		println!("No cert");
+		println!("\nServer certificate does not exist. Creating...");
 		}
+
+	let sc = ShortCrypt::new(CFGKEY);
+	let (_, crypt_passphrase) = sc.encrypt(&passphrase);
+	let encoded_crypt = base64::encode(&crypt_passphrase);
+
+	let confconn = Connection::open(CFGPATH).expect("Error: Could not initialize configuration database");
+	confconn.execute("create table if not exists CONFIG ( KEY text not null, VALUE text not null )",[]).expect("Error: Could not create CONFIG table in configuration database");
+	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)",&[&"IPADDR",address.as_str()]).expect("Error: Could not insert IPADDR into CONFIG table.");
+	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)",&[&"PORT",port.to_string().as_str()]).expect("Error: Could not insert PORT into CONFIG table.");
+	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)",&[&"PKPASS",encoded_crypt.as_str()]).expect("Error: Could not insert PKPASS into CONFIG table.");
+	confconn.close().unwrap();
 
 	println!("Server IP address: {}", address);
 	println!("Server Port: {}", port);
-	println!("Private Key Passphrase: {}", passphrase);
+	println!("Private Key: {}", DKPATH);
+	println!("Public Key: {}", DPPATH);
+	println!("Certificate: {}", DCPATH);
 	process::exit(0);
 	}
 
@@ -316,20 +350,46 @@ fn is_valid_ipv6_address(ip: &str) -> bool {
 	ip.parse::<Ipv6Addr>().is_ok()
 	}
 
-// Create Private Key File
+// Create Private/Public Key PEM Files
 fn generate_private_key(ui_keypass: &str) -> Result<(), ErrorStack> {
 	let rsa = Rsa::generate(2048).unwrap();
 	let pkey = PKey::from_rsa(rsa).unwrap();
 
-	let mut keyfile = File::create(DKPATH).expect("Could not create file");
+	let mut keyfile = File::create(DKPATH).expect("Could not create private key file");
+	let mut pubkeyfile = File::create(DPPATH).expect("Could not create public key file");
 
-	//let pub_key: Vec<u8> = pkey.public_key_to_pem().unwrap();
-	//let prv_key: Vec<u8> = pkey.private_key_to_pem_pkcs8().unwrap();
+	let prv_key = pkey.private_key_to_pem_pkcs8().unwrap();
+	let pub_key = pkey.public_key_to_pem().unwrap();
 	let encrypted_key = pkey.private_key_to_pem_pkcs8_passphrase(Cipher::aes_256_cbc(), ui_keypass.as_bytes()).expect("Failed to encrypt private key");
-	keyfile.write_all(str::from_utf8(encrypted_key.as_slice()).unwrap().as_bytes()).expect("Could not write key data to file");
+	keyfile.write_all(str::from_utf8(encrypted_key.as_slice()).unwrap().as_bytes()).expect("Failed to write private key data to file");
+	pubkeyfile.write_all(str::from_utf8(pub_key.as_slice()).unwrap().as_bytes()).expect("Failed to write public key data to file");
+	Ok(())
+	}
+
+/*
+fn generate_certificate() -> Result<(), ErrorStack> {
+	let mut name_builder = X509NameBuilder::new().expect("Failed to create X509NameBuilder");
+	name_builder.append_entry_by_nid(Nid::COMMONNAME, "example.com").expect("Failed to add CN to X509Name");
+	let name = name_builder.build();
+
+	let mut x509 = X509::builder().expect("Failed to create X509 builder");
+	x509.set_version(2).expect("Failed to set version");
+	x509.set_subject_name(&name).expect("Failed to set subject name");
+	x509.set_issuer_name(&name).expect("Failed to set issuer name");
+	x509.set_pubkey(&pub_key).expect("Failed to set public key");
+
+	let not_before = Asn1Time::days_from_now(0).expect("Failed to set not before time");
+	let not_after = Asn1Time::days_from_now(365).expect("Failed to set not after time");
+
+	x509.set_not_before(&not_before).expect("Failed to set not before");
+	x509.set_not_after(&not_after).expect("Failed to set not after");
+	x509.sign(&pub_key, openssl::hash::MessageDigest::sha256()).expect("Failed to sign certificate");
+
+	let certificate = x509.build();
 
 	Ok(())
 	}
+*/
 
 // Debug Output
 fn dbout(debug: bool, outlvl: i32, output: &str) {
