@@ -32,7 +32,6 @@ use openssl::x509::{X509NameBuilder, X509};
 use openssl::hash::MessageDigest;
 use openssl::asn1::Asn1Time;
 use openssl::nid::Nid;
-use serde_json::json;
 use serde_json::Value;
 
 const VER: &str = "0.0.1";
@@ -238,7 +237,7 @@ fn main() {
 	// Listen for incoming connections
 	while running.load(Ordering::SeqCst) {
 		match listener.accept() {
-			Ok((stream, _)) => {
+			Ok((stream, peer_addr)) => {
 				// Accept TLS connection
 				let tls_stream = match acceptor.accept(stream) {
 					Ok(stream) => stream,
@@ -247,9 +246,9 @@ fn main() {
 						continue;
 						}
 					};
-
 				// Handle the connection
-				handle_client(tls_stream);
+				let peer_addr_str = peer_addr.to_string();
+				handle_client(peer_addr_str,tls_stream,debug);
 				}
 			Err(err) => { dbout(debug,2,format!("Error accepting connection: {}", err).as_str()); }
 			}
@@ -257,7 +256,7 @@ fn main() {
 	dbout(debug,0,format!("Luminum server daemon stopped.").as_str());
 	}
 
-fn handle_client(mut stream: native_tls::TlsStream<TcpStream>) {
+fn handle_client(peer_addr: String, mut stream: native_tls::TlsStream<TcpStream>, debug: bool) {
 	// Buffer to store incoming data
 	let mut buffer = [0; 1024];
 
@@ -265,20 +264,26 @@ fn handle_client(mut stream: native_tls::TlsStream<TcpStream>) {
 	match stream.read(&mut buffer) {
 		Ok(n) => {
 			let data_raw = String::from_utf8_lossy(&buffer[..n]);
-			let data = data_raw.as_ref();
-			//let data = r#"{"product": "Luminum Client","version": "0.0.1","module": "Query","data": {"content": "","signature": ""}}"#;
-			let v: Value = serde_json::from_str(data).expect("Error: Could not parse received data");
-			if v["product"] == "Luminum Client" {
-				println!("{}",v["data"]["content"]);
-				}
-
-			// Echo the data back to the client
-			//match stream.write_all(&buffer[..n]) {
-			//	Ok(_) => println!("Echoed back to client"),
-			//	Err(e) => eprintln!("Failed to echo back: {}", e),
-			//	}
-			}
+			handle_json(peer_addr,data_raw.as_ref(),debug);
+			},
 		Err(e) => eprintln!("Error reading from stream: {}", e),
+		}
+	}
+
+fn handle_json(peer_addr: String, data: &str, debug: bool) {
+	// {"product": "Luminum Client","version": "0.0.1","module": "Query","data": {"content": "","signature": ""}}
+	//let v: Value = serde_json::from_str(data);
+	match serde_json::from_str::<Value>(data) {
+		Ok(v) => {
+			if v["product"] == "Luminum Client" {
+				if let Some(content) = v["data"].get("content") {
+					println!("{}", content);
+					}
+				}
+			}
+		Err(e) => {
+			dbout(debug,2,format!("Malformed data in stream from {}",peer_addr).as_str());
+			}
 		}
 	}
 
@@ -469,7 +474,10 @@ fn generate_certificate(ui_keypass: &str) -> Result<(), ErrorStack> {
 	let serial_number = serial_number.to_asn1_integer().unwrap();
 
 	let mut name_builder = X509NameBuilder::new().unwrap();
+	name_builder.append_entry_by_nid(Nid::COUNTRYNAME, cert_co).expect("Failed to add country to X509Name");
 	name_builder.append_entry_by_nid(Nid::STATEORPROVINCENAME, cert_st).expect("Failed to add state to X509Name");
+	name_builder.append_entry_by_nid(Nid::LOCALITYNAME, cert_lc).expect("Failed to add city to X509Name");
+	name_builder.append_entry_by_nid(Nid::ORGANIZATIONNAME, cert_on).expect("Failed to add organization to X509Name");
 	name_builder.append_entry_by_nid(Nid::COMMONNAME, cert_cn).expect("Failed to add CN to X509Name");
 
 	let mut x509 = X509::builder().expect("Failed to create X509 builder");
