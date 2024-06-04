@@ -5,27 +5,19 @@ use notify::{RecommendedWatcher, RecursiveMode, Watcher, Config, Result};
 use std::sync::mpsc::channel;
 
 fn main() -> Result<()> {
-	match pkg_config::probe_library("fsevent") {
-		Ok(_) => {
-			let (tx, rx) = channel();
-			let mut watcher: RecommendedWatcher = Watcher::new(tx, Config::default())?;
+	let (tx, rx) = channel();
+	let mut watcher: RecommendedWatcher = Watcher::new(tx, Config::default())?;
 
-			let path = PathBuf::from(".");
+	let path = PathBuf::from(".");
 
-			let _ = watcher.watch(&path, RecursiveMode::Recursive);
+	let _ = watcher.watch(&path, RecursiveMode::Recursive);
 
-			loop {
-				match rx.recv() {
-					Ok(event) => println!("Event: {:?}",event),
-					Err(e) => println!("Error: {:?}",e)
-					}
-				}
-			}
-		Err(_) => {
-			hashscan();
+	loop {
+		match rx.recv() {
+			Ok(event) => println!("Event: {:?}",event),
+			Err(e) => println!("Error: {:?}",e)
 			}
 		}
-	Ok(())
 	}
 
 fn hashscan() {
