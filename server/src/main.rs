@@ -32,6 +32,8 @@ use openssl::x509::{X509NameBuilder, X509};
 use openssl::hash::MessageDigest;
 use openssl::asn1::Asn1Time;
 use openssl::nid::Nid;
+use serde_json::json;
+use serde_json::Value;
 
 const VER: &str = "0.0.1";
 const CFGKEY: &str = "config_encryption_password";
@@ -262,14 +264,19 @@ fn handle_client(mut stream: native_tls::TlsStream<TcpStream>) {
 	// Read data from the stream
 	match stream.read(&mut buffer) {
 		Ok(n) => {
-			// Print received data
-			println!("Received {} bytes: {}", n, String::from_utf8_lossy(&buffer[..n]));
+			let data_raw = String::from_utf8_lossy(&buffer[..n]);
+			let data = data_raw.as_ref();
+			//let data = r#"{"product": "Luminum Client","version": "0.0.1","module": "Query","data": {"content": "","signature": ""}}"#;
+			let v: Value = serde_json::from_str(data).expect("Error: Could not parse received data");
+			if v["product"] == "Luminum Client" {
+				println!("{}",v["data"]["content"]);
+				}
 
 			// Echo the data back to the client
-			match stream.write_all(&buffer[..n]) {
-				Ok(_) => println!("Echoed back to client"),
-				Err(e) => eprintln!("Failed to echo back: {}", e),
-				}
+			//match stream.write_all(&buffer[..n]) {
+			//	Ok(_) => println!("Echoed back to client"),
+			//	Err(e) => eprintln!("Failed to echo back: {}", e),
+			//	}
 			}
 		Err(e) => eprintln!("Error reading from stream: {}", e),
 		}
