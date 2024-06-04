@@ -4,7 +4,7 @@ extern crate base64;
 
 use chrono::Local;
 use chrono::format::strftime::StrftimeItems;
-use native_tls::{Identity, TlsAcceptor};
+use std::collections::HashMap;
 use std::env;
 use std::str;
 use std::fs::{self, File};
@@ -21,11 +21,15 @@ use short_crypt::ShortCrypt;
 use rusqlite::{params, Connection, Result};
 use std::net::Ipv4Addr;
 use std::net::Ipv6Addr;
+use native_tls::{Identity, TlsAcceptor};
+use openssl::bn::BigNum;
 use openssl::rsa::Rsa;
 use openssl::pkey::PKey;
 use openssl::symm::Cipher;
 use openssl::error::ErrorStack;
+use openssl::pkcs12::Pkcs12;
 use openssl::x509::{X509NameBuilder, X509};
+use openssl::hash::MessageDigest;
 use openssl::asn1::Asn1Time;
 use openssl::nid::Nid;
 
@@ -37,6 +41,11 @@ const DPPATH: &str = "/opt/luminum/LuminumServer/conf/luminum.pub";
 const DCPATH: &str = "/opt/luminum/LuminumServer/conf/luminum.crt";
 const DIPATH: &str = "/opt/luminum/LuminumServer/conf/luminum.pfx";
 const DPORT: u16 = 10465;
+
+struct Config {
+	key: String,
+	value: String
+	}
 
 fn main() {
 	// Parse command-line arguments
@@ -59,7 +68,7 @@ fn main() {
 		.short('i')
 		.long("identity")
 		.value_name("IDENTITY_FILE")
-		.help("Specifies the path to the identity file")
+		.help("Specifies the path to the PFX identity file")
 		.takes_value(true))
 	.arg(Arg::with_name("address")
 		.short('a')
@@ -91,10 +100,12 @@ fn main() {
 	let key_file = matches.value_of("key").unwrap_or(DKPATH);
 	let cert_file = matches.value_of("certificate").unwrap_or(DCPATH);
 	let identity_file = matches.value_of("identity").unwrap_or(DIPATH);
-	let address = matches.value_of("address").unwrap_or("127.0.0.1");
-	let port = matches.value_of("port").unwrap_or("10465");
+	let mut address = matches.value_of("address").unwrap_or("");
+	let mut port = matches.value_of("port").unwrap_or("");
 	let setup = matches.is_present("setup");
 	let debug = matches.is_present("debug");
+
+	let mut serverconfig: HashMap<String, String> = HashMap::new();
 
 	if setup {
 		dbout(debug,4,format!("Starting daemon setup.").as_str());
@@ -110,7 +121,26 @@ fn main() {
 	// Startup
 	dbout(debug,0,format!("Starting Luminum Server Daemon v{}...",VER).as_str());
 	if fs::metadata(CFGPATH).is_ok() {
+
 		let confconn = Connection::open(CFGPATH).expect("Error: Could not open configuration database.");
+		let mut stmt = confconn.prepare("select KEY,VALUE from CONFIG").unwrap();
+		let cfg_iter = stmt.query_map(params![], |row| {
+			Ok(Config {
+				key: row.get(0)?,
+				value: row.get(1)?
+				})
+			}).expect("Error: Failed to parse configuration values");
+		for cfg_result in cfg_iter {
+			if let Ok(cfg) = cfg_result {
+				serverconfig.insert(cfg.key.to_string(),cfg.value.to_string());
+				}
+			}
+		if address == "" {
+			address = serverconfig.get("IPADDR").expect("Error: Could not set server IP address from configuration database.");
+			}
+		if port == "" {
+			port = serverconfig.get("PORT").expect("Error: Could not set server port from configuration database.");
+			}
 		}
 	else {
 		dbout(debug,1,format!("Configuration database not found. (Run with --setup)").as_str());
@@ -138,6 +168,14 @@ fn main() {
 	let addr: SocketAddr = addr_str.parse().expect("Invalid socket address");
 
 	// Check if necessary encryption files exist
+	if !file_exists(key_file) {
+		dbout(debug,1,format!("Private key file ({}) does not exist.", key_file).as_str());
+		process::exit(1);
+		}
+	else {
+		dbout(debug,3,format!("Using private key: {}",key_file).as_str());
+		}
+
 	if !file_exists(cert_file) {
 		dbout(debug,1,format!("Certificate file ({}) does not exist.", cert_file).as_str());
 		process::exit(1);
@@ -146,20 +184,9 @@ fn main() {
 		dbout(debug,3,format!("Using certificate: {}",cert_file).as_str());
 		}
 
-	if !file_exists(key_file) {
-		dbout(debug,1,format!("Private key file ({}) does not exist.", key_file).as_str());
-		return;
-		}
-	else {
-		dbout(debug,3,format!("Using private key: {}",key_file).as_str());
-		}
-
 	if !file_exists(identity_file) {
 		dbout(debug,1,format!("Identity file ({}) does not exist.", identity_file).as_str());
-		return;
-		}
-	else {
-		dbout(debug,3,format!("Using identity: {}",identity_file).as_str());
+		process::exit(1);
 		}
 
 	// Load TLS certificate, private key, and identity files
@@ -325,6 +352,7 @@ fn daemonsetup() {
 
 	if fs::metadata(DCPATH).is_err() {
 		println!("\nServer certificate does not exist. Creating...");
+		let _ = generate_certificate(passphrase.as_str());
 		}
 
 	let sc = ShortCrypt::new(CFGKEY);
@@ -369,33 +397,104 @@ fn generate_private_key(ui_keypass: &str) -> Result<(), ErrorStack> {
 	let encrypted_key = pkey.private_key_to_pem_pkcs8_passphrase(Cipher::aes_256_cbc(), ui_keypass.as_bytes()).expect("Failed to encrypt private key");
 	keyfile.write_all(str::from_utf8(encrypted_key.as_slice()).unwrap().as_bytes()).expect("Failed to write private key data to file");
 	pubkeyfile.write_all(str::from_utf8(pub_key.as_slice()).unwrap().as_bytes()).expect("Failed to write public key data to file");
+
 	Ok(())
 	}
 
-/*
-fn generate_certificate() -> Result<(), ErrorStack> {
-	let mut name_builder = X509NameBuilder::new().expect("Failed to create X509NameBuilder");
-	name_builder.append_entry_by_nid(Nid::COMMONNAME, "example.com").expect("Failed to add CN to X509Name");
-	let name = name_builder.build();
+
+fn generate_certificate(ui_keypass: &str) -> Result<(), ErrorStack> {
+	let mut cert_co = String::new();
+	let mut cert_st = String::new();
+	let mut cert_lc = String::new();
+	let mut cert_on = String::new();
+	let mut cert_cn = String::new();
+
+	let mut prv_key_file = File::open(DKPATH).expect("Unable to open private key file");
+	let mut prv_key_pem = String::new();
+	let mut pub_key_file = File::open(DPPATH).expect("Unable to open public key file");
+	let mut pub_key_pem = String::new();
+
+	prv_key_file.read_to_string(&mut prv_key_pem).expect("Unable to read private key file");
+	let prv_key = PKey::private_key_from_pem(prv_key_pem.as_bytes()).expect("Unable to parse private key");
+	pub_key_file.read_to_string(&mut pub_key_pem).expect("Unable to read public key file");
+	let pub_key = PKey::public_key_from_pem(pub_key_pem.as_bytes()).expect("Unable to parse public key");
+
+	print!("Two-letter country code: ");
+	io::stdout().flush().unwrap();
+	io::stdin()
+		.read_line(&mut cert_co)
+		.expect("Error reading user input");
+	let cert_co = cert_co.trim();
+
+	print!("State or province: ");
+	io::stdout().flush().unwrap();
+	io::stdin()
+		.read_line(&mut cert_st)
+		.expect("Error reading user input");
+	let cert_st = cert_st.trim();
+
+	print!("City or locality name: ");
+	io::stdout().flush().unwrap();
+	io::stdin()
+		.read_line(&mut cert_lc)
+		.expect("Error reading user input");
+	let cert_lc = cert_lc.trim();
+
+	print!("Organization: ");
+	io::stdout().flush().unwrap();
+	io::stdin()
+		.read_line(&mut cert_on)
+		.expect("Error reading user input");
+	let cert_on = cert_on.trim();
+
+	print!("Enter certificate common name (CN): ");
+	io::stdout().flush().unwrap();
+	io::stdin()
+		.read_line(&mut cert_cn)
+		.expect("Error reading user input");
+	let cert_cn = cert_cn.trim();
+
+	let mut serial_number = BigNum::new().unwrap();
+	serial_number.rand(159, openssl::bn::MsbOption::MAYBE_ZERO, false).unwrap();
+	let serial_number = serial_number.to_asn1_integer().unwrap();
+
+	let mut name_builder = X509NameBuilder::new().unwrap();
+	name_builder.append_entry_by_nid(Nid::STATEORPROVINCENAME, cert_st).expect("Failed to add state to X509Name");
+	name_builder.append_entry_by_nid(Nid::COMMONNAME, cert_cn).expect("Failed to add CN to X509Name");
 
 	let mut x509 = X509::builder().expect("Failed to create X509 builder");
-	x509.set_version(2).expect("Failed to set version");
-	x509.set_subject_name(&name).expect("Failed to set subject name");
-	x509.set_issuer_name(&name).expect("Failed to set issuer name");
-	x509.set_pubkey(&pub_key).expect("Failed to set public key");
+	let name = name_builder.build();
+	x509.set_version(2).expect("Failed to set x509 version");
+	x509.set_serial_number(&serial_number).unwrap();
+	x509.set_subject_name(&name).expect("Failed to set x509 subject name");
+	x509.set_issuer_name(&name).expect("Failed to set x509 issuer name");
+	x509.set_pubkey(&pub_key).unwrap();
 
 	let not_before = Asn1Time::days_from_now(0).expect("Failed to set not before time");
 	let not_after = Asn1Time::days_from_now(365).expect("Failed to set not after time");
 
 	x509.set_not_before(&not_before).expect("Failed to set not before");
 	x509.set_not_after(&not_after).expect("Failed to set not after");
-	x509.sign(&pub_key, openssl::hash::MessageDigest::sha256()).expect("Failed to sign certificate");
+	x509.sign(&prv_key, MessageDigest::sha256()).unwrap();
 
 	let certificate = x509.build();
+	let cert_pem = certificate.to_pem().unwrap();
+	match std::fs::write(DCPATH, &cert_pem) {
+		Ok(_) => println!("Certificate written to {}",DCPATH),
+		Err(e) => eprintln!("Error writing certificate to file: {}", e)
+		}
+
+	let pkcs12_builder = Pkcs12::builder();
+	let pkcs12 = pkcs12_builder.build(&ui_keypass,"Luminum Server Key",&prv_key, &certificate) .expect("Failed to build PKCS#12 structure");
+	let pkcs12_der = pkcs12.to_der().expect("Failed to convert PKCS#12 to DER format");
+	match std::fs::write(DIPATH, &pkcs12_der) {
+		Ok(_) => println!("Identity written to {}",DIPATH),
+		Err(e) => eprintln!("Error writing identity file: {}", e)
+		}
 
 	Ok(())
 	}
-*/
+
 
 // Debug Output
 fn dbout(debug: bool, outlvl: i32, output: &str) {
