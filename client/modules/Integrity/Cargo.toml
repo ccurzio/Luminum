@@ -1,0 +1,8 @@
+[package]
+name = "LuminumIntegrity"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+notify = "5.0"
+
