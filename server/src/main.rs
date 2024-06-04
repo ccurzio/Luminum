@@ -188,6 +188,9 @@ fn main() {
 		dbout(debug,1,format!("Identity file ({}) does not exist.", identity_file).as_str());
 		process::exit(1);
 		}
+	else {
+		dbout(debug,3,format!("Using identity: {}",identity_file).as_str());
+		}
 
 	// Load TLS certificate, private key, and identity files
 	let identity = match Identity::from_pkcs12(&fs::read(identity_file).unwrap(), "PASSWORD_GOES_HERE") {
