@@ -10,7 +10,7 @@ fn main() -> Result<()> {
 			let (tx, rx) = channel();
 			let mut watcher: RecommendedWatcher = Watcher::new(tx, Config::default())?;
 
-			let path = PathBuf::from("/Users/ccurzio");
+			let path = PathBuf::from(".");
 
 			let _ = watcher.watch(&path, RecursiveMode::Recursive);
 
