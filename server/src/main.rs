@@ -97,8 +97,14 @@ fn main() {
 	let debug = matches.is_present("debug");
 
 	if setup {
-		if fs::metadata(CFGPATH).is_err() { daemonsetup(); }
-		else { dbout(debug,1,format!("Server configuration already exists. Aborting.").as_str()); }
+		dbout(debug,4,format!("Starting daemon setup.").as_str());
+		if fs::metadata(CFGPATH).is_err() {
+			daemonsetup();
+			}
+		else {
+			dbout(debug,1,format!("Server configuration already exists. Aborting.").as_str());
+			process::exit(1);
+			}
 		}
 
 	// Startup
