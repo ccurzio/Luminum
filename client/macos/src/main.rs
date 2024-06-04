@@ -1,4 +1,4 @@
-// Luminum Client for Linux
+// Luminum Client for macOS
 // by Christopher R. Curzio <ccurzio@luminum.net>
 
 fn main() {
