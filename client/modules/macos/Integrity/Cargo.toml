@@ -5,4 +5,5 @@ edition = "2021"
 
 [dependencies]
 notify = "5.0"
+pkg-config = "0.3.30"
 
