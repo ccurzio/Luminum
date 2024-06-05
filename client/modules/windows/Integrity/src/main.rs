@@ -1,5 +1,5 @@
 // Luminum Integrity Lumy (Windows)
-// by Christopher R. Curzio <ccurzio@luminum.net>
+// by Christopher R. Curzio
 
 use std::path::PathBuf;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher, Config, Result};
