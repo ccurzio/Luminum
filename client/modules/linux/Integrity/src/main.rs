@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher, Event, Config, Result};
-use serde::{Serialize};
+use serde::Serialize;
 use serde_json::json;
 use std::sync::mpsc::channel;
 
