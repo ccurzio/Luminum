@@ -1,9 +1,0 @@
-Package: Luminum-Policy
-Version: 0.0.1
-Section: base
-Priority: optional
-Architecture: amd64
-Depends: luminum-server (>= 0.0.1)
-Maintainer: Christopher R. Curzio <ccurzio@accipiter.org>
-Description: The Luminum Policy module allows for management of endpoint
- security policies.

@@ -1,5 +1,0 @@
-#!/bin/sh
-#
-# Luminum Server Post-Installation Script
-
-echo "POSTINST -- JERRY! HELLO!"

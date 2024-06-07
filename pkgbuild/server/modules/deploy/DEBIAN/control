@@ -1,9 +1,0 @@
-Package: Luminum-Deploy
-Version: 0.0.1
-Section: base
-Priority: optional
-Architecture: amd64
-Depends: luminum-server (>= 0.0.1)
-Maintainer: Christopher R. Curzio <ccurzio@accipiter.org>
-Description: The Luminum Deploy module allows for sending software and
- packages to endpoints for installation and execution.

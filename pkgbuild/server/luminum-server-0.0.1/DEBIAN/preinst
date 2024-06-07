@@ -1,5 +1,0 @@
-#!/bin/sh
-#
-# Luminum Server Pre-Installation Script
-
-echo "PREINST -- JERRY! HELLO!"

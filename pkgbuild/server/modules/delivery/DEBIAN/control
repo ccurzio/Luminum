@@ -1,9 +1,0 @@
-Package: Luminum-Delivery
-Version: 0.0.1
-Section: base
-Priority: optional
-Architecture: amd64
-Depends: luminum-server (>= 0.0.1)
-Maintainer: Christopher R. Curzio <ccurzio@accipiter.org>
-Description: The Luminum Delivery module allows for sending information to
- various logging and communication systems.
