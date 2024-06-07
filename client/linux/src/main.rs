@@ -11,18 +11,12 @@ use std::collections::HashMap;
 use std::fs::{self, File};
 
 const VER: &str = "0.0.1";
-const DCFGPATH: &str = "/opt/luminum/LuminumClient/conf/luminum.conf.db";
+const CFGPATH: &str = "/opt/luminum/LuminumClient/conf/luminum.conf.db";
 
 fn main() {
 	let matches = App::new("Luminum Client (Linux)")
 		.version(VER)
 		.author("Christopher R. Curzio <ccurzio@luminum.net>")
-	.arg(Arg::with_name("config")
-		.short('c')
-		.long("config")
-		.value_name("CFG_PATH")
-		.help("Specifies the path to the configuration database")
-		.takes_value(true))
 	 .arg(Arg::with_name("debug")
 		.short('d')
 		.long("debug")
@@ -31,13 +25,16 @@ fn main() {
 		.takes_value(false))
 	.get_matches();
 
-	let config_file = matches.value_of("config").unwrap_or(DCFGPATH);
 	let debug = matches.is_present("debug");
 
 	let mut clientconfig: HashMap<String, String> = HashMap::new();
 
-	if fs::metadata(config_file).is_ok() {
+	// Client Startup
+	dbout(debug,0,format!("Starting Luminum Client v{}...",VER).as_str());
+
+	if fs::metadata(CFGPATH).is_ok() {
 		// Read Client Config
+		let confconn = Connection::open(CFGPATH).expect("Error: Could not open configuration database.");
 		}
 	else {
 		dbout(debug,1,format!("Configuration database not found.").as_str());
