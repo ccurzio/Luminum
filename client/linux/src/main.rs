@@ -11,10 +11,10 @@ use std::collections::HashMap;
 use std::fs::{self, File};
 
 const VER: &str = "0.0.1";
-const DCFGPATH: &str = "/opt/luminum/LuminumClient/conf/server.conf.db";
+const DCFGPATH: &str = "/opt/luminum/LuminumClient/conf/luminum.conf.db";
 
 fn main() {
-	let matches = App::new("Luminum Server Daemon")
+	let matches = App::new("Luminum Client (Linux)")
 		.version(VER)
 		.author("Christopher R. Curzio <ccurzio@luminum.net>")
 	.arg(Arg::with_name("config")
