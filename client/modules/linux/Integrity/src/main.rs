@@ -44,8 +44,9 @@ fn main() -> Result<()> {
 					let eijson = json!({"dtype":"inotify"});
 					let event_info: Value = serde_json::to_value(eijson).unwrap();
 					let mut combined_json = json!({});
-					combined_json["notify_event"] = serde_json::to_value(&notify_event).unwrap();
-					combined_json["event_info"] = event_info;
+					combined_json["product"] = serde_json::to_value("Luminum Integrity").unwrap();
+					combined_json["content"]["notify_event"] = serde_json::to_value(&notify_event).unwrap();
+					combined_json["content"]["event_info"] = event_info;
 					let json_event = serde_json::to_string(&combined_json).unwrap();
 					stream.write_all(&json_event.as_bytes());
 					stream.shutdown(Shutdown::Write);

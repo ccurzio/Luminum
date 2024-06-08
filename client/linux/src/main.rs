@@ -128,7 +128,7 @@ fn lumcomm(debug: bool) {
 fn handle_json(data: &str, debug: bool) {
 	match serde_json::from_str::<Value>(data) {
 		Ok(v) => {
-			if let Some(content) = v["data"].get("content") { println!("{}", content); }
+			if let content = v["content"].to_string() { println!("{}", content); }
 			}
 		Err(e) => {
 			dbout(debug,2,format!("Malformed data received on local listener").as_str());
