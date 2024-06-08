@@ -38,6 +38,7 @@ fn main() -> Result<()> {
 		loop {
 			match rx.recv() {
 				Ok(Ok(event)) => {
+					// TODO: Can't have hard-coded port. Need to save in client config and pass to modules in their own configs
 					let mut stream = TcpStream::connect("127.0.0.1:10511").expect("Error: Could not connect to Luminum Client process");
 					let notify_event: NotifyEvent = event.into();
 					let eijson = json!({"dtype":"inotify"});
