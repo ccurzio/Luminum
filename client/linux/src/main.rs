@@ -20,6 +20,12 @@ fn main() {
 	let matches = App::new("Luminum Client (Linux)")
 		.version(VER)
 		.author("Christopher R. Curzio <ccurzio@luminum.net>")
+	 .arg(Arg::with_name("config")
+		.short('c')
+		.long("config")
+		.value_name("config")
+		.help("Set client configuration parameters")
+		.takes_value(false))
 	 .arg(Arg::with_name("debug")
 		.short('d')
 		.long("debug")
@@ -28,9 +34,19 @@ fn main() {
 		.takes_value(false))
 	.get_matches();
 
+	let config = matches.is_present("config");
 	let debug = matches.is_present("debug");
 
 	let mut clientconfig: HashMap<String, String> = HashMap::new();
+
+	if config {
+		dbout(debug,4,format!("Starting client setup...").as_str());
+		if fs::metadata(CFGPATH).is_err() { clientsetup(); }
+		else {
+			dbout(debug,1,format!("Client configuration already exists. Aborting.").as_str());
+			process::exit(1);
+			}
+		}
 
 	// Client Startup
 	dbout(debug,0,format!("Starting Luminum Client v{}...",VER).as_str());
@@ -45,6 +61,13 @@ fn main() {
 		dbout(debug,1,format!("Configuration database not found.").as_str());
 		process::exit(1);
 		}
+	}
+
+fn clientsetup() {
+	println!("Luminum Client (Linux)\nby Christopher R. Curzio <ccurzio@luminum.net>\n");
+	println!("Client Configuration\n--------------------");
+
+	process::exit(0);
 	}
 
 fn lumcomm(debug: bool) {

@@ -2,8 +2,12 @@ use std::fs;
 use std::path::Path;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher, Event, Config, Result};
 use serde::Serialize;
-use serde_json::json;
+use serde_json::{json, to_value, Value};
 use std::sync::mpsc::channel;
+use std::net::{TcpStream, Shutdown};
+use std::io::Write;
+use std::thread;
+use std::time::Duration;
 
 #[derive(Serialize)]
 struct NotifyEvent {
@@ -34,16 +38,22 @@ fn main() -> Result<()> {
 		loop {
 			match rx.recv() {
 				Ok(Ok(event)) => {
+					let mut stream = TcpStream::connect("127.0.0.1:10511").expect("Error: Could not connect to Luminum Client process");
 					let notify_event: NotifyEvent = event.into();
-					let event_info = json!({"dtype":"inotify"});
+					let eijson = json!({"dtype":"inotify"});
+					let event_info: Value = serde_json::to_value(eijson).unwrap();
 					let mut combined_json = json!({});
 					combined_json["notify_event"] = serde_json::to_value(&notify_event).unwrap();
 					combined_json["event_info"] = event_info;
 					let json_event = serde_json::to_string(&combined_json).unwrap();
+					stream.write_all(&json_event.as_bytes());
+					stream.shutdown(Shutdown::Write);
 					println!("{}", json_event);
 					}
 				Ok(Err(e)) => println!("Watch error: {:?}", e),
-				Err(e) => println!("Error: {:?}",e)
+				Err(e) => {
+					println!("Error: {:?}",e);
+					}
 				}
 			}
 		}
