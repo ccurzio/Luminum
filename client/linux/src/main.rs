@@ -108,12 +108,12 @@ fn clientsetup() {
 	}
 
 fn lumcomm(debug: bool) {
-	let listener = TcpListener::bind("127.0.0.1:10511").expect("Error: Could not open listener on localhost");
+	let listener = TcpListener::bind("127.0.0.1:10511").expect("Error: Failed to configure local listener port");
 	for stream in listener.incoming() {
 		match stream {
 			Ok(mut stream) => {
 				let mut buffer = [0; 1024];
-				let bytes_read = stream.read(&mut buffer).expect("Failed to read from socket");
+				let bytes_read = stream.read(&mut buffer).expect("Error: Failure reading input stream");
 				println!("Received: {}", String::from_utf8_lossy(&buffer[..bytes_read]));
 				}
 			Err(e) => {
