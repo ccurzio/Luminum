@@ -204,6 +204,7 @@ fn main() {
 
 	// Create TLS handler
 	let acceptor = match TlsAcceptor::new(identity) {
+		// TODO: Probably want to set up the connection to require client certificates
 		Ok(acceptor) => acceptor,
 		Err(err) => {
 			dbout(debug,1,format!("Error creating TLS handler: {}", err).as_str());
