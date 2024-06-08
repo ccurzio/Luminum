@@ -11,6 +11,7 @@ use rusqlite::{params, Connection, Result};
 use std::collections::HashMap;
 use std::fs;
 use std::io::{self, Read, Write};
+use serde_json::Value;
 
 const VER: &str = "0.0.1";
 const CFGPATH: &str = "/opt/luminum/LuminumClient/conf/luminum.conf.db";
@@ -114,11 +115,23 @@ fn lumcomm(debug: bool) {
 			Ok(mut stream) => {
 				let mut buffer = [0; 1024];
 				let bytes_read = stream.read(&mut buffer).expect("Error: Failure reading input stream");
-				println!("Received: {}", String::from_utf8_lossy(&buffer[..bytes_read]));
+				let data_raw = String::from_utf8_lossy(&buffer[..bytes_read]);
+				handle_json(data_raw.as_ref(),debug);
 				}
 			Err(e) => {
 				eprintln!("Error: {}", e);
 				}
+			}
+		}
+	}
+
+fn handle_json(data: &str, debug: bool) {
+	match serde_json::from_str::<Value>(data) {
+		Ok(v) => {
+			if let Some(content) = v["data"].get("content") { println!("{}", content); }
+			}
+		Err(e) => {
+			dbout(debug,2,format!("Malformed data received on local listener").as_str());
 			}
 		}
 	}
