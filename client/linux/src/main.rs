@@ -10,10 +10,11 @@ use std::net::TcpListener;
 use rusqlite::{params, Connection, Result};
 use std::collections::HashMap;
 use std::fs;
-use std::io::{Read};
+use std::io::{self, Read, Write};
 
 const VER: &str = "0.0.1";
 const CFGPATH: &str = "/opt/luminum/LuminumClient/conf/luminum.conf.db";
+const DPORT: u16 = 10465;
 const LPORT: u16 = 10511;
 
 fn main() {
@@ -66,6 +67,42 @@ fn main() {
 fn clientsetup() {
 	println!("Luminum Client (Linux)\nby Christopher R. Curzio <ccurzio@luminum.net>\n");
 	println!("Client Configuration\n--------------------");
+
+	let mut server = String::new();
+	let mut ui_server = String::new();
+	let mut port: u16 = 10465;
+
+	print!("Enter Luminum server hostname or IP: ");
+	io::stdout().flush().unwrap();
+	io::stdin()
+		.read_line(&mut ui_server)
+		.expect("Error reading user input");
+	let ui_server = ui_server.trim();
+	server = ui_server.to_string();
+
+	loop {
+		let mut ui_port = String::new();
+		print!("Enter server port [{}]: ",DPORT);
+		io::stdout().flush().unwrap();
+
+		io::stdin().read_line(&mut ui_port).unwrap();
+		let ui_port = ui_port.trim();
+		let num = if ui_port.is_empty() { DPORT }
+		else {
+			match ui_port.parse::<u16>() {
+				Ok(num) if num >= 1 => num,
+				_ => {
+					println!("Invalid port: {}\n", ui_port);
+					continue;
+					}
+				}
+			};
+		port = num;
+		break;
+		}
+
+	println!("Server host: {}",server);
+	println!("Server port: {}",port);
 
 	process::exit(0);
 	}
