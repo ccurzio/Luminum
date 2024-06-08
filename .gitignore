@@ -26,3 +26,6 @@ bin/Luminum-Client
 *.deb
 *.txz
 *.rpm
+
+# Miscellaneous
+*.swp
