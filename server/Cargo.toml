@@ -7,9 +7,10 @@ edition = "2021"
 
 [dependencies]
 chrono = "0.4"
-colored = "2.0"
+libc = "0.2.155"
 ctrlc = "3.3.0"
 clap = "3.0.0"
+colored = "2.0"
 regex = "1.5"
 native-tls = "0.2.8"
 openssl = "0.10.64"

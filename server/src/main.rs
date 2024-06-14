@@ -4,11 +4,13 @@ use std::collections::HashMap;
 use std::env;
 use std::str;
 use std::fs::{self, File};
-use std::io::{self, Read, Write};
+use std::path::Path;
+use std::io::{self, BufRead, Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::process;
 use std::net::{TcpListener, SocketAddr, TcpStream};
+use libc::{uid_t, setuid};
 use random_str;
 use magic_crypt::{new_magic_crypt, MagicCryptTrait};
 use clap::{Arg, App};
@@ -115,6 +117,26 @@ fn main() {
 			}
 		}
 
+	// Check if the "luminum" system user exists
+	let (user_exists,user_uid) = sysuser_info("luminum");
+	if user_exists {
+		let parse_uid: Result<u32, _> = user_uid.unwrap_or_else(|| String::new()).parse();
+		match parse_uid {
+			Ok(run_uid) => {
+				if unsafe { setuid(run_uid) } != 0 {
+					dbout(debug,1,format!("Could not assign process to \"luminum\" system user.").as_str());
+					process::exit(1);
+					}
+				},
+			Err(err) => {
+				}
+			}
+		}
+	else {
+		dbout(debug,1,format!("The \"luminum\" system user does not exist.").as_str());
+		process::exit(1);
+		}
+
 	// Check if the standard installation paths exist
 	if fs::metadata("/opt/Luminum").is_err() || fs::metadata("/opt/Luminum/LuminumServer").is_err() || fs::metadata("/opt/Luminum/LuminumServer/config/").is_err() {
 		dbout(debug,1,format!("Luminum Server install paths are missing. Is the software installed correctly?").as_str());
@@ -197,7 +219,10 @@ fn main() {
 		dbout(debug,3,format!("Using identity: {}",identity_file).as_str());
 		}
 
+	// Main server startup routine
 	dbout(debug,0,format!("Starting Luminum Server Daemon v{}...",VER).as_str());
+
+	
 
 	// Use private key passphrase from server configuration and load TLS identity file
 	let server_key = serverconfig.get("SVRKEY").unwrap();
@@ -403,7 +428,7 @@ fn daemonsetup() {
 				let oldpub = format!("{DPPATH}.old");
 				let oldcrt = format!("{DCPATH}.old");
 				let oldpfx = format!("{DIPATH}.old");
-				
+
 				if file_exists(&oldkey) { fs::remove_file(&oldkey).expect("Error: Could not delete existing private key backup file"); }
 				if file_exists(&oldpub) { fs::remove_file(&oldpub).expect("Error: Could not delete existing private key backup file"); }
 				if file_exists(&oldcrt) { fs::remove_file(&oldcrt).expect("Error: Could not delete existing certificate backup file"); }
@@ -620,6 +645,26 @@ fn generate_certificate(ui_keypass: &str) -> Result<(), ErrorStack> {
 	Ok(())
 	}
 
+// See if a specific user exists on the system
+fn sysuser_info(username: &str) -> (bool, Option<String>) {
+	let pwpath = Path::new("/etc/passwd");
+	let pwfile = File::open(&pwpath);
+
+	if let Ok(pwfile) = File::open(pwpath) {
+		let reader = io::BufReader::new(pwfile);
+		for line in reader.lines() {
+			if let Ok(line) = line {
+				let fields: Vec<&str> = line.split(':').collect();
+				if let (Some(user),Some(uid)) = (fields.get(0),fields.get(2)) {
+					if *user == username {
+						return (true, Some((*uid).to_string()));
+						}
+					}
+				}
+			}
+		}
+	return (false,None);
+	}
 
 // Debug Output
 fn dbout(debug: bool, outlvl: i32, output: &str) {
