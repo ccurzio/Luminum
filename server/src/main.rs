@@ -1,7 +1,3 @@
-extern crate short_crypt;
-extern crate regex;
-extern crate base64;
-
 use chrono::Local;
 use chrono::format::strftime::StrftimeItems;
 use std::collections::HashMap;
@@ -13,11 +9,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::process;
 use std::net::{TcpListener, SocketAddr, TcpStream};
+use random_str;
+use magic_crypt::{new_magic_crypt, MagicCryptTrait};
 use clap::{Arg, App};
 use regex::Regex;
 use colored::Colorize;
 use rpassword;
-use short_crypt::ShortCrypt;
 use rusqlite::{params, Connection, Result};
 use std::net::Ipv4Addr;
 use std::net::Ipv6Addr;
@@ -35,12 +32,11 @@ use openssl::nid::Nid;
 use serde_json::Value;
 
 const VER: &str = "0.0.1";
-const CFGKEY: &str = "config_encryption_password";
-const CFGPATH: &str = "/opt/luminum/LuminumServer/conf/server.conf.db";
-const DKPATH: &str = "/opt/luminum/LuminumServer/conf/luminum.key";
-const DPPATH: &str = "/opt/luminum/LuminumServer/conf/luminum.pub";
-const DCPATH: &str = "/opt/luminum/LuminumServer/conf/luminum.crt";
-const DIPATH: &str = "/opt/luminum/LuminumServer/conf/luminum.pfx";
+const CFGPATH: &str = "/opt/Luminum/LuminumServer/config/server.conf.db";
+const DKPATH: &str = "/opt/Luminum/LuminumServer/config/luminum.key";
+const DPPATH: &str = "/opt/Luminum/LuminumServer/config/luminum.pub";
+const DCPATH: &str = "/opt/Luminum/LuminumServer/config/luminum.crt";
+const DIPATH: &str = "/opt/Luminum/LuminumServer/config/luminum.pfx";
 const DPORT: u16 = 10465;
 
 struct Config {
@@ -108,6 +104,24 @@ fn main() {
 
 	let mut serverconfig: HashMap<String, String> = HashMap::new();
 
+	// Figure out location on disk
+	match env::current_exe() {
+		Ok(current_exe) => {
+			let path_string = current_exe.to_string_lossy().into_owned();
+			dbout(debug,4,format!("Run location: {}",path_string).as_str());
+			}
+		Err(err) => {
+			dbout(debug,1,format!("Unable to determine run location: {}",err).as_str());
+			}
+		}
+
+	// Check if the standard installation paths exist
+	if fs::metadata("/opt/Luminum").is_err() || fs::metadata("/opt/Luminum/LuminumServer").is_err() || fs::metadata("/opt/Luminum/LuminumServer/config/").is_err() {
+		dbout(debug,1,format!("Luminum Server install paths are missing. Is the software installed correctly?").as_str());
+		process::exit(1);
+		}
+
+	// Check if setup flag is specified and run setup routine if true
 	if setup {
 		dbout(debug,4,format!("Starting daemon setup.").as_str());
 		if fs::metadata(CFGPATH).is_err() {
@@ -119,10 +133,8 @@ fn main() {
 			}
 		}
 
-	// Startup
-	dbout(debug,0,format!("Starting Luminum Server Daemon v{}...",VER).as_str());
+	// Import server configuration
 	if fs::metadata(CFGPATH).is_ok() {
-
 		let confconn = Connection::open(CFGPATH).expect("Error: Could not open configuration database.");
 		let mut stmt = confconn.prepare("select KEY,VALUE from CONFIG").unwrap();
 		let cfg_iter = stmt.query_map(params![], |row| {
@@ -136,6 +148,9 @@ fn main() {
 				serverconfig.insert(cfg.key.to_string(),cfg.value.to_string());
 				}
 			}
+
+		let server_key = serverconfig.get("SVRKEY").expect("Error: Could not set server key from configuration database.");
+
 		if address == "" {
 			address = serverconfig.get("IPADDR").expect("Error: Could not set server IP address from configuration database.");
 			}
@@ -146,17 +161,6 @@ fn main() {
 	else {
 		dbout(debug,1,format!("Configuration database not found. (Run with --setup)").as_str());
 		process::exit(1);
-		}
-
-	// Figure out location on disk
-	match env::current_exe() {
-		Ok(current_exe) => {
-			let path_string = current_exe.to_string_lossy().into_owned();
-			dbout(debug,4,format!("Run location: {}",path_string).as_str());
-			}
-		Err(err) => {
-			dbout(debug,1,format!("Unable to determine run location: {}",err).as_str());
-			}
 		}
 
 	// Network options sanity checking
@@ -193,8 +197,15 @@ fn main() {
 		dbout(debug,3,format!("Using identity: {}",identity_file).as_str());
 		}
 
-	// Load TLS certificate, private key, and identity files
-	let identity = match Identity::from_pkcs12(&fs::read(identity_file).unwrap(), "PASSWORD_GOES_HERE") {
+	dbout(debug,0,format!("Starting Luminum Server Daemon v{}...",VER).as_str());
+
+	// Use private key passphrase from server configuration and load TLS identity file
+	let server_key = serverconfig.get("SVRKEY").unwrap();
+	let mc = new_magic_crypt!(server_key, 256);
+	let encrypted_passphrase = serverconfig.get("PKPASS").unwrap();
+	let passphrase = mc.decrypt_base64_to_string(&encrypted_passphrase).unwrap();
+
+	let identity = match Identity::from_pkcs12(&fs::read(identity_file).unwrap(), &passphrase) {
 		Ok(identity) => identity,
 		Err(err) => {
 			dbout(debug,1,format!("Error loading TLS identity: {}", err).as_str());
@@ -267,7 +278,7 @@ fn handle_client(peer_addr: String, mut stream: native_tls::TlsStream<TcpStream>
 			let data_raw = String::from_utf8_lossy(&buffer[..n]);
 			handle_json(peer_addr,data_raw.as_ref(),debug);
 			},
-		Err(e) => eprintln!("Error reading from stream: {}", e),
+		Err(err) => eprintln!("Error reading from stream: {}", err),
 		}
 	}
 
@@ -282,8 +293,8 @@ fn handle_json(peer_addr: String, data: &str, debug: bool) {
 					}
 				}
 			}
-		Err(e) => {
-			dbout(debug,2,format!("Malformed data in stream from {}",peer_addr).as_str());
+		Err(err) => {
+			dbout(debug,2,format!("Malformed data in stream from {}: {}",peer_addr, err).as_str());
 			}
 		}
 	}
@@ -297,14 +308,19 @@ fn contains_no_numbers(variable: &str) -> bool {
 	!re.is_match(variable)
 	}
 
+fn contains_only_numbers(input: &str) -> bool {
+	let re = Regex::new(r"^\d+$").unwrap();
+	re.is_match(input)
+	}
+
 // Daemon Setup
 fn daemonsetup() {
 	println!("Luminum Server Daemon\nby Christopher R. Curzio <ccurzio@accipiter.org>\n");
 	println!("Daemon Configuration\n--------------------");
 
-	let mut address = String::new();
-	let port: u16;
-	let mut passphrase = String::new();
+	let mut setup_address = String::new();
+	let mut setup_port = String::new();
+	let mut setup_passphrase = String::new();
 
 	loop {
 		let mut ui_address = String::new();
@@ -317,7 +333,7 @@ fn daemonsetup() {
 		let ui_address = ui_address.trim();
 
 		if is_valid_ipv4_address(ui_address) || is_valid_ipv6_address(ui_address) {
-			address = ui_address.to_string();
+			setup_address = ui_address.to_string();
 			break;
 			}
 		else {
@@ -328,62 +344,146 @@ fn daemonsetup() {
 	loop {
 		let mut ui_port = String::new();
 
-		print!("Enter server port [{}]: ",DPORT);
+		print!("Enter server port [{}]: ", DPORT.to_string());
 		io::stdout().flush().unwrap();
 
 		io::stdin().read_line(&mut ui_port).unwrap();
 		let ui_port = ui_port.trim();
-		let num = if ui_port.is_empty() { DPORT }
+
+		if ui_port.is_empty() {
+			setup_port = DPORT.to_string();
+			break;
+			}
 		else {
-			match ui_port.parse::<u16>() {
-				Ok(num) if num >= 1 => num,
-				_ => {
-					println!("Invalid port: {}\n", ui_port);
-					continue;
-					}
+			if ui_port == "0" || !contains_only_numbers(ui_port) {
+				println!("Invalid port: {}\n", ui_port);
+				continue;
 				}
-			};
-		port = num;
-		break;
+			else {
+				setup_port = ui_port.to_string();
+				break;
+				}
+			}
 		}
 
 	if fs::metadata(DKPATH).is_err() {
 		println!("\nServer key pair does not exist. Creating...");
 		loop {
-			let keypass = rpassword::read_password_from_tty(Some("Enter passphrase for private key: ")).expect("Error reading passphrase input");
-			let vkeypass = rpassword::read_password_from_tty(Some("Verify passphrase: ")).expect("Error reading verify passphrase input");
+			let keypass = rpassword::read_password_from_tty(Some("Enter PEM passphrase for private key: ")).expect("Error reading passphrase input");
+			let vkeypass = rpassword::read_password_from_tty(Some("Verify PEM passphrase: ")).expect("Error reading verify passphrase input");
 			if keypass != vkeypass {
 				println!("Error: Passphrase mismatch\n");
 				continue;
 				}
 			else {
 				let _ = generate_private_key(keypass.as_str());
-				passphrase = keypass;
+				setup_passphrase = keypass;
 				break;
 				}
 			}
-		println!("Wrote private key: {}",DKPATH);
-		println!("Wrote public key: {}",DPPATH);
+		}
+	else {
+		let mut ui_exkey = String::new();
+		println!("\nA private key was found at {}", DKPATH);
+		loop {
+			print!("Do you want to use this key? [Y/n]: ");
+			io::stdout().flush().unwrap();
+			io::stdin().read_line(&mut ui_exkey).expect("Error reading user input");
+			let ui_exkey = ui_exkey.trim();
+			if ui_exkey == "Y" || ui_exkey == "y" || ui_exkey.is_empty() {
+				loop {
+					let ui_passphrase = rpassword::read_password_from_tty(Some("Enter PEM passphrase for private key: ")).expect("Error reading passphrase input");
+					setup_passphrase = ui_passphrase.trim().to_string();
+					break;
+					}
+				break;
+				}
+			else {
+				let oldkey = format!("{DKPATH}.old");
+				let oldpub = format!("{DPPATH}.old");
+				let oldcrt = format!("{DCPATH}.old");
+				let oldpfx = format!("{DIPATH}.old");
+				
+				if file_exists(&oldkey) { fs::remove_file(&oldkey).expect("Error: Could not delete existing private key backup file"); }
+				if file_exists(&oldpub) { fs::remove_file(&oldpub).expect("Error: Could not delete existing private key backup file"); }
+				if file_exists(&oldcrt) { fs::remove_file(&oldcrt).expect("Error: Could not delete existing certificate backup file"); }
+				if file_exists(&oldpfx) { fs::remove_file(&oldpfx).expect("Error: Could not delete existing identity backup file"); }
+
+				match fs::rename(DKPATH, &oldkey) {
+					Ok(()) => {
+						println!("Backed up existing private key to {}", oldkey);
+						},
+					Err(err) => {
+						println!("Failure: Backup of existing private key failed: {}", err);
+						process::exit(1);
+						}
+					}
+				match fs::rename(DPPATH, &oldpub) {
+					Ok(()) => {
+						println!("Backed up existing public key to {}", oldpub);
+						},
+					Err(err) => {
+						println!("Failure: Backup of existing public key failed: {}", err);
+						process::exit(1);
+						}
+					}
+				match fs::rename(DCPATH, &oldcrt) {
+					Ok(()) => {
+						println!("Backed up existing certificate to {}", oldcrt);
+						},
+					Err(err) => {
+						println!("Failure: Backup of existing certificate failed: {}", err);
+						process::exit(1);
+						}
+					}
+				match fs::rename(DIPATH, &oldpfx) {
+					Ok(()) => {
+						println!("Backed up existing identity file to {}", oldpfx);
+						},
+					Err(err) => {
+						println!("Failure: Backup of existing identity file failed: {}",err);
+						process::exit(1);
+						}
+					}
+				println!("\nCreating new keypair and identity...");
+				loop {
+					let keypass = rpassword::read_password_from_tty(Some("Enter PEM passphrase for private key: ")).expect("Error reading passphrase input");
+					let vkeypass = rpassword::read_password_from_tty(Some("Verify PEM passphrase: ")).expect("Error reading verify passphrase input");
+					if keypass != vkeypass {
+						println!("Error: Passphrase mismatch\n");
+						continue;
+						}
+					else {
+						let _ = generate_private_key(keypass.as_str());
+						setup_passphrase = keypass;
+						break;
+						}
+					}
+				}
+			if setup_passphrase.is_empty() { continue; }
+			else { break; }
+			}
 		}
 
 	if fs::metadata(DCPATH).is_err() {
 		println!("\nServer certificate does not exist. Creating...");
-		let _ = generate_certificate(passphrase.as_str());
+		let _ = generate_certificate(setup_passphrase.as_str());
 		}
 
-	let sc = ShortCrypt::new(CFGKEY);
-	let (_, crypt_passphrase) = sc.encrypt(&passphrase);
-	let encoded_crypt = base64::encode(&crypt_passphrase);
+	let new_server_key = random_str::get_string(128, true, true, true, true);
+	let mc = new_magic_crypt!(&new_server_key, 256);
+	let encoded_crypt = mc.encrypt_str_to_base64(setup_passphrase);
 
 	let confconn = Connection::open(CFGPATH).expect("Error: Could not initialize configuration database");
 	confconn.execute("create table if not exists CONFIG ( KEY text not null, VALUE text not null )",[]).expect("Error: Could not create CONFIG table in configuration database");
-	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)",&[&"IPADDR",address.as_str()]).expect("Error: Could not insert IPADDR into CONFIG table.");
-	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)",&[&"PORT",port.to_string().as_str()]).expect("Error: Could not insert PORT into CONFIG table.");
+	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)",&[&"SVRKEY",new_server_key.as_str()]).expect("Error: Could not insert SVRKEY into CONFIG table.");
+	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)",&[&"IPADDR",setup_address.as_str()]).expect("Error: Could not insert IPADDR into CONFIG table.");
+	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)",&[&"PORT",setup_port.as_str()]).expect("Error: Could not insert PORT into CONFIG table.");
 	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)",&[&"PKPASS",encoded_crypt.as_str()]).expect("Error: Could not insert PKPASS into CONFIG table.");
 	confconn.close().unwrap();
 
-	println!("Server IP address: {}", address);
-	println!("Server Port: {}", port);
+	println!("Server IP address: {}", setup_address);
+	println!("Server Port: {}", setup_port);
 	println!("Private Key: {}", DKPATH);
 	println!("Public Key: {}", DPPATH);
 	println!("Certificate: {}", DCPATH);
@@ -392,12 +492,18 @@ fn daemonsetup() {
 
 // IPv4 Address Validation
 fn is_valid_ipv4_address(ip: &str) -> bool {
-	ip.parse::<Ipv4Addr>().is_ok()
+	if ip.to_string() != "127.0.0.1" {
+		return ip.parse::<Ipv4Addr>().is_ok()
+		}
+	else { return false; }
 	}
 
 // IPv6 Address Validation
 fn is_valid_ipv6_address(ip: &str) -> bool {
-	ip.parse::<Ipv6Addr>().is_ok()
+	if ip.to_string() != "0:0:0:0:0:0:0:1" && ip.to_string() != "::1" {
+		ip.parse::<Ipv6Addr>().is_ok()
+		}
+	else { return false; }
 	}
 
 // Create Private/Public Key PEM Files
@@ -431,9 +537,9 @@ fn generate_certificate(ui_keypass: &str) -> Result<(), ErrorStack> {
 	let mut pub_key_pem = String::new();
 
 	prv_key_file.read_to_string(&mut prv_key_pem).expect("Unable to read private key file");
-	let prv_key = PKey::private_key_from_pem(prv_key_pem.as_bytes()).expect("Unable to parse private key");
+	let prv_key = PKey::private_key_from_pem_passphrase(prv_key_pem.as_bytes(),ui_keypass.as_bytes()).expect("Unable to parse private key");
 	pub_key_file.read_to_string(&mut pub_key_pem).expect("Unable to read public key file");
-	let pub_key = PKey::public_key_from_pem(pub_key_pem.as_bytes()).expect("Unable to parse public key");
+	let pub_key = PKey::public_key_from_pem_passphrase(pub_key_pem.as_bytes(),ui_keypass.as_bytes()).expect("Unable to parse public key");
 
 	print!("Two-letter country code: ");
 	io::stdout().flush().unwrap();
@@ -500,7 +606,7 @@ fn generate_certificate(ui_keypass: &str) -> Result<(), ErrorStack> {
 	let cert_pem = certificate.to_pem().unwrap();
 	match std::fs::write(DCPATH, &cert_pem) {
 		Ok(_) => println!("Certificate written to {}",DCPATH),
-		Err(e) => eprintln!("Error writing certificate to file: {}", e)
+		Err(err) => eprintln!("Error writing certificate to file: {}", err)
 		}
 
 	let pkcs12_builder = Pkcs12::builder();
@@ -508,7 +614,7 @@ fn generate_certificate(ui_keypass: &str) -> Result<(), ErrorStack> {
 	let pkcs12_der = pkcs12.to_der().expect("Failed to convert PKCS#12 to DER format");
 	match std::fs::write(DIPATH, &pkcs12_der) {
 		Ok(_) => println!("Identity written to {}",DIPATH),
-		Err(e) => eprintln!("Error writing identity file: {}", e)
+		Err(err) => eprintln!("Error writing identity file: {}", err)
 		}
 
 	Ok(())
