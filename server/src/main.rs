@@ -18,6 +18,8 @@ use regex::Regex;
 use colored::Colorize;
 use rpassword;
 use rusqlite::{params, Connection, Result};
+use mysql::*;
+use mysql::prelude::*;
 use std::net::Ipv4Addr;
 use std::net::Ipv6Addr;
 use native_tls::{Identity, TlsAcceptor};
@@ -117,26 +119,6 @@ fn main() {
 			}
 		}
 
-	// Check if the "luminum" system user exists
-	let (user_exists,user_uid) = sysuser_info("luminum");
-	if user_exists {
-		let parse_uid: Result<u32, _> = user_uid.unwrap_or_else(|| String::new()).parse();
-		match parse_uid {
-			Ok(run_uid) => {
-				if unsafe { setuid(run_uid) } != 0 {
-					dbout(debug,1,format!("Could not assign process to \"luminum\" system user.").as_str());
-					process::exit(1);
-					}
-				},
-			Err(err) => {
-				}
-			}
-		}
-	else {
-		dbout(debug,1,format!("The \"luminum\" system user does not exist.").as_str());
-		process::exit(1);
-		}
-
 	// Check if the standard installation paths exist
 	if fs::metadata("/opt/Luminum").is_err() || fs::metadata("/opt/Luminum/LuminumServer").is_err() || fs::metadata("/opt/Luminum/LuminumServer/config/").is_err() {
 		dbout(debug,1,format!("Luminum Server install paths are missing. Is the software installed correctly?").as_str());
@@ -221,12 +203,57 @@ fn main() {
 
 	// Main server startup routine
 	dbout(debug,0,format!("Starting Luminum Server Daemon v{}...",VER).as_str());
+	let server_key = serverconfig.get("SVRKEY").unwrap();
 
-	
+	// Check if the "luminum" system user exists and switch process to that user
+	let (user_exists,user_uid) = sysuser_info("luminum");
+	if user_exists {
+		let parse_uid: Result<u32, _> = user_uid.unwrap_or_else(|| String::new()).parse();
+		match parse_uid {
+			Ok(run_uid) => {
+				if unsafe { setuid(run_uid) } != 0 {
+					dbout(debug,1,format!("Could not assign process to \"luminum\" system user.").as_str());
+					process::exit(1);
+					}
+				},
+			Err(err) => {
+				}
+			}
+		}
+	else {
+		dbout(debug,1,format!("The \"luminum\" system user does not exist.").as_str());
+		process::exit(1);
+		}
+
+	// Connect to MySQL server
+	if !file_exists("/var/run/mysqld/mysqld.sock") {
+		dbout(debug,1,format!("Database socket (/var/run/mysqld/mysqld.sock) is missing.").as_str());
+		process::exit(1);
+		}
+
+	let socket_path = "/var/run/mysqld/mysqld.sock";
+
+	let mc = new_magic_crypt!(server_key, 256);
+	let encrypted_dbpass = serverconfig.get("DBPASS").unwrap();
+	let dbpass = mc.decrypt_base64_to_string(&encrypted_dbpass).unwrap();
+
+	let clients_db_pool = match Pool::new(OptsBuilder::new().socket(Some(socket_path)).user(Some("luminum")).pass(Some(dbpass)).db_name(Some("CLIENTS"))) {
+		Ok(clients_pool) => { clients_pool }
+		Err(err) => {
+			dbout(debug,1,format!("Error creating pool for CLIENTS: {}", err).as_str());
+			std::process::exit(1);
+			}
+		};
+
+	let mut clientsconn = match clients_db_pool.get_conn() {
+		Ok(conn) => { conn }
+		Err(err) => {
+			dbout(debug,1,format!("Error connecting to MySQL database: {}", err).as_str());
+			std::process::exit(1);
+			}
+		};
 
 	// Use private key passphrase from server configuration and load TLS identity file
-	let server_key = serverconfig.get("SVRKEY").unwrap();
-	let mc = new_magic_crypt!(server_key, 256);
 	let encrypted_passphrase = serverconfig.get("PKPASS").unwrap();
 	let passphrase = mc.decrypt_base64_to_string(&encrypted_passphrase).unwrap();
 
@@ -498,6 +525,8 @@ fn daemonsetup() {
 	let new_server_key = random_str::get_string(128, true, true, true, true);
 	let mc = new_magic_crypt!(&new_server_key, 256);
 	let encoded_crypt = mc.encrypt_str_to_base64(setup_passphrase);
+	let dbpass = random_str::get_string(16, true, true, true, true);
+	let encoded_dbpass = mc.encrypt_str_to_base64(dbpass);
 
 	let confconn = Connection::open(CFGPATH).expect("Error: Could not initialize configuration database");
 	confconn.execute("create table if not exists CONFIG ( KEY text not null, VALUE text not null )",[]).expect("Error: Could not create CONFIG table in configuration database");
@@ -505,6 +534,7 @@ fn daemonsetup() {
 	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)",&[&"IPADDR",setup_address.as_str()]).expect("Error: Could not insert IPADDR into CONFIG table.");
 	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)",&[&"PORT",setup_port.as_str()]).expect("Error: Could not insert PORT into CONFIG table.");
 	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)",&[&"PKPASS",encoded_crypt.as_str()]).expect("Error: Could not insert PKPASS into CONFIG table.");
+	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)",&[&"DBPASS",encoded_dbpass.as_str()]).expect("Error: Could not insert DBPASS into CONFIG table.");
 	confconn.close().unwrap();
 
 	println!("Server IP address: {}", setup_address);
