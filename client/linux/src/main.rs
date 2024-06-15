@@ -8,6 +8,7 @@ use chrono::format::strftime::StrftimeItems;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::process;
 use std::thread;
+use gethostname::gethostname;
 use std::net::{TcpListener, SocketAddr, ToSocketAddrs, TcpStream};
 use native_tls::{TlsConnector, TlsStream};
 use rusqlite::{params, Connection, Result};
@@ -28,6 +29,7 @@ struct Config {
 	}
 
 fn main() {
+	let endpointname = gethostname().to_string_lossy().into_owned();
 	let matches = App::new("Luminum Client (Linux)")
 		.version(VER)
 		.author("Christopher R. Curzio <ccurzio@luminum.net>")
@@ -153,10 +155,12 @@ fn main() {
 	let mut uid = String::new();
 	if clientconfig.get("UID").is_none() {
 		dbout(debug,3,format!("Endpoint is not registered with the Luminum server.").as_str());
-		let eijson = json!({"dtype":"inotify"});
-		let event_info: Value = serde_json::to_value(eijson).unwrap();
 		let mut combined_json = json!({});
-		combined_json["action"] = serde_json::to_value("register").unwrap();
+		combined_json["product"] = serde_json::to_value("Luminum Client").unwrap();
+		combined_json["content"]["action"] = serde_json::to_value("register").unwrap();
+		combined_json["content"]["hostname"] = serde_json::to_value(endpointname.clone()).unwrap();
+		let ejson = json!({"dtype":"inotify"});
+		let event_info: Value = serde_json::to_value(ejson).unwrap();
 		let json_event = serde_json::to_string(&combined_json).unwrap();
 		write_to_server(server_stream.clone(), json_event.as_bytes());
 		}
