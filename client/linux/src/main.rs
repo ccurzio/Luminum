@@ -75,6 +75,11 @@ fn main() {
 	// Client Startup
 	dbout(debug,0,format!("Starting Luminum Client v{}...", VER).as_str());
 
+	fn write_to_server(stream: Arc<Mutex<TlsStream<TcpStream>>>, data: &[u8]) {
+		let mut stream = stream.lock().unwrap();
+		stream.write_all(data).expect("Failed to write to server");
+		}
+
 	if fs::metadata(CFGPATH).is_ok() {
 		let confconn = Connection::open(CFGPATH).expect("Error: Could not open configuration database.");
 		let mut stmt = confconn.prepare("select KEY,VALUE from CONFIG").unwrap();
@@ -93,11 +98,6 @@ fn main() {
 	else {
 		dbout(debug,1,format!("Configuration database not found.").as_str());
 		process::exit(1);
-		}
-
-	fn write_to_server(stream: Arc<Mutex<TlsStream<TcpStream>>>, data: &[u8]) {
-		let mut stream = stream.lock().unwrap();
-		stream.write_all(data).expect("Failed to write to server");
 		}
 
 	// Conncet to Luminum Server
@@ -154,9 +154,10 @@ fn main() {
 	// Get client status from server
 	let mut uid = String::new();
 	if clientconfig.get("UID").is_none() {
-		dbout(debug,3,format!("Endpoint is not registered with the Luminum server.").as_str());
+		dbout(debug,4,format!("Endpoint is not registered with the Luminum server. Sending registration request...").as_str());
 		let mut combined_json = json!({});
 		combined_json["product"] = serde_json::to_value("Luminum Client").unwrap();
+		combined_json["version"] = serde_json::to_value(VER).unwrap();
 		combined_json["content"]["action"] = serde_json::to_value("register").unwrap();
 		combined_json["content"]["hostname"] = serde_json::to_value(endpointname.clone()).unwrap();
 		let ejson = json!({"dtype":"inotify"});
@@ -167,9 +168,6 @@ fn main() {
 	else {
 		dbout(debug,3,format!("Endpoint is registered with UID {}.", uid).as_str());
 		}
-
-	//let data = b"Hello, server!";
-	//write_to_server(server_stream.clone(), data);
 
 	// Set up local IPC listener
 	let addr_str = format!("127.0.0.1:{}", LPORT);
@@ -206,6 +204,7 @@ fn main() {
 				}
 			}
 		}
+
 	}
 
 fn clientsetup() {

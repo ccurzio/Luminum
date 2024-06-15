@@ -115,6 +115,8 @@ fn main() {
 
 	let mut serverconfig: HashMap<String, String> = HashMap::new();
 
+	dbout(debug,0,format!("Starting Luminum Server Daemon v{}...",VER).as_str());
+
 	// Figure out location on disk
 	match env::current_exe() {
 		Ok(current_exe) => {
@@ -217,7 +219,6 @@ fn main() {
 		}
 
 	// Main server startup routine
-	dbout(debug,0,format!("Starting Luminum Server Daemon v{}...",VER).as_str());
 	let server_key = serverconfig.get("SVRKEY").unwrap();
 
 	// Check if the "luminum" system user exists and switch process to that user
@@ -333,9 +334,6 @@ fn main() {
 			}
 		}
 	dbout(debug,0,format!("Luminum server daemon stopped.").as_str());
-
-	fn register_client() {
-		}
 	}
 
 fn handle_client(peer_addr: String, mut stream: native_tls::TlsStream<TcpStream>, debug: bool) {
@@ -355,11 +353,14 @@ fn handle_client(peer_addr: String, mut stream: native_tls::TlsStream<TcpStream>
 fn handle_json(peer_addr: String, data: &str, debug: bool) {
 	// {"product": "Luminum Client","version": "0.0.1","module": "Query","data": {"content": "","signature": ""}}
 	//let v: Value = serde_json::from_str(data);
+	let mut hostname = String::new();
+
 	match serde_json::from_str::<Value>(data) {
-		Ok(v) => {
-			if v["product"] == "Luminum Client" {
-				if let Some(content) = v["data"].get("content") {
-					println!("{}", content);
+		Ok(rcvd_data) => {
+			if rcvd_data["product"] == "Luminum Client" {
+				if rcvd_data["content"]["action"] == "register" {
+					let hostname = rcvd_data["content"]["hostname"].clone();
+					dbout(debug,4,format!("Received endpoint registration request from {} ({})", hostname,peer_addr).as_str());
 					}
 				}
 			}
