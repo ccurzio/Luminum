@@ -244,7 +244,6 @@ fn main() {
 	let encrypted_dbpass = serverconfig.get("DBPASS").unwrap();
 	let dbpass = mc.decrypt_base64_to_string(&encrypted_dbpass).unwrap();
 
-/*
 	let clients_db_pool = match Pool::new(OptsBuilder::new().socket(Some(socket_path)).user(Some("luminum")).pass(Some(dbpass)).db_name(Some("CLIENTS"))) {
 		Ok(clients_pool) => { clients_pool }
 		Err(err) => {
@@ -260,7 +259,7 @@ fn main() {
 			std::process::exit(1);
 			}
 		};
-*/
+
 	// Use private key passphrase from server configuration and load TLS identity file
 	let encrypted_passphrase = serverconfig.get("PKPASS").unwrap();
 	let passphrase = mc.decrypt_base64_to_string(&encrypted_passphrase).unwrap();
@@ -537,7 +536,7 @@ fn daemonsetup() {
 	let mc = new_magic_crypt!(&new_server_key, 256);
 	let encoded_crypt = mc.encrypt_str_to_base64(setup_passphrase);
 	let dbpass = random_str::get_string(16, true, true, true, true);
-	let encoded_dbpass = mc.encrypt_str_to_base64(dbpass);
+	let encoded_dbpass = mc.encrypt_str_to_base64(dbpass.clone());
 
 	let confconn = Connection::open(CFGPATH).expect("Error: Could not initialize configuration database");
 	confconn.execute("create table if not exists CONFIG ( KEY text not null, VALUE text not null )",[]).expect("Error: Could not create CONFIG table in configuration database");
@@ -553,6 +552,9 @@ fn daemonsetup() {
 	println!("Private Key: {}", DKPATH);
 	println!("Public Key: {}", DPPATH);
 	println!("Certificate: {}", DCPATH);
+	println!("Databaqse password for user \"luminum\": {}", dbpass);
+	println!("\nNOTE: This will be the only time the database password for the \"luminum\" user will be made available. Please make a note of it!\n\n");
+	println!("Luminum Server setup is complete.");
 	process::exit(0);
 	}
 
