@@ -192,6 +192,14 @@ fn main() {
 		dbout(debug,3,format!("Using private key: {}",key_file).as_str());
 		}
 
+	if !file_exists(pub_file) {
+		dbout(debug,1,format!("Public key file ({}) does not exist.", pub_file).as_str());
+		process::exit(1);
+		}
+	else {
+		dbout(debug,3,format!("Using public key: {}",pub_file).as_str());
+		}
+
 	if !file_exists(cert_file) {
 		dbout(debug,1,format!("Certificate file ({}) does not exist.", cert_file).as_str());
 		process::exit(1);
