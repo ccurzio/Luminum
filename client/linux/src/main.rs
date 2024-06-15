@@ -93,7 +93,16 @@ fn main() {
 						let uuid_pattern = Regex::new(r"^[0-9a-fA-F\-]+$").unwrap();
 						if uuid_pattern.is_match(new_uid) {
 							let confconn = Connection::open(CFGPATH).expect("Error: Could not open configuration database.");
-							confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)",&[&"UID",rcvd_data["content"]["uid"].to_string().as_str()]).expect("Error: Could not insert UID into CONFIG table.");
+							match confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)",&[&"UID",rcvd_data["content"]["uid"].to_string().as_str()]) {
+								Ok(_) => {
+									dbout(debug,3,format!("Server-assigned UID saved to configuration").as_str());
+									dbout(debug,3,format!("Registration successful.").as_str());
+									}
+								Err(err) => {
+									dbout(debug,1,format!("Unable to save UID value to configuration database: {}", err).as_str());
+									process::exit(1);
+									}
+								}
 							confconn.close().unwrap();
 							}
 						}
@@ -160,7 +169,6 @@ fn main() {
 		};
 
 	let sconn_clone = sconn.try_clone().expect("Failed to clone TcpStream");
-
 	let mut builder = native_tls::TlsConnector::builder();
 	builder.add_root_certificate(native_tls::Certificate::from_pem(&cert_buffer).expect("Failed to parse certificate"));
 	let connector = builder.build().expect("Failed to create TLS connector");
@@ -216,10 +224,11 @@ fn main() {
 		combined_json["content"]["osver"] = serde_json::to_value(os_release).unwrap();
 		let json_event = serde_json::to_string(&combined_json).unwrap();
 		write_to_server(server_stream.clone(), json_event.as_bytes(),debug);
+		dbout(debug,4,format!("Successfully sent registration request to server").as_str());
 		}
 	else {
-		uid = clientconfig.get("UID").expect("Error: could not set UID from client config.").to_string();
-		dbout(debug,3,format!("Endpoint registered with UID {}", uid).as_str());
+		uid = clientconfig.get("UID").expect("Error: could not set UID from client configuration.").to_string();
+		dbout(debug,3,format!("Endpoint UID: {}", uid).as_str());
 		}
 
 	// Set up local IPC listener
@@ -232,7 +241,7 @@ fn main() {
 			ipclistener
 			},
 		Err(err) => {
-			dbout(debug,1,format!("Failed to configure local IPC: {}", err).as_str());
+			dbout(debug,1,format!("Failed to initialize local IPC listener: {}", err).as_str());
 			process::exit(1);
 			}
 		};
@@ -253,11 +262,10 @@ fn main() {
 					});
 				},
 			Err(e) => {
-				eprintln!("Error: {}", e);
+				dbout(debug,2,format!("Malformed data received on local listener: {}", e).as_str());
 				}
 			}
 		}
-	println!("FOO");
 	}
 
 fn clientsetup() {
