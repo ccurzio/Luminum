@@ -77,14 +77,32 @@ fn main() {
 	// Client Startup
 	dbout(debug,0,format!("Starting Luminum Client v{}...", VER).as_str());
 
-	fn write_to_server(stream: Arc<Mutex<TlsStream<TcpStream>>>, data: &[u8]) {
+	fn write_to_server(stream: Arc<Mutex<TlsStream<TcpStream>>>, data: &[u8], debug: bool) {
 		let mut stream = stream.lock().unwrap();
 		stream.write_all(data).expect("Failed to write to server");
 
 		let mut buffer = [0; 1024];
 		let bytes_read = stream.read(&mut buffer).expect("Error: Failure reading input stream");
 		let data_raw = String::from_utf8_lossy(&buffer[..bytes_read]);
-		println!("Received: {}", data_raw);
+
+		match serde_json::from_str::<Value>(data_raw.as_ref()) {
+			Ok(rcvd_data) => {
+				if rcvd_data["product"] == "Luminum Server" {
+					if rcvd_data["content"]["action"] == "register" {
+						let new_uid = rcvd_data["content"]["uid"].as_str().unwrap_or("");
+						let uuid_pattern = Regex::new(r"^[0-9a-fA-F\-]+$").unwrap();
+						if uuid_pattern.is_match(new_uid) {
+							let confconn = Connection::open(CFGPATH).expect("Error: Could not open configuration database.");
+							confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)",&[&"UID",rcvd_data["content"]["uid"].to_string().as_str()]).expect("Error: Could not insert UID into CONFIG table.");
+							confconn.close().unwrap();
+							}
+						}
+					}
+				}
+			Err(err) => {
+				dbout(debug,2,format!("Malformed data in stream from server: {}", err).as_str());
+				}
+			}
 		}
 
 	if fs::metadata(CFGPATH).is_ok() {
@@ -197,10 +215,11 @@ fn main() {
 		combined_json["content"]["osplat"] = serde_json::to_value("Linux").unwrap();
 		combined_json["content"]["osver"] = serde_json::to_value(os_release).unwrap();
 		let json_event = serde_json::to_string(&combined_json).unwrap();
-		write_to_server(server_stream.clone(), json_event.as_bytes());
+		write_to_server(server_stream.clone(), json_event.as_bytes(),debug);
 		}
 	else {
-		dbout(debug,3,format!("Endpoint is registered with UID {}.", uid).as_str());
+		uid = clientconfig.get("UID").expect("Error: could not set UID from client config.").to_string();
+		dbout(debug,3,format!("Endpoint registered with UID {}", uid).as_str());
 		}
 
 	// Set up local IPC listener
