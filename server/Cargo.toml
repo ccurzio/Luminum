@@ -1,3 +1,4 @@
+
 [package]
 name = "LuminumServer"
 version = "0.0.1"
@@ -22,3 +23,6 @@ serde = { version = "1.0.203", features = ["derive"] }
 serde_json = "1.0.117"
 random_str = "0.1.2"
 mysql = "25.0.1"
+lazy_static = "1.4.0"
+uuid = { version = "1.8.0", features = ["v4"] }
+

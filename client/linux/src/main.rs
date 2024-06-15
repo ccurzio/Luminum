@@ -204,7 +204,7 @@ fn main() {
 				}
 			}
 		}
-
+	println!("FOO");
 	}
 
 fn clientsetup() {

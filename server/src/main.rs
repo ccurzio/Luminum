@@ -7,7 +7,7 @@ use std::fs::{self, File};
 use std::path::Path;
 use std::io::{self, BufRead, Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::process;
 use std::net::{TcpListener, SocketAddr, TcpStream};
 use libc::setuid;
@@ -19,8 +19,9 @@ use colored::Colorize;
 use rpassword;
 use rusqlite::{params, Connection, Result};
 use mysql::*;
-use std::net::Ipv4Addr;
-use std::net::Ipv6Addr;
+use mysql::prelude::Queryable;
+use std::net::{Ipv4Addr, Ipv6Addr};
+use uuid::Uuid;
 use native_tls::{Identity, TlsAcceptor};
 use openssl::bn::BigNum;
 use openssl::rsa::Rsa;
@@ -28,7 +29,7 @@ use openssl::pkey::PKey;
 use openssl::symm::Cipher;
 use openssl::error::ErrorStack;
 use openssl::pkcs12::Pkcs12;
-use openssl::x509::{X509NameBuilder, X509, X509Ref};
+use openssl::x509::{X509NameBuilder, X509};
 use openssl::x509::extension::SubjectAlternativeName;
 use openssl::hash::MessageDigest;
 use openssl::asn1::Asn1Time;
@@ -247,28 +248,32 @@ fn main() {
 		process::exit(1);
 		}
 
-	let socket_path = "/var/run/mysqld/mysqld.sock";
-
 	let mc = new_magic_crypt!(server_key, 256);
 	let encrypted_dbpass = serverconfig.get("DBPASS").unwrap();
 	let dbpass = mc.decrypt_base64_to_string(&encrypted_dbpass).unwrap();
 
-	let clients_db_pool = match Pool::new(OptsBuilder::new().socket(Some(socket_path)).user(Some("luminum")).pass(Some(dbpass)).db_name(Some("CLIENTS"))) {
-		Ok(clients_pool) => { clients_pool }
-		Err(err) => {
-			dbout(debug,1,format!("Error creating pool for CLIENTS: {}", err).as_str());
-			std::process::exit(1);
-			}
-		};
+	let socket_path = "/var/run/mysqld/mysqld.sock";
 
+	let opts = Opts::from(OptsBuilder::new()
+		.socket(Some(socket_path))
+		.user(Some("luminum"))
+		.pass(Some(dbpass))
+		.db_name(Some("CLIENTS")));
+
+	let clients_db_pool = Arc::new(Pool::new(opts).unwrap());
+
+/*
 	let clientsconn = match clients_db_pool.get_conn() {
-		Ok(conn) => { conn }
+		Ok(conn) => {
+			dbout(debug,3,format!("Connected to MySQL database: CLIENTS").as_str());
+			conn
+			}
 		Err(err) => {
 			dbout(debug,1,format!("Error connecting to MySQL database: {}", err).as_str());
 			std::process::exit(1);
 			}
 		};
-
+*/
 	// Use private key passphrase from server configuration and load TLS identity file
 	let encrypted_passphrase = serverconfig.get("PKPASS").unwrap();
 	let passphrase = mc.decrypt_base64_to_string(&encrypted_passphrase).unwrap();
@@ -328,15 +333,16 @@ fn main() {
 					};
 				// Handle the connection
 				let peer_addr_str = peer_addr.to_string();
-				handle_client(peer_addr_str,tls_stream,debug);
-				}
+				handle_client(&clients_db_pool,peer_addr_str,tls_stream,debug);
+				},
 			Err(err) => { dbout(debug,2,format!("Error accepting connection: {}", err).as_str()); }
 			}
 		}
+
 	dbout(debug,0,format!("Luminum server daemon stopped.").as_str());
 	}
 
-fn handle_client(peer_addr: String, mut stream: native_tls::TlsStream<TcpStream>, debug: bool) {
+fn handle_client(pool: &Arc<Pool>, peer_addr: String, mut stream: native_tls::TlsStream<TcpStream>, debug: bool) {
 	// Buffer to store incoming data
 	let mut buffer = [0; 1024];
 
@@ -344,13 +350,13 @@ fn handle_client(peer_addr: String, mut stream: native_tls::TlsStream<TcpStream>
 	match stream.read(&mut buffer) {
 		Ok(n) => {
 			let data_raw = String::from_utf8_lossy(&buffer[..n]);
-			handle_json(peer_addr,data_raw.as_ref(),debug);
+			handle_json(&pool,peer_addr,data_raw.as_ref(),debug);
 			},
 		Err(err) => eprintln!("Error reading from stream: {}", err),
 		}
 	}
 
-fn handle_json(peer_addr: String, data: &str, debug: bool) {
+fn handle_json(pool: &Arc<Pool>, peer_addr: String, data: &str, debug: bool) {
 	// {"product": "Luminum Client","version": "0.0.1","module": "Query","data": {"content": "","signature": ""}}
 	//let v: Value = serde_json::from_str(data);
 	let mut hostname = String::new();
@@ -359,13 +365,31 @@ fn handle_json(peer_addr: String, data: &str, debug: bool) {
 		Ok(rcvd_data) => {
 			if rcvd_data["product"] == "Luminum Client" {
 				if rcvd_data["content"]["action"] == "register" {
-					let hostname = rcvd_data["content"]["hostname"].clone();
 					dbout(debug,4,format!("Received endpoint registration request from {} ({})", hostname,peer_addr).as_str());
+					register_client(&pool,peer_addr,data,debug);
 					}
 				}
 			}
 		Err(err) => {
 			dbout(debug,2,format!("Malformed data in stream from {}: {}",peer_addr, err).as_str());
+			}
+		}
+	}
+
+pub fn register_client(pool: &Arc<Pool>, peer_addr: String, data: &str, debug: bool) {
+	let mut conn = pool.get_conn().unwrap();
+	let uid = Uuid::new_v4();
+	match serde_json::from_str::<Value>(data) {
+		Ok(rcvd_data) => {
+			if rcvd_data["product"] == "Luminum Client" {
+				if rcvd_data["content"]["action"] == "register" {
+					let hostname = rcvd_data["content"]["hostname"].as_str().unwrap();
+					let query = format!("insert into STATUS (UID,HOSTNAME,IPV4,OSPLAT,OSVER,REGDATE,LASTSEEN) VALUES ('{}', '{}', '{}', 'Liunx', 'Debian GNU/Linux 12 (bookworm)',now(),now())", uid, hostname, peer_addr);
+					conn.query_drop(query).unwrap();
+					}
+				}
+			}
+		Err(err) => {
 			}
 		}
 	}
@@ -728,7 +752,7 @@ fn sysuser_info(username: &str) -> (bool, Option<String>) {
 	}
 
 // Debug Output
-fn dbout(debug: bool, outlvl: i32, output: &str) {
+pub fn dbout(debug: bool, outlvl: i32, output: &str) {
 	let dateformat = StrftimeItems::new("%Y-%m-%d %H:%M:%S");
 	let current_datetime = Local::now();
 	let formatted_datetime = current_datetime.format_with_items(dateformat).to_string();
