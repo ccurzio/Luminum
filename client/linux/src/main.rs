@@ -8,10 +8,11 @@ use chrono::format::strftime::StrftimeItems;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::process;
-use std::net::{TcpListener, SocketAddr, TcpStream};
+use std::net::{TcpListener, SocketAddr, ToSocketAddrs, TcpStream};
+use native_tls::{TlsConnector, TlsStream};
 use rusqlite::{params, Connection, Result};
 use std::collections::HashMap;
-use std::fs;
+use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use serde_json::Value;
 
@@ -91,19 +92,65 @@ fn main() {
 		process::exit(1);
 		}
 
-	// Start local IPC listener
+	// Conncet to Luminum Server
+	let server_host = clientconfig.get("SHOST").unwrap();
+	let server_port = clientconfig.get("SPORT").unwrap();
+	let server_addr_str = format!("{}:{}", server_host, server_port);
+	//let server_addr: SocketAddr = server_addr_str.to_socket_addrs().expect("Invalid server address");
+	let server_addr: SocketAddr = match server_addr_str.to_socket_addrs() {
+		Ok(mut addrs) => {
+			if let Some(addr) = addrs.next() { addr }
+			else {
+				eprintln!("No addresses found for hostname");
+				return;
+				}
+			},
+		Err(e) => {
+			eprintln!("Failed to resolve hostname: {}", e);
+			return;
+			}
+		};
+
+	let server_cert_path = "/opt/Luminum/LuminumServer/config/luminum.crt";
+	let mut server_cert = File::open(server_cert_path).expect("Failed to open certificate file");
+	let mut cert_buffer = Vec::new();
+	server_cert.read_to_end(&mut cert_buffer).expect("Failed to read certificate file");
+
+	let sconn = match TcpStream::connect(server_addr) {
+		Ok(sconn) => {
+			dbout(debug,3,format!("Connected to Luminum server {}",server_addr_str).as_str());
+			sconn
+			},
+		Err(err) => {
+			dbout(debug,1,format!("Connection to Luminum server failed: {}", err).as_str());
+			process::exit(1);
+			}
+		};
+
+	let mut builder = native_tls::TlsConnector::builder();
+	builder.add_root_certificate(native_tls::Certificate::from_pem(&cert_buffer).expect("Failed to parse certificate"));
+	let connector = builder.build().expect("Failed to create TLS connector");
+
+	let mut server_stream = match connector.connect(server_host, sconn) {
+		Ok(stream) => stream,
+		Err(err) => {
+			dbout(debug,1,format!("TLS handshake failed: {}", err).as_str());
+			process::exit(1);
+			}
+		};
+
+	// Set up local IPC listener
 	let addr_str = format!("127.0.0.1:{}", LPORT);
 	let addr: SocketAddr = addr_str.parse().expect("Invalid socket address");
 
 	let ipclistener = match TcpListener::bind(addr) {
 		Ok(ipclistener) => { 
-			dbout(debug,3,format!("Local IPC listening on {}", addr_str).as_str());
+			dbout(debug,3,format!("Local IPC listening on port {}", LPORT).as_str());
 			ipclistener
 			},
 		Err(err) => {
 			dbout(debug,1,format!("Failed to configure local IPC: {}", err).as_str());
 			process::exit(1);
-			return;
 			}
 		};
 
@@ -169,9 +216,6 @@ fn clientsetup() {
 	println!("Server port: {}",port);
 
 	process::exit(0);
-	}
-
-fn lumcomm(debug: bool) {
 	}
 
 fn handle_json(data: &str, debug: bool) {

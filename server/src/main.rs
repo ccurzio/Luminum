@@ -664,6 +664,7 @@ fn generate_certificate(ui_keypass: &str) -> Result<(), ErrorStack> {
 
 	x509.set_not_before(&not_before).expect("Failed to set not before");
 	x509.set_not_after(&not_after).expect("Failed to set not after");
+
 	x509.sign(&prv_key, MessageDigest::sha256()).unwrap();
 
 	let certificate = x509.build();
