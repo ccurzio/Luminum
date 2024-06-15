@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::process;
 use std::net::{TcpListener, SocketAddr, TcpStream};
-use libc::{uid_t, setuid};
+use libc::setuid;
 use random_str;
 use magic_crypt::{new_magic_crypt, MagicCryptTrait};
 use clap::{Arg, App};
@@ -19,7 +19,6 @@ use colored::Colorize;
 use rpassword;
 use rusqlite::{params, Connection, Result};
 use mysql::*;
-use mysql::prelude::*;
 use std::net::Ipv4Addr;
 use std::net::Ipv6Addr;
 use native_tls::{Identity, TlsAcceptor};
@@ -65,6 +64,12 @@ fn main() {
 		.value_name("KEY_FILE")
 		.help("Specifies the path to the private key file")
 		.takes_value(true))
+	.arg(Arg::with_name("pubkey")
+		.short('b')
+		.long("pubkey")
+		.value_name("PUBKEY_FILE")
+		.help("Specifies the path to the public key file")
+		.takes_value(true))
 	.arg(Arg::with_name("identity")
 		.short('i')
 		.long("identity")
@@ -99,6 +104,7 @@ fn main() {
 
 	// Set variables based on command-line arguments or use defaults
 	let key_file = matches.value_of("key").unwrap_or(DKPATH);
+	let pub_file = matches.value_of("pubkey").unwrap_or(DPPATH);
 	let cert_file = matches.value_of("certificate").unwrap_or(DCPATH);
 	let identity_file = matches.value_of("identity").unwrap_or(DIPATH);
 	let mut address = matches.value_of("address").unwrap_or("");
@@ -245,7 +251,7 @@ fn main() {
 			}
 		};
 
-	let mut clientsconn = match clients_db_pool.get_conn() {
+	let clientsconn = match clients_db_pool.get_conn() {
 		Ok(conn) => { conn }
 		Err(err) => {
 			dbout(debug,1,format!("Error connecting to MySQL database: {}", err).as_str());
@@ -318,6 +324,9 @@ fn main() {
 			}
 		}
 	dbout(debug,0,format!("Luminum server daemon stopped.").as_str());
+
+	fn register_client() {
+		}
 	}
 
 fn handle_client(peer_addr: String, mut stream: native_tls::TlsStream<TcpStream>, debug: bool) {

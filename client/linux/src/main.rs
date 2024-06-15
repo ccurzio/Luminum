@@ -5,8 +5,10 @@ use clap::{Arg, App};
 use colored::Colorize;
 use chrono::Local;
 use chrono::format::strftime::StrftimeItems;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::process;
-use std::net::TcpListener;
+use std::net::{TcpListener, SocketAddr, TcpStream};
 use rusqlite::{params, Connection, Result};
 use std::collections::HashMap;
 use std::fs;
@@ -14,18 +16,23 @@ use std::io::{self, Read, Write};
 use serde_json::Value;
 
 const VER: &str = "0.0.1";
-const CFGPATH: &str = "/opt/luminum/LuminumClient/conf/luminum.conf.db";
+const CFGPATH: &str = "/opt/Luminum/LuminumClient/conf/luminum.conf.db";
 const DPORT: u16 = 10465;
-const LPORT: u16 = 10511;
+const LPORT: u16 = 10461;
+
+struct Config {
+	key: String,
+	value: String
+	}
 
 fn main() {
 	let matches = App::new("Luminum Client (Linux)")
 		.version(VER)
 		.author("Christopher R. Curzio <ccurzio@luminum.net>")
-	 .arg(Arg::with_name("config")
-		.short('c')
-		.long("config")
-		.value_name("config")
+	 .arg(Arg::with_name("setup")
+		.short('s')
+		.long("setup")
+		.value_name("setup")
 		.help("Set client configuration parameters")
 		.takes_value(false))
 	 .arg(Arg::with_name("debug")
@@ -36,12 +43,12 @@ fn main() {
 		.takes_value(false))
 	.get_matches();
 
-	let config = matches.is_present("config");
+	let setup = matches.is_present("setup");
 	let debug = matches.is_present("debug");
 
 	let mut clientconfig: HashMap<String, String> = HashMap::new();
 
-	if config {
+	if setup {
 		dbout(debug,4,format!("Starting client setup...").as_str());
 		if fs::metadata(CFGPATH).is_err() { clientsetup(); }
 		else {
@@ -50,18 +57,68 @@ fn main() {
 			}
 		}
 
-	// Client Startup
-	dbout(debug,0,format!("Starting Luminum Client v{}...",VER).as_str());
+        // Set up break handler
+	let running = Arc::new(AtomicBool::new(true));
+	let r = running.clone();
+	ctrlc::set_handler(move || {
+		r.store(false, Ordering::SeqCst);
+		println!();
+		dbout(debug,0,"BREAK");
+		dbout(debug,0,format!("Terminating Luminum Client.").as_str());
+		process::exit(1);
+		}).expect("Error creating break handler");
 
-	lumcomm(debug);
+	// Client Startup
+	dbout(debug,0,format!("Starting Luminum Client v{}...", VER).as_str());
 
 	if fs::metadata(CFGPATH).is_ok() {
-		// Read Client Config
 		let confconn = Connection::open(CFGPATH).expect("Error: Could not open configuration database.");
+		let mut stmt = confconn.prepare("select KEY,VALUE from CONFIG").unwrap();
+		let cfg_iter = stmt.query_map(params![], |row| {
+			Ok(Config {
+				key: row.get(0)?,
+				value: row.get(1)?
+				})
+			}).expect("Error: Failed to parse configuration values");
+		for cfg_result in cfg_iter {
+			if let Ok(cfg) = cfg_result {
+				clientconfig.insert(cfg.key.to_string(),cfg.value.to_string());
+				}
+			}
 		}
 	else {
 		dbout(debug,1,format!("Configuration database not found.").as_str());
 		process::exit(1);
+		}
+
+	// Start local IPC listener
+	let addr_str = format!("127.0.0.1:{}", LPORT);
+	let addr: SocketAddr = addr_str.parse().expect("Invalid socket address");
+
+	let ipclistener = match TcpListener::bind(addr) {
+		Ok(ipclistener) => { 
+			dbout(debug,3,format!("Local IPC listening on {}", addr_str).as_str());
+			ipclistener
+			},
+		Err(err) => {
+			dbout(debug,1,format!("Failed to configure local IPC: {}", err).as_str());
+			process::exit(1);
+			return;
+			}
+		};
+
+	for stream in ipclistener.incoming() {
+		match stream {
+			Ok(mut stream) => {
+				let mut buffer = [0; 1024];
+				let bytes_read = stream.read(&mut buffer).expect("Error: Failure reading input stream");
+				let data_raw = String::from_utf8_lossy(&buffer[..bytes_read]);
+				handle_json(data_raw.as_ref(),debug);
+				}
+			Err(e) => {
+				eprintln!("Error: {}", e);
+				}
+			}
 		}
 	}
 
@@ -73,7 +130,7 @@ fn clientsetup() {
 	let mut ui_server = String::new();
 	let mut port: u16 = 10465;
 
-	print!("Enter Luminum server hostname or IP: ");
+	print!("Enter Luminum server hostname or IP address: ");
 	io::stdout().flush().unwrap();
 	io::stdin()
 		.read_line(&mut ui_server)
@@ -83,7 +140,7 @@ fn clientsetup() {
 
 	loop {
 		let mut ui_port = String::new();
-		print!("Enter server port [{}]: ",DPORT);
+		print!("Enter server port [{}]: ", DPORT);
 		io::stdout().flush().unwrap();
 
 		io::stdin().read_line(&mut ui_port).unwrap();
@@ -102,6 +159,12 @@ fn clientsetup() {
 		break;
 		}
 
+	let confconn = Connection::open(CFGPATH).expect("Error: Could not initialize configuration database");
+	confconn.execute("create table if not exists CONFIG ( KEY text not null, VALUE text not null )",[]).expect("Error: Could not create CONFIG table in configuration database");
+	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)",&[&"SHOST",server.as_str()]).expect("Error: Could not insert SHOST into CONFIG table.");
+	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)",&[&"SPORT",port.to_string().as_str()]).expect("Error: Could not insert SPORT into CONFIG table.");
+	confconn.close().unwrap();
+
 	println!("Server host: {}",server);
 	println!("Server port: {}",port);
 
@@ -109,20 +172,6 @@ fn clientsetup() {
 	}
 
 fn lumcomm(debug: bool) {
-	let listener = TcpListener::bind("127.0.0.1:10511").expect("Error: Failed to configure local listener port");
-	for stream in listener.incoming() {
-		match stream {
-			Ok(mut stream) => {
-				let mut buffer = [0; 1024];
-				let bytes_read = stream.read(&mut buffer).expect("Error: Failure reading input stream");
-				let data_raw = String::from_utf8_lossy(&buffer[..bytes_read]);
-				handle_json(data_raw.as_ref(),debug);
-				}
-			Err(e) => {
-				eprintln!("Error: {}", e);
-				}
-			}
-		}
 	}
 
 fn handle_json(data: &str, debug: bool) {
