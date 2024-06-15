@@ -14,7 +14,7 @@ use rusqlite::{params, Connection, Result};
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
-use serde_json::Value;
+use serde_json::{json, to_value, Value};
 
 const VER: &str = "0.0.1";
 const CFGPATH: &str = "/opt/Luminum/LuminumClient/conf/luminum.conf.db";
@@ -131,8 +131,10 @@ fn main() {
 	builder.add_root_certificate(native_tls::Certificate::from_pem(&cert_buffer).expect("Failed to parse certificate"));
 	let connector = builder.build().expect("Failed to create TLS connector");
 
-	let mut server_stream = match connector.connect(server_host, sconn) {
-		Ok(stream) => stream,
+	let mut server_stream;
+
+	 match connector.connect(server_host, sconn) {
+		Ok(stream) => { server_stream = stream; },
 		Err(err) => {
 			dbout(debug,1,format!("TLS handshake failed: {}", err).as_str());
 			process::exit(1);
@@ -167,6 +169,10 @@ fn main() {
 				}
 			}
 		}
+
+if let Err(e) = server_stream.write_all(b"Hello, world!") {
+        eprintln!("Failed to write to server stream: {}", e);
+    }
 	}
 
 fn clientsetup() {
