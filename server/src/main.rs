@@ -5,11 +5,11 @@ use std::env;
 use std::str;
 use std::fs::{self, File};
 use std::path::Path;
-use std::io::{self, BufRead, Read, Write};
+use std::io::{self, BufRead, BufReader, Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::process;
-use std::net::{TcpListener, SocketAddr, TcpStream};
+use std::net::{TcpListener, SocketAddr, TcpStream, Ipv4Addr, Ipv6Addr};
 use libc::setuid;
 use random_str;
 use magic_crypt::{new_magic_crypt, MagicCryptTrait};
@@ -20,7 +20,6 @@ use rpassword;
 use rusqlite::{params, Connection, Result};
 use mysql::*;
 use mysql::prelude::Queryable;
-use std::net::{Ipv4Addr, Ipv6Addr};
 use uuid::Uuid;
 use native_tls::{Identity, TlsAcceptor};
 use openssl::bn::BigNum;
@@ -384,7 +383,11 @@ pub fn register_client(pool: &Arc<Pool>, peer_addr: String, data: &str, debug: b
 			if rcvd_data["product"] == "Luminum Client" {
 				if rcvd_data["content"]["action"] == "register" {
 					let hostname = rcvd_data["content"]["hostname"].as_str().unwrap();
-					let query = format!("insert into STATUS (UID,HOSTNAME,IPV4,OSPLAT,OSVER,REGDATE,LASTSEEN) VALUES ('{}', '{}', '{}', 'Liunx', 'Debian GNU/Linux 12 (bookworm)',now(),now())", uid, hostname, peer_addr);
+					let ipv4 = rcvd_data["content"]["ipv4"].as_str().unwrap_or("");
+					let ipv6 = rcvd_data["content"]["ipv6"].as_str().unwrap_or("");
+					let osplat = rcvd_data["content"]["osplat"].as_str().unwrap();
+					let osver = rcvd_data["content"]["osver"].as_str().unwrap();
+					let query = format!("insert into STATUS (UID,HOSTNAME,IPV4,IPV6,OSPLAT,OSVER,REGDATE,LASTSEEN) VALUES ('{}', '{}', '{}', '{}', '{}', '{}',now(),now())", uid, hostname, ipv4, ipv6, osplat, osver);
 					conn.query_drop(query).unwrap();
 					}
 				}
