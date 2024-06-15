@@ -28,7 +28,8 @@ use openssl::pkey::PKey;
 use openssl::symm::Cipher;
 use openssl::error::ErrorStack;
 use openssl::pkcs12::Pkcs12;
-use openssl::x509::{X509NameBuilder, X509};
+use openssl::x509::{X509NameBuilder, X509, X509Ref};
+use openssl::x509::extension::SubjectAlternativeName;
 use openssl::hash::MessageDigest;
 use openssl::asn1::Asn1Time;
 use openssl::nid::Nid;
@@ -243,6 +244,7 @@ fn main() {
 	let encrypted_dbpass = serverconfig.get("DBPASS").unwrap();
 	let dbpass = mc.decrypt_base64_to_string(&encrypted_dbpass).unwrap();
 
+/*
 	let clients_db_pool = match Pool::new(OptsBuilder::new().socket(Some(socket_path)).user(Some("luminum")).pass(Some(dbpass)).db_name(Some("CLIENTS"))) {
 		Ok(clients_pool) => { clients_pool }
 		Err(err) => {
@@ -258,7 +260,7 @@ fn main() {
 			std::process::exit(1);
 			}
 		};
-
+*/
 	// Use private key passphrase from server configuration and load TLS identity file
 	let encrypted_passphrase = serverconfig.get("PKPASS").unwrap();
 	let passphrase = mc.decrypt_base64_to_string(&encrypted_passphrase).unwrap();
@@ -653,7 +655,7 @@ fn generate_certificate(ui_keypass: &str) -> Result<(), ErrorStack> {
 
 	let mut x509 = X509::builder().expect("Failed to create X509 builder");
 	let name = name_builder.build();
-	x509.set_version(2).expect("Failed to set x509 version");
+	x509.set_version(3).expect("Failed to set x509 version");
 	x509.set_serial_number(&serial_number).unwrap();
 	x509.set_subject_name(&name).expect("Failed to set x509 subject name");
 	x509.set_issuer_name(&name).expect("Failed to set x509 issuer name");
@@ -665,10 +667,18 @@ fn generate_certificate(ui_keypass: &str) -> Result<(), ErrorStack> {
 	x509.set_not_before(&not_before).expect("Failed to set not before");
 	x509.set_not_after(&not_after).expect("Failed to set not after");
 
+	let san = SubjectAlternativeName::new()
+		.ip("192.168.1.10")
+		.dns(cert_cn)
+		.build(&x509.x509v3_context(None, None))
+		.unwrap();
+	x509.append_extension(san).unwrap();
+
 	x509.sign(&prv_key, MessageDigest::sha256()).unwrap();
 
 	let certificate = x509.build();
 	let cert_pem = certificate.to_pem().unwrap();
+
 	match std::fs::write(DCPATH, &cert_pem) {
 		Ok(_) => println!("Certificate written to {}",DCPATH),
 		Err(err) => eprintln!("Error writing certificate to file: {}", err)
