@@ -80,6 +80,11 @@ fn main() {
 	fn write_to_server(stream: Arc<Mutex<TlsStream<TcpStream>>>, data: &[u8]) {
 		let mut stream = stream.lock().unwrap();
 		stream.write_all(data).expect("Failed to write to server");
+
+		let mut buffer = [0; 1024];
+		let bytes_read = stream.read(&mut buffer).expect("Error: Failure reading input stream");
+		let data_raw = String::from_utf8_lossy(&buffer[..bytes_read]);
+		println!("Received: {}", data_raw);
 		}
 
 	if fs::metadata(CFGPATH).is_ok() {
