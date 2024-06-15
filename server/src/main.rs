@@ -33,7 +33,7 @@ use openssl::x509::extension::SubjectAlternativeName;
 use openssl::hash::MessageDigest;
 use openssl::asn1::Asn1Time;
 use openssl::nid::Nid;
-use serde_json::Value;
+use serde_json::{json, to_value, Value};
 
 const VER: &str = "0.0.1";
 const CFGPATH: &str = "/opt/Luminum/LuminumServer/config/server.conf.db";
@@ -349,13 +349,13 @@ fn handle_client(pool: &Arc<Pool>, peer_addr: String, mut stream: native_tls::Tl
 	match stream.read(&mut buffer) {
 		Ok(n) => {
 			let data_raw = String::from_utf8_lossy(&buffer[..n]);
-			handle_json(&pool,peer_addr,data_raw.as_ref(),debug);
+			handle_json(&pool,peer_addr,data_raw.as_ref(),stream,debug);
 			},
 		Err(err) => eprintln!("Error reading from stream: {}", err),
 		}
 	}
 
-fn handle_json(pool: &Arc<Pool>, peer_addr: String, data: &str, debug: bool) {
+fn handle_json(pool: &Arc<Pool>, peer_addr: String, data: &str, mut stream: native_tls::TlsStream<TcpStream>, debug: bool) {
 	// {"product": "Luminum Client","version": "0.0.1","module": "Query","data": {"content": "","signature": ""}}
 	//let v: Value = serde_json::from_str(data);
 	let mut hostname = String::new();
@@ -364,8 +364,8 @@ fn handle_json(pool: &Arc<Pool>, peer_addr: String, data: &str, debug: bool) {
 		Ok(rcvd_data) => {
 			if rcvd_data["product"] == "Luminum Client" {
 				if rcvd_data["content"]["action"] == "register" {
-					dbout(debug,4,format!("Received endpoint registration request from {} ({})", hostname,peer_addr).as_str());
-					register_client(&pool,peer_addr,data,debug);
+					dbout(debug,4,format!("Received endpoint registration request from {}", peer_addr).as_str());
+					register_client(&pool,peer_addr,data,stream,debug);
 					}
 				}
 			}
@@ -375,20 +375,35 @@ fn handle_json(pool: &Arc<Pool>, peer_addr: String, data: &str, debug: bool) {
 		}
 	}
 
-pub fn register_client(pool: &Arc<Pool>, peer_addr: String, data: &str, debug: bool) {
+fn register_client(pool: &Arc<Pool>, peer_addr: String, data: &str, mut stream: native_tls::TlsStream<TcpStream>, debug: bool) {
 	let mut conn = pool.get_conn().unwrap();
 	let uid = Uuid::new_v4();
 	match serde_json::from_str::<Value>(data) {
 		Ok(rcvd_data) => {
 			if rcvd_data["product"] == "Luminum Client" {
 				if rcvd_data["content"]["action"] == "register" {
-					let hostname = rcvd_data["content"]["hostname"].as_str().unwrap();
+					let hostname = rcvd_data["content"]["hostname"].as_str().unwrap_or("");
 					let ipv4 = rcvd_data["content"]["ipv4"].as_str().unwrap_or("");
 					let ipv6 = rcvd_data["content"]["ipv6"].as_str().unwrap_or("");
-					let osplat = rcvd_data["content"]["osplat"].as_str().unwrap();
-					let osver = rcvd_data["content"]["osver"].as_str().unwrap();
+					let osplat = rcvd_data["content"]["osplat"].as_str().unwrap_or("");
+					let osver = rcvd_data["content"]["osver"].as_str().unwrap_or("");
 					let query = format!("insert into STATUS (UID,HOSTNAME,IPV4,IPV6,OSPLAT,OSVER,REGDATE,LASTSEEN) VALUES ('{}', '{}', '{}', '{}', '{}', '{}',now(),now())", uid, hostname, ipv4, ipv6, osplat, osver);
-					conn.query_drop(query).unwrap();
+					match conn.query_drop(query) {
+						Ok(_) => {
+							let mut combined_json = json!({});
+							combined_json["product"] = serde_json::to_value("Luminum Server").unwrap();
+							combined_json["content"]["action"] = serde_json::to_value("register").unwrap();
+							combined_json["content"]["uid"] = serde_json::to_value(uid.to_string()).unwrap();
+							let json_event = serde_json::to_string(&combined_json).unwrap();
+							match stream.write_all(json_event.as_bytes()) {
+								Ok(_) => {},
+								Err(err) => {}
+								}
+							}
+						Err(err) => {
+							dbout(debug,2,format!("Failed to register endpoint \"{}\"",hostname).as_str());
+							}
+						}
 					}
 				}
 			}

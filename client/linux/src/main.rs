@@ -8,6 +8,8 @@ use chrono::format::strftime::StrftimeItems;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::process;
 use std::thread;
+use regex::Regex;
+use etc_os_release::OsRelease;
 use gethostname::gethostname;
 use std::net::{TcpListener, SocketAddr, ToSocketAddrs, TcpStream};
 use native_tls::{TlsConnector, TlsStream};
@@ -104,7 +106,6 @@ fn main() {
 	let server_host = clientconfig.get("SHOST").unwrap();
 	let server_port = clientconfig.get("SPORT").unwrap();
 	let server_addr_str = format!("{}:{}", server_host, server_port);
-	//let server_addr: SocketAddr = server_addr_str.to_socket_addrs().expect("Invalid server address");
 	let server_addr: SocketAddr = match server_addr_str.to_socket_addrs() {
 		Ok(mut addrs) => {
 			if let Some(addr) = addrs.next() { addr }
@@ -135,6 +136,8 @@ fn main() {
 			}
 		};
 
+	let sconn_clone = sconn.try_clone().expect("Failed to clone TcpStream");
+
 	let mut builder = native_tls::TlsConnector::builder();
 	builder.add_root_certificate(native_tls::Certificate::from_pem(&cert_buffer).expect("Failed to parse certificate"));
 	let connector = builder.build().expect("Failed to create TLS connector");
@@ -151,8 +154,32 @@ fn main() {
 
 	let server_stream = Arc::new(Mutex::new(server_stream));
 
+	let local_addr: SocketAddr = sconn_clone.local_addr().expect("Error: Unable to determine local socket address");
+	let ip_address = local_addr.ip().to_string();
+
+	let ipv4_regex = Regex::new(r"^(\d{1,3}\.){3}\d{1,3}$").unwrap();
+	let ipv6_regex = Regex::new(r"^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$").unwrap();
+	let mut ip_type = String::new();
+
+	if ipv4_regex.is_match(&ip_address) { ip_type = "IPV4".to_string(); }
+	else if ipv6_regex.is_match(&ip_address) { ip_type = "IPV6".to_string(); }
+
+	let mut ipv4_address = String::new();
+	let mut ipv6_address = String::new();
+
+	if ip_type == "IPV4" {
+		ipv4_address = ip_address.to_string();
+		ipv6_address = " ".to_string();
+		}
+	else if ip_type == "IPV6" {
+		ipv6_address = ip_address.to_string();
+		ipv4_address = " ".to_string();
+		}
+
 	// Get client status from server
 	let mut uid = String::new();
+	let os_release = get_os_release();
+
 	if clientconfig.get("UID").is_none() {
 		dbout(debug,4,format!("Endpoint is not registered with the Luminum server. Sending registration request...").as_str());
 		let mut combined_json = json!({});
@@ -160,8 +187,10 @@ fn main() {
 		combined_json["version"] = serde_json::to_value(VER).unwrap();
 		combined_json["content"]["action"] = serde_json::to_value("register").unwrap();
 		combined_json["content"]["hostname"] = serde_json::to_value(endpointname.clone()).unwrap();
-		let ejson = json!({"dtype":"inotify"});
-		let event_info: Value = serde_json::to_value(ejson).unwrap();
+		combined_json["content"]["ipv4"] = serde_json::to_value(ipv4_address).unwrap();
+		combined_json["content"]["ipv6"] = serde_json::to_value(ipv6_address).unwrap();
+		combined_json["content"]["osplat"] = serde_json::to_value("Linux").unwrap();
+		combined_json["content"]["osver"] = serde_json::to_value(os_release).unwrap();
 		let json_event = serde_json::to_string(&combined_json).unwrap();
 		write_to_server(server_stream.clone(), json_event.as_bytes());
 		}
@@ -265,6 +294,15 @@ fn handle_json(data: &str, debug: bool) {
 			dbout(debug,2,format!("Malformed data received on local listener").as_str());
 			}
 		}
+	}
+
+fn get_os_release() -> String {
+	let mut os_release = String::new();
+	match OsRelease::open() {
+		Ok(result) => { os_release = result.pretty_name().to_string(); }
+		Err(_) => { os_release = "Unknown".to_string(); }
+		}
+	return os_release;
 	}
 
 fn dbout(debug: bool, outlvl: i32, output: &str) {
