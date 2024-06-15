@@ -5,13 +5,14 @@ use clap::{Arg, App};
 use colored::Colorize;
 use chrono::Local;
 use chrono::format::strftime::StrftimeItems;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::process;
+use std::thread;
 use std::net::{TcpListener, SocketAddr, ToSocketAddrs, TcpStream};
 use native_tls::{TlsConnector, TlsStream};
 use rusqlite::{params, Connection, Result};
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use serde_json::{json, to_value, Value};
@@ -92,6 +93,11 @@ fn main() {
 		process::exit(1);
 		}
 
+	fn write_to_server(stream: Arc<Mutex<TlsStream<TcpStream>>>, data: &[u8]) {
+		let mut stream = stream.lock().unwrap();
+		stream.write_all(data).expect("Failed to write to server");
+		}
+
 	// Conncet to Luminum Server
 	let server_host = clientconfig.get("SHOST").unwrap();
 	let server_port = clientconfig.get("SPORT").unwrap();
@@ -133,13 +139,33 @@ fn main() {
 
 	let mut server_stream;
 
-	 match connector.connect(server_host, sconn) {
+	match connector.connect(server_host, sconn) {
 		Ok(stream) => { server_stream = stream; },
 		Err(err) => {
 			dbout(debug,1,format!("TLS handshake failed: {}", err).as_str());
 			process::exit(1);
 			}
 		};
+
+	let server_stream = Arc::new(Mutex::new(server_stream));
+
+	// Get client status from server
+	let mut uid = String::new();
+	if clientconfig.get("UID").is_none() {
+		dbout(debug,3,format!("Endpoint is not registered with the Luminum server.").as_str());
+		let eijson = json!({"dtype":"inotify"});
+		let event_info: Value = serde_json::to_value(eijson).unwrap();
+		let mut combined_json = json!({});
+		combined_json["action"] = serde_json::to_value("register").unwrap();
+		let json_event = serde_json::to_string(&combined_json).unwrap();
+		write_to_server(server_stream.clone(), json_event.as_bytes());
+		}
+	else {
+		dbout(debug,3,format!("Endpoint is registered with UID {}.", uid).as_str());
+		}
+
+	//let data = b"Hello, server!";
+	//write_to_server(server_stream.clone(), data);
 
 	// Set up local IPC listener
 	let addr_str = format!("127.0.0.1:{}", LPORT);
@@ -156,23 +182,26 @@ fn main() {
 			}
 		};
 
-	for stream in ipclistener.incoming() {
-		match stream {
+	let ipcstream = Arc::new(Mutex::new(None));
+
+	for incoming in ipclistener.incoming() {
+		match incoming {
 			Ok(mut stream) => {
-				let mut buffer = [0; 1024];
-				let bytes_read = stream.read(&mut buffer).expect("Error: Failure reading input stream");
-				let data_raw = String::from_utf8_lossy(&buffer[..bytes_read]);
-				handle_json(data_raw.as_ref(),debug);
-				}
+				let shared_stream = Arc::clone(&ipcstream);
+				thread::spawn(move || {
+					let mut buffer = [0; 1024];
+					let bytes_read = stream.read(&mut buffer).expect("Error: Failure reading input stream");
+					let data_raw = String::from_utf8_lossy(&buffer[..bytes_read]);
+					handle_json(data_raw.as_ref(),debug);
+					let mut shared_stream = shared_stream.lock().unwrap();
+					*shared_stream = Some(stream);
+					});
+				},
 			Err(e) => {
 				eprintln!("Error: {}", e);
 				}
 			}
 		}
-
-if let Err(e) = server_stream.write_all(b"Hello, world!") {
-        eprintln!("Failed to write to server stream: {}", e);
-    }
 	}
 
 fn clientsetup() {
