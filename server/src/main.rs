@@ -390,24 +390,31 @@ fn register_client(pool: &Arc<Pool>, peer_addr: String, data: &str, mut stream: 
 					let query = format!("insert into STATUS (UID,HOSTNAME,IPV4,IPV6,OSPLAT,OSVER,REGDATE,LASTSEEN) VALUES ('{}', '{}', '{}', '{}', '{}', '{}',now(),now())", uid, hostname, ipv4, ipv6, osplat, osver);
 					match conn.query_drop(query) {
 						Ok(_) => {
+							dbout(debug,3,format!("Saved information for endpoint \"{}\" with UID: {} ",hostname, uid).as_str());
+							dbout(debug,4,format!("Sending new UID to endpoint...").as_str());
 							let mut combined_json = json!({});
 							combined_json["product"] = serde_json::to_value("Luminum Server").unwrap();
 							combined_json["content"]["action"] = serde_json::to_value("register").unwrap();
 							combined_json["content"]["uid"] = serde_json::to_value(uid.to_string()).unwrap();
 							let json_event = serde_json::to_string(&combined_json).unwrap();
 							match stream.write_all(json_event.as_bytes()) {
-								Ok(_) => {},
-								Err(err) => {}
+								Ok(_) => {
+									dbout(debug,3,format!("Registration for \"{}\" successful.",hostname).as_str());
+									},
+								Err(err) => {
+									dbout(debug,2,format!("There was an error sending the UID to the endpoint: {}", err).as_str());
+									}
 								}
 							}
 						Err(err) => {
-							dbout(debug,2,format!("Failed to register endpoint \"{}\"",hostname).as_str());
+							dbout(debug,2,format!("Registration failed for endpoint \"{}\"",hostname).as_str());
 							}
 						}
 					}
 				}
 			}
 		Err(err) => {
+			dbout(debug,2,format!("There was an error parsing the registration request: {}",err).as_str());
 			}
 		}
 	}

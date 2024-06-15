@@ -79,7 +79,14 @@ fn main() {
 
 	fn write_to_server(stream: Arc<Mutex<TlsStream<TcpStream>>>, data: &[u8], debug: bool) {
 		let mut stream = stream.lock().unwrap();
-		stream.write_all(data).expect("Failed to write to server");
+		match stream.write_all(data) {
+			Ok(_) => {
+				dbout(debug,3,format!("Successfully sent registration request to server.").as_str());
+				}
+			Err(err) => {
+				dbout(debug,2,format!("Failed to send registration request: {}", err).as_str());
+				}
+			}
 
 		let mut buffer = [0; 1024];
 		let bytes_read = stream.read(&mut buffer).expect("Error: Failure reading input stream");
@@ -89,14 +96,15 @@ fn main() {
 			Ok(rcvd_data) => {
 				if rcvd_data["product"] == "Luminum Server" {
 					if rcvd_data["content"]["action"] == "register" {
+						dbout(debug,4,format!("Received registration response from server.").as_str());
 						let new_uid = rcvd_data["content"]["uid"].as_str().unwrap_or("");
 						let uuid_pattern = Regex::new(r"^[0-9a-fA-F\-]+$").unwrap();
 						if uuid_pattern.is_match(new_uid) {
-							let confconn = Connection::open(CFGPATH).expect("Error: Could not open configuration database.");
-							match confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)",&[&"UID",rcvd_data["content"]["uid"].to_string().as_str()]) {
+							let confconn = Connection::open(CFGPATH).expect("Error: Could not open client configuration database.");
+							match confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)",&[&"UID",new_uid]) {
 								Ok(_) => {
-									dbout(debug,3,format!("Server-assigned UID saved to configuration").as_str());
-									dbout(debug,3,format!("Registration successful.").as_str());
+									dbout(debug,3,format!("UID saved to client configuration.").as_str());
+									dbout(debug,3,format!("Registration complete.").as_str());
 									}
 								Err(err) => {
 									dbout(debug,1,format!("Unable to save UID value to configuration database: {}", err).as_str());
@@ -159,7 +167,7 @@ fn main() {
 
 	let sconn = match TcpStream::connect(server_addr) {
 		Ok(sconn) => {
-			dbout(debug,3,format!("Connected to Luminum server {}",server_addr_str).as_str());
+			dbout(debug,3,format!("Connected to Luminum server at {}",server_addr_str).as_str());
 			sconn
 			},
 		Err(err) => {
@@ -224,11 +232,10 @@ fn main() {
 		combined_json["content"]["osver"] = serde_json::to_value(os_release).unwrap();
 		let json_event = serde_json::to_string(&combined_json).unwrap();
 		write_to_server(server_stream.clone(), json_event.as_bytes(),debug);
-		dbout(debug,4,format!("Successfully sent registration request to server").as_str());
 		}
 	else {
 		uid = clientconfig.get("UID").expect("Error: could not set UID from client configuration.").to_string();
-		dbout(debug,3,format!("Endpoint UID: {}", uid).as_str());
+		dbout(debug,3,format!("Endpoint UID: {}", uid.to_string()).as_str());
 		}
 
 	// Set up local IPC listener
