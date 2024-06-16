@@ -349,10 +349,23 @@ fn main() {
 				// Handle the connection
 				let peer_addr_str = peer_addr.to_string();
 				let mut buffer = [0; 1024];
+
 				match tls_stream.read(&mut buffer) {
 					Ok(n) => {
 						let data_raw = String::from_utf8_lossy(&buffer[..n]);
-						handle_json(&clients_db_pool,peer_addr.to_string(),data_raw.as_ref(),&mut tls_stream,debug);
+						match serde_json::from_str::<Value>(&data_raw) {
+							Ok(rcvd_data) => {
+								if rcvd_data["product"] == "Luminum Client" {
+									handle_json(&clients_db_pool.clone(),peer_addr.to_string(),data_raw.as_ref(),&mut tls_stream,debug);;
+									}
+								else if rcvd_data["product"] == "Luminum Integrity" {
+									handle_json(&integrity_db_pool.clone(),peer_addr.to_string(),data_raw.as_ref(),&mut tls_stream,debug);
+									}
+								},
+							Err(err) => {
+								dbout(debug,2,format!("Error reading from stream: {}", err).as_str());
+								}
+							}
 						},
 					Err(err) => {
 						dbout(debug,2,format!("Error reading from stream: {}", err).as_str());
