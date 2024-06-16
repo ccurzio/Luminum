@@ -7,6 +7,7 @@ use chrono::Local;
 use chrono::format::strftime::StrftimeItems;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::process;
+use std::process::Command;
 use std::thread;
 use regex::Regex;
 use etc_os_release::OsRelease;
@@ -60,7 +61,7 @@ fn main() {
 			}
 		}
 
-	let clientconfig: HashMap<String, String> = HashMap::new();
+	let mut clientconfig: HashMap<String, String> = HashMap::new();
 	let endpointname = gethostname().to_string_lossy().into_owned();
 
         // Set up break handler
@@ -282,6 +283,7 @@ fn main() {
 	let ipcstream = Arc::new(Mutex::new(None));
 
 	for incoming in ipclistener.incoming() {
+		let cloned_server_stream = server_stream.clone();
 		match incoming {
 			Ok(mut stream) => {
 				let shared_stream = Arc::clone(&ipcstream);
@@ -289,7 +291,7 @@ fn main() {
 					let mut buffer = [0; 1024];
 					let bytes_read = stream.read(&mut buffer).expect("Error: Failure reading input stream");
 					let data_raw = String::from_utf8_lossy(&buffer[..bytes_read]);
-					handle_json(data_raw.as_ref(),debug);
+					handle_json(cloned_server_stream,data_raw.as_ref(),debug);
 					let mut shared_stream = shared_stream.lock().unwrap();
 					*shared_stream = Some(stream);
 					});
@@ -350,11 +352,32 @@ fn clientsetup() {
 	process::exit(0);
 	}
 
-fn handle_json(data: &str, debug: bool) {
+fn handle_json(stream: Arc<Mutex<TlsStream<TcpStream>>>, data: &str, debug: bool) {
+	let mut lumy = String::new();
 	match serde_json::from_str::<Value>(data) {
 		Ok(rcvd_data) => {
-			if rcvd_data["product"] == "Luminum Integrity" {
+			for line in data.lines() {
+				let parsed_value: Value = serde_json::from_str(line).expect("Error: could not parse JSON");
+				if let Some(product) = parsed_value.get("product") {
+					if product == "Luminum Integrity" {
+						lumy = "Integrity".to_string();
+						if let Some(content) = parsed_value.get("content") {
+							if let Some(event) = content.get("notify_event") {
+								if let Some(kind_value) = event.get("kind") {
+									if let Some(kind_str) = kind_value.as_str() {
+										}
+									}
+								if let Some(path_value) = event.get("paths") {
+									}
+								}
+							}
+						}
+					}
 				}
+//{"content":{"event_info":{"dtype":"inotify"},"notify_event":{"kind":"Create(File)","paths":["/usr/foo"]}},"product":"Luminum Integrity"}
+//{"content":{"event_info":{"dtype":"inotify"},"notify_event":{"kind":"Modify(Metadata(Any))","paths":["/usr/foo"]}},"product":"Luminum Integrity"}
+//{"content":{"event_info":{"dtype":"inotify"},"notify_event":{"kind":"Access(Close(Write))","paths":["/usr/foo"]}},"product":"Luminum Integrity"}
+//{"content":{"event_info":{"dtype":"inotify"},"notify_event":{"kind":"Remove(File)","paths":["/usr/foo"]}},"product":"Luminum Integrity"}
 			}
 		Err(err) => {
 			dbout(debug,2,format!("Malformed data received on local listener").as_str());
