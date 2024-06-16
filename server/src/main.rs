@@ -261,7 +261,7 @@ fn main() {
 
 	let clients_db_pool = Arc::new(Pool::new(opts).unwrap());
 
-/*
+
 	let clientsconn = match clients_db_pool.get_conn() {
 		Ok(conn) => {
 			dbout(debug,3,format!("Connected to MySQL database: CLIENTS").as_str());
@@ -272,7 +272,7 @@ fn main() {
 			std::process::exit(1);
 			}
 		};
-*/
+
 	// Use private key passphrase from server configuration and load TLS identity file
 	let encrypted_passphrase = serverconfig.get("PKPASS").unwrap();
 	let passphrase = mc.decrypt_base64_to_string(&encrypted_passphrase).unwrap();
@@ -367,6 +367,78 @@ fn handle_json(pool: &Arc<Pool>, peer_addr: String, data: &str, mut stream: nati
 					dbout(debug,4,format!("Received endpoint registration request from {}", peer_addr).as_str());
 					register_client(&pool,peer_addr,data,stream,debug);
 					}
+				else if rcvd_data["content"]["action"] == "verify" {
+					verify_client(&pool,peer_addr,data,stream,debug);
+					}
+				}
+			}
+		Err(err) => {
+			dbout(debug,2,format!("Malformed data in stream from {}: {}",peer_addr, err).as_str());
+			}
+		}
+	}
+
+fn verify_client(pool: &Arc<Pool>, peer_addr: String, data: &str, mut stream: native_tls::TlsStream<TcpStream>, debug: bool) {
+	let mut conn = pool.get_conn().unwrap();
+	let mut vstat = String::new();
+	match serde_json::from_str::<Value>(data) {
+		Ok(rcvd_data) => {
+			if rcvd_data["product"] == "Luminum Client" {
+				if rcvd_data["content"]["action"] == "verify" {
+					let uid = rcvd_data["content"]["uid"].as_str().unwrap_or("");
+					let stmt = conn.prep("select count(*) from STATUS where UID = ?").expect("Error preparing query");
+					let count_result: Result<Option<Row>, Error> = conn.exec_first(&stmt, (uid,));
+					match count_result {
+						Ok(Some(row)) => {
+							let count: u64 = row.get(0).unwrap_or(0);
+							if count == 0 {
+								vstat = "NOREG".to_string();
+								dbout(debug,2,format!("Registration mismatch between server and client for UID {}",uid).as_str());
+								}
+							else if count == 1 {
+								vstat = "OK".to_string();
+								dbout(debug,3,format!("Endpoint registration verified for UID {}",uid).as_str());
+								}
+							else if count > 1 {
+								vstat = "MULTIPLE".to_string();
+								dbout(debug,2,format!("Multiple registered clients foundfor UID {}",uid).as_str());
+								}
+							},
+						Ok(None) => {},
+						Err(err) => {
+							dbout(debug,2,format!("Error querying CLIENTS database: {}",err).as_str());
+							}
+						}
+					let mut combined_json = json!({});
+					let newuid = Uuid::new_v4();
+					combined_json["product"] = serde_json::to_value("Luminum Server").unwrap();
+					combined_json["content"]["action"] = serde_json::to_value("verify").unwrap();
+					combined_json["content"]["status"] = serde_json::to_value(&vstat).unwrap();
+					combined_json["content"]["uid"] = serde_json::to_value(uid.to_string()).unwrap();
+					let json_event = serde_json::to_string(&combined_json).unwrap();
+					match stream.write_all(json_event.as_bytes()) {
+						Ok(_) => {
+							},
+						Err(err) => {
+							dbout(debug,2,format!("There was an error sending the update to the endpoint: {}", err).as_str());
+							}
+						}
+					if vstat == "OK" {
+						let stmt = conn.prep("update STATUS set LASTSEEN = now() where UID = ?").expect("Error preparing query");
+						match conn.exec_drop(&stmt, (uid,)) {
+							Ok(_) => {  }
+							Err(err) => {
+								dbout(debug,2,format!("There was an error updating the database: {}", err).as_str());
+								}
+							}
+						}
+					else if vstat == "NOREG" {
+						combined_json["content"]["status"] = serde_json::to_value("noreg").unwrap();
+						}
+					else if vstat == "MULTIPLE" {
+						combined_json["content"]["status"] = serde_json::to_value("multiple").unwrap();
+						}
+					}
 				}
 			}
 		Err(err) => {
@@ -399,7 +471,7 @@ fn register_client(pool: &Arc<Pool>, peer_addr: String, data: &str, mut stream: 
 							let json_event = serde_json::to_string(&combined_json).unwrap();
 							match stream.write_all(json_event.as_bytes()) {
 								Ok(_) => {
-									dbout(debug,3,format!("Registration for \"{}\" successful.",hostname).as_str());
+									dbout(debug,3,format!("Registration for \"{}\" is complete.",hostname).as_str());
 									},
 								Err(err) => {
 									dbout(debug,2,format!("There was an error sending the UID to the endpoint: {}", err).as_str());

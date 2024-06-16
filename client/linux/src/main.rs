@@ -31,7 +31,6 @@ struct Config {
 	}
 
 fn main() {
-	let endpointname = gethostname().to_string_lossy().into_owned();
 	let matches = App::new("Luminum Client (Linux)")
 		.version(VER)
 		.author("Christopher R. Curzio <ccurzio@luminum.net>")
@@ -52,8 +51,6 @@ fn main() {
 	let setup = matches.is_present("setup");
 	let debug = matches.is_present("debug");
 
-	let mut clientconfig: HashMap<String, String> = HashMap::new();
-
 	if setup {
 		dbout(debug,4,format!("Starting client setup...").as_str());
 		if fs::metadata(CFGPATH).is_err() { clientsetup(); }
@@ -62,6 +59,9 @@ fn main() {
 			process::exit(1);
 			}
 		}
+
+	let clientconfig: HashMap<String, String> = HashMap::new();
+	let endpointname = gethostname().to_string_lossy().into_owned();
 
         // Set up break handler
 	let running = Arc::new(AtomicBool::new(true));
@@ -81,10 +81,10 @@ fn main() {
 		let mut stream = stream.lock().unwrap();
 		match stream.write_all(data) {
 			Ok(_) => {
-				dbout(debug,3,format!("Successfully sent registration request to server.").as_str());
+				dbout(debug,3,format!("Data message successfully sent to server.").as_str());
 				}
 			Err(err) => {
-				dbout(debug,2,format!("Failed to send registration request: {}", err).as_str());
+				dbout(debug,2,format!("Failed to send data package: {}", err).as_str());
 				}
 			}
 
@@ -114,12 +114,37 @@ fn main() {
 							confconn.close().unwrap();
 							}
 						}
+					else if rcvd_data["content"]["action"] == "verify" {
+						let vstat = rcvd_data["content"]["status"].as_str().unwrap_or("");
+						let uid = rcvd_data["content"]["uid"].as_str().unwrap_or("");
+						if vstat == "OK" {
+							dbout(debug,3,format!("Verified server association with UID.").as_str());
+							}
+						else if vstat == "NOREG" {
+							dbout(debug,2,format!("Registration mismatch detected. Revoking UID {}",uid).as_str());
+							let confconn = Connection::open(CFGPATH).expect("Error: Could not initialize configuration database");
+							let mut stmt = confconn.execute("delete from CONFIG where KEY = 'UID'",[]).expect("Error with configuration delete query");
+							confconn.close().unwrap();
+							dbout(debug,1,format!("UID has been revoked. Please restart the service to re-register with the server.").as_str());
+							process::exit(1);
+							}
+						}
 					}
 				}
 			Err(err) => {
 				dbout(debug,2,format!("Malformed data in stream from server: {}", err).as_str());
 				}
 			}
+		}
+
+	fn verify_ask(stream: Arc<Mutex<TlsStream<TcpStream>>>, uid: String, debug: bool) {
+		let mut combined_json = json!({});
+		combined_json["product"] = serde_json::to_value("Luminum Client").unwrap();
+		combined_json["version"] = serde_json::to_value(VER).unwrap();
+		combined_json["content"]["action"] = serde_json::to_value("verify").unwrap();
+		combined_json["content"]["uid"] = serde_json::to_value(uid).unwrap();
+		let json_event = serde_json::to_string(&combined_json).unwrap();
+		write_to_server(stream, json_event.as_bytes(),debug);
 		}
 
 	if fs::metadata(CFGPATH).is_ok() {
@@ -215,12 +240,12 @@ fn main() {
 		ipv4_address = " ".to_string();
 		}
 
-	// Get client status from server
+	// Get client status from server and register if needed
 	let mut uid = String::new();
-	let os_release = get_os_release();
 
 	if clientconfig.get("UID").is_none() {
 		dbout(debug,4,format!("Endpoint is not registered with the Luminum server. Sending registration request...").as_str());
+		let os_release = get_os_release();
 		let mut combined_json = json!({});
 		combined_json["product"] = serde_json::to_value("Luminum Client").unwrap();
 		combined_json["version"] = serde_json::to_value(VER).unwrap();
@@ -236,6 +261,7 @@ fn main() {
 	else {
 		uid = clientconfig.get("UID").expect("Error: could not set UID from client configuration.").to_string();
 		dbout(debug,3,format!("Endpoint UID: {}", uid.to_string()).as_str());
+		verify_ask(server_stream.clone(),uid,debug);
 		}
 
 	// Set up local IPC listener
@@ -326,10 +352,11 @@ fn clientsetup() {
 
 fn handle_json(data: &str, debug: bool) {
 	match serde_json::from_str::<Value>(data) {
-		Ok(v) => {
-			if let content = v["content"].to_string() { println!("{}", content); }
+		Ok(rcvd_data) => {
+			if rcvd_data["product"] == "Luminum Integrity" {
+				}
 			}
-		Err(e) => {
+		Err(err) => {
 			dbout(debug,2,format!("Malformed data received on local listener").as_str());
 			}
 		}
