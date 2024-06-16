@@ -253,18 +253,34 @@ fn main() {
 
 	let socket_path = "/var/run/mysqld/mysqld.sock";
 
-	let opts = Opts::from(OptsBuilder::new()
+	let copts = Opts::from(OptsBuilder::new()
 		.socket(Some(socket_path))
 		.user(Some("luminum"))
-		.pass(Some(dbpass))
+		.pass(Some(dbpass.clone()))
 		.db_name(Some("CLIENTS")));
-
-	let clients_db_pool = Arc::new(Pool::new(opts).unwrap());
-
+	let clients_db_pool = Arc::new(Pool::new(copts).unwrap());
 
 	let clientsconn = match clients_db_pool.get_conn() {
-		Ok(conn) => {
+		Ok(cconn) => {
 			dbout(debug,3,format!("Connected to MySQL database: CLIENTS").as_str());
+			cconn
+			}
+		Err(err) => {
+			dbout(debug,1,format!("Error connecting to MySQL database: {}", err).as_str());
+			std::process::exit(1);
+			}
+		};
+
+	let liopts = Opts::from(OptsBuilder::new()
+		.socket(Some(socket_path))
+		.user(Some("luminum"))
+		.pass(Some(dbpass.clone()))
+		.db_name(Some("INTEGRITY")));
+	let integrity_db_pool = Arc::new(Pool::new(liopts).unwrap());
+
+	let liconn = match integrity_db_pool.get_conn() {
+		Ok(conn) => {
+			dbout(debug,3,format!("Connected to MySQL database: INTEGRITY").as_str());
 			conn
 			}
 		Err(err) => {
@@ -321,9 +337,9 @@ fn main() {
 	// Listen for incoming connections
 	while running.load(Ordering::SeqCst) {
 		match listener.accept() {
-			Ok((stream, peer_addr)) => {
+			Ok((mut stream, peer_addr)) => {
 				// Accept TLS connection
-				let tls_stream = match acceptor.accept(stream) {
+				let mut tls_stream = match acceptor.accept(stream) {
 					Ok(stream) => stream,
 					Err(err) => {
 						dbout(debug,2,format!("Error accepting TLS connection: {}", err).as_str());
@@ -332,7 +348,16 @@ fn main() {
 					};
 				// Handle the connection
 				let peer_addr_str = peer_addr.to_string();
-				handle_client(&clients_db_pool,peer_addr_str,tls_stream,debug);
+				let mut buffer = [0; 1024];
+				match tls_stream.read(&mut buffer) {
+					Ok(n) => {
+						let data_raw = String::from_utf8_lossy(&buffer[..n]);
+						handle_json(&clients_db_pool,peer_addr.to_string(),data_raw.as_ref(),&mut tls_stream,debug);
+						},
+					Err(err) => {
+						dbout(debug,2,format!("Error reading from stream: {}", err).as_str());
+						}
+					}
 				},
 			Err(err) => { dbout(debug,2,format!("Error accepting connection: {}", err).as_str()); }
 			}
@@ -341,34 +366,45 @@ fn main() {
 	dbout(debug,0,format!("Luminum server daemon stopped.").as_str());
 	}
 
-fn handle_client(pool: &Arc<Pool>, peer_addr: String, mut stream: native_tls::TlsStream<TcpStream>, debug: bool) {
-	// Buffer to store incoming data
-	let mut buffer = [0; 1024];
-
-	// Read data from the stream
-	match stream.read(&mut buffer) {
-		Ok(n) => {
-			let data_raw = String::from_utf8_lossy(&buffer[..n]);
-			handle_json(&pool,peer_addr,data_raw.as_ref(),stream,debug);
-			},
-		Err(err) => eprintln!("Error reading from stream: {}", err),
-		}
-	}
-
-fn handle_json(pool: &Arc<Pool>, peer_addr: String, data: &str, mut stream: native_tls::TlsStream<TcpStream>, debug: bool) {
+fn handle_json(pool: &Arc<Pool>, peer_addr: String, data: &str, stream: &mut native_tls::TlsStream<TcpStream>, debug: bool) {
 	// {"product": "Luminum Client","version": "0.0.1","module": "Query","data": {"content": "","signature": ""}}
 	//let v: Value = serde_json::from_str(data);
 	let mut hostname = String::new();
 
 	match serde_json::from_str::<Value>(data) {
 		Ok(rcvd_data) => {
-			if rcvd_data["product"] == "Luminum Client" {
-				if rcvd_data["content"]["action"] == "register" {
-					dbout(debug,4,format!("Received endpoint registration request from {}", peer_addr).as_str());
-					register_client(&pool,peer_addr,data,stream,debug);
-					}
-				else if rcvd_data["content"]["action"] == "verify" {
-					verify_client(&pool,peer_addr,data,stream,debug);
+			for line in data.lines() {
+				let parsed_value: Value = serde_json::from_str(line).expect("Error: could not parse JSON");
+				if let Some(product) = parsed_value.get("product") {
+					if product == "Luminum Client" {
+						if let Some(content) = parsed_value.get("content") {
+							if let Some(action) = content.get("action") {
+								if action == "register" {
+									dbout(debug,4,format!("Received endpoint registration request from {}",&peer_addr).as_str());
+									register_client(&pool,peer_addr.clone(),data,stream,debug);
+									}
+								else if action == "verify" {
+									verify_client(&pool,peer_addr.clone(),data,stream,debug);
+									}
+								else if action == "config" {
+									if let Some(cgfreq) = action.get("config") {
+										}
+									}
+								}
+							}
+						}
+					else if product == "Luminum Integrity" {
+						if let Some(content) = parsed_value.get("content") {
+							if let Some(action) = content.get("action") {
+								if action == "config" {
+									if let Some(cgfreq) = action.get("config") {
+										if let Some(uid) = cgfreq.get("uid") {
+											}
+										}
+									}
+								}
+							}
+						}
 					}
 				}
 			}
@@ -378,7 +414,7 @@ fn handle_json(pool: &Arc<Pool>, peer_addr: String, data: &str, mut stream: nati
 		}
 	}
 
-fn verify_client(pool: &Arc<Pool>, peer_addr: String, data: &str, mut stream: native_tls::TlsStream<TcpStream>, debug: bool) {
+fn verify_client(pool: &Arc<Pool>, peer_addr: String, data: &str, stream: &mut native_tls::TlsStream<TcpStream>, debug: bool) {
 	let mut conn = pool.get_conn().unwrap();
 	let mut vstat = String::new();
 	match serde_json::from_str::<Value>(data) {
@@ -447,7 +483,7 @@ fn verify_client(pool: &Arc<Pool>, peer_addr: String, data: &str, mut stream: na
 		}
 	}
 
-fn register_client(pool: &Arc<Pool>, peer_addr: String, data: &str, mut stream: native_tls::TlsStream<TcpStream>, debug: bool) {
+fn register_client(pool: &Arc<Pool>, peer_addr: String, data: &str, stream: &mut native_tls::TlsStream<TcpStream>, debug: bool) {
 	let mut conn = pool.get_conn().unwrap();
 	let uid = Uuid::new_v4();
 	match serde_json::from_str::<Value>(data) {
