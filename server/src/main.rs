@@ -876,8 +876,9 @@ fn generate_certificate(ui_keypass: &str) -> Result<(), ErrorStack> {
 		Err(err) => eprintln!("Error writing certificate to file: {}", err)
 		}
 
-	let pkcs12_builder = Pkcs12::builder();
-	let pkcs12 = pkcs12_builder.build(&ui_keypass,"Luminum Server Key",&prv_key, &certificate) .expect("Failed to build PKCS#12 structure");
+	let mut pkcs12_builder = Pkcs12::builder();
+	//let pkcs12 = pkcs12_builder.build(&ui_keypass,"Luminum Server Key",&prv_key, &certificate).expect("Failed to build PKCS#12 structure");
+	let pkcs12 = pkcs12_builder.name("Luminum Server Key").pkey(&prv_key).cert(&certificate).build2(&ui_keypass).expect("Failed to build PKCS#12 structure");
 	let pkcs12_der = pkcs12.to_der().expect("Failed to convert PKCS#12 to DER format");
 	match std::fs::write(DIPATH, &pkcs12_der) {
 		Ok(_) => println!("Identity written to {}",DIPATH),
