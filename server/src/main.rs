@@ -390,7 +390,8 @@ fn handle_json(pool: &Arc<Pool>, peer_addr: String, data: &str, stream: &mut nat
 	let mut conn = pool.get_conn().unwrap();
 
 	match serde_json::from_str::<Value>(data) {
-		Ok(rcvd_data) => {
+		//Ok(rcvd_data) => {
+		Ok(_) => {
 			for line in data.lines() {
 				let parsed_value: Value = serde_json::from_str(line).expect("Error: could not parse JSON");
 				if let Some(product) = parsed_value.get("product") {
