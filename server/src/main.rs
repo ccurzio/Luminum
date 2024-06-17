@@ -360,10 +360,10 @@ fn main() {
 						match serde_json::from_str::<Value>(&data_raw) {
 							Ok(rcvd_data) => {
 								if rcvd_data["product"] == "Luminum Client" {
-									handle_json(&clients_db_pool.clone(),peer_addr.to_string(),data_raw.as_ref(),&mut tls_stream,debug);
+									handle_msg(&clients_db_pool.clone(),peer_addr.to_string(),data_raw.as_ref(),&mut tls_stream,debug);
 									}
 								else if rcvd_data["product"] == "Luminum Integrity" {
-									handle_json(&integrity_db_pool.clone(),peer_addr.to_string(),data_raw.as_ref(),&mut tls_stream,debug);
+									handle_msg(&integrity_db_pool.clone(),peer_addr.to_string(),data_raw.as_ref(),&mut tls_stream,debug);
 									}
 								},
 							Err(err) => {
@@ -383,7 +383,7 @@ fn main() {
 	dbout(debug,0,format!("Luminum server daemon stopped.").as_str());
 	}
 
-fn handle_json(pool: &Arc<Pool>, peer_addr: String, data: &str, stream: &mut native_tls::TlsStream<TcpStream>, debug: bool) {
+fn handle_nsg(pool: &Arc<Pool>, peer_addr: String, data: &str, stream: &mut native_tls::TlsStream<TcpStream>, debug: bool) {
 	// {"product": "Luminum Client","version": "0.0.1","module": "Query","data": {"content": "","signature": ""}}
 	//let v: Value = serde_json::from_str(data);
 	//let hostname = String::new();
