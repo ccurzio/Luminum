@@ -5,9 +5,9 @@ use std::env;
 use std::str;
 use std::fs::{self, File};
 use std::path::Path;
-use std::io::{self, BufRead, BufReader, Read, Write};
+use std::io::{self, BufRead, Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
 use std::process;
 use std::net::{TcpListener, SocketAddr, TcpStream, Ipv4Addr, Ipv6Addr};
 use libc::setuid;
@@ -33,7 +33,9 @@ use openssl::x509::extension::SubjectAlternativeName;
 use openssl::hash::MessageDigest;
 use openssl::asn1::Asn1Time;
 use openssl::nid::Nid;
-use serde_json::{json, to_value, Value};
+use serde_json::{json, Value};
+use serde::{Deserialize, Serialize};
+use rmp_serde::{Deserializer, Serializer};
 
 const VER: &str = "0.0.1";
 const CFGPATH: &str = "/opt/Luminum/LuminumServer/config/server.conf.db";
@@ -113,8 +115,6 @@ fn main() {
 	let setup = matches.is_present("setup");
 	let debug = matches.is_present("debug");
 
-	let mut serverconfig: HashMap<String, String> = HashMap::new();
-
 	dbout(debug,0,format!("Starting Luminum Server Daemon v{}...",VER).as_str());
 
 	// Figure out location on disk
@@ -134,6 +134,17 @@ fn main() {
 		process::exit(1);
 		}
 
+	// Set up break handler
+	let running = Arc::new(AtomicBool::new(true));
+	let r = running.clone();
+	ctrlc::set_handler(move || {
+		r.store(false, Ordering::SeqCst);
+		println!();
+		dbout(debug,0,"BREAK");
+		dbout(debug,0,format!("Terminating Luminum Server Daemon.").as_str());
+		process::exit(1);
+		}).expect("Error creating break handler");
+
 	// Check if setup flag is specified and run setup routine if true
 	if setup {
 		dbout(debug,4,format!("Starting daemon setup.").as_str());
@@ -147,6 +158,7 @@ fn main() {
 		}
 
 	// Import server configuration
+	let mut serverconfig: HashMap<String, String> = HashMap::new();
 	if fs::metadata(CFGPATH).is_ok() {
 		let confconn = Connection::open(CFGPATH).expect("Error: Could not open configuration database.");
 		let mut stmt = confconn.prepare("select KEY,VALUE from CONFIG").unwrap();
@@ -233,6 +245,8 @@ fn main() {
 					}
 				},
 			Err(err) => {
+				dbout(debug,1,format!("Could not assign process to \"luminum\" system user: {}", err).as_str());
+				process::exit(1);
 				}
 			}
 		}
@@ -253,6 +267,7 @@ fn main() {
 
 	let socket_path = "/var/run/mysqld/mysqld.sock";
 
+	// Open CLIENTS database
 	let copts = Opts::from(OptsBuilder::new()
 		.socket(Some(socket_path))
 		.user(Some("luminum"))
@@ -271,6 +286,9 @@ fn main() {
 			}
 		};
 
+	// TODO - Need to create a check for configured modules so we're not creating connections for modules not enabled
+
+	// Open INTEGRITY database
 	let liopts = Opts::from(OptsBuilder::new()
 		.socket(Some(socket_path))
 		.user(Some("luminum"))
@@ -289,7 +307,7 @@ fn main() {
 			}
 		};
 
-	// Use private key passphrase from server configuration and load TLS identity file
+	// Use private key passphrase from server configuration and load PKE identity file
 	let encrypted_passphrase = serverconfig.get("PKPASS").unwrap();
 	let passphrase = mc.decrypt_base64_to_string(&encrypted_passphrase).unwrap();
 
@@ -311,7 +329,7 @@ fn main() {
 			}
 		};
 
-	// Starts the data listener service
+	// Start the data listener service
 	let listener = match TcpListener::bind(addr) {
 		Ok(listener) => listener,
 		Err(err) => {
@@ -320,24 +338,13 @@ fn main() {
 			}
 		};
 
-	// Set up break handler
-	let running = Arc::new(AtomicBool::new(true));
-	let r = running.clone();
-	ctrlc::set_handler(move || {
-		r.store(false, Ordering::SeqCst);
-		println!();
-		dbout(debug,0,"BREAK");
-		dbout(debug,0,format!("Terminating Luminum Server Daemon.").as_str());
-		process::exit(1);
-		}).expect("Error creating break handler");
-
-	// Startuo
+	// Finished Startup
 	dbout(debug,3,format!("Luminum Server Daemon started on {}...",addr_str).as_str());
 
 	// Listen for incoming connections
 	while running.load(Ordering::SeqCst) {
 		match listener.accept() {
-			Ok((mut stream, peer_addr)) => {
+			Ok((stream, peer_addr)) => {
 				// Accept TLS connection
 				let mut tls_stream = match acceptor.accept(stream) {
 					Ok(stream) => stream,
@@ -347,7 +354,6 @@ fn main() {
 						}
 					};
 				// Handle the connection
-				let peer_addr_str = peer_addr.to_string();
 				let mut buffer = [0; 1024];
 
 				match tls_stream.read(&mut buffer) {
@@ -356,7 +362,7 @@ fn main() {
 						match serde_json::from_str::<Value>(&data_raw) {
 							Ok(rcvd_data) => {
 								if rcvd_data["product"] == "Luminum Client" {
-									handle_json(&clients_db_pool.clone(),peer_addr.to_string(),data_raw.as_ref(),&mut tls_stream,debug);;
+									handle_json(&clients_db_pool.clone(),peer_addr.to_string(),data_raw.as_ref(),&mut tls_stream,debug);
 									}
 								else if rcvd_data["product"] == "Luminum Integrity" {
 									handle_json(&integrity_db_pool.clone(),peer_addr.to_string(),data_raw.as_ref(),&mut tls_stream,debug);
@@ -383,6 +389,7 @@ fn handle_json(pool: &Arc<Pool>, peer_addr: String, data: &str, stream: &mut nat
 	// {"product": "Luminum Client","version": "0.0.1","module": "Query","data": {"content": "","signature": ""}}
 	//let v: Value = serde_json::from_str(data);
 	let mut hostname = String::new();
+	let mut conn = pool.get_conn().unwrap();
 
 	match serde_json::from_str::<Value>(data) {
 		Ok(rcvd_data) => {
@@ -406,12 +413,19 @@ fn handle_json(pool: &Arc<Pool>, peer_addr: String, data: &str, stream: &mut nat
 								}
 							}
 						}
+
 					else if product == "Luminum Integrity" {
 						if let Some(content) = parsed_value.get("content") {
 							if let Some(action) = content.get("action") {
 								if action == "config" {
 									if let Some(cgfreq) = action.get("config") {
 										if let Some(uid) = cgfreq.get("uid") {
+											let result: Vec<(i32, String)> = conn.query_map("select MODE,ENABLED from CONFIG where ID = (select ID from CLIENTS.STATUS where UID = ?)",
+												|(mode, enabled)| { (mode, enabled) },
+												).expect("SQL Query failed");
+											for (mode, enabled) in result {
+												println!("Mode: {}, Enabled: {}", mode, enabled);
+												}
 											}
 										}
 									}

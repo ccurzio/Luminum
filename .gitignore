@@ -30,3 +30,4 @@ bin/Luminum-Client
 # Miscellaneous
 *.swp
 ,gitignore
+log
