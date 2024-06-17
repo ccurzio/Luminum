@@ -174,7 +174,7 @@ fn main() {
 				}
 			}
 
-		let server_key = serverconfig.get("SVRKEY").expect("Error: Could not set server key from configuration database.");
+		//let server_key = serverconfig.get("SVRKEY").expect("Error: Could not set server key from configuration database.");
 
 		if address == "" {
 			address = serverconfig.get("IPADDR").expect("Error: Could not set server IP address from configuration database.");
@@ -230,9 +230,6 @@ fn main() {
 		dbout(debug,3,format!("Using identity: {}",identity_file).as_str());
 		}
 
-	// Main server startup routine
-	let server_key = serverconfig.get("SVRKEY").unwrap();
-
 	// Check if the "luminum" system user exists and switch process to that user
 	let (user_exists,user_uid) = sysuser_info("luminum");
 	if user_exists {
@@ -261,7 +258,8 @@ fn main() {
 		process::exit(1);
 		}
 
-	let mc = new_magic_crypt!(server_key, 256);
+	let server_key = serverconfig.get("SVRKEY").unwrap();
+	let mc = new_magic_crypt!(&server_key, 256);
 	let encrypted_dbpass = serverconfig.get("DBPASS").unwrap();
 	let dbpass = mc.decrypt_base64_to_string(&encrypted_dbpass).unwrap();
 
@@ -388,7 +386,7 @@ fn main() {
 fn handle_json(pool: &Arc<Pool>, peer_addr: String, data: &str, stream: &mut native_tls::TlsStream<TcpStream>, debug: bool) {
 	// {"product": "Luminum Client","version": "0.0.1","module": "Query","data": {"content": "","signature": ""}}
 	//let v: Value = serde_json::from_str(data);
-	let mut hostname = String::new();
+	//let hostname = String::new();
 	let mut conn = pool.get_conn().unwrap();
 
 	match serde_json::from_str::<Value>(data) {
@@ -407,7 +405,7 @@ fn handle_json(pool: &Arc<Pool>, peer_addr: String, data: &str, stream: &mut nat
 									verify_client(&pool,peer_addr.clone(),data,stream,debug);
 									}
 								else if action == "config" {
-									if let Some(cgfreq) = action.get("config") {
+									if let Some(cfgreq) = action.get("config") {
 										}
 									}
 								}
@@ -418,8 +416,8 @@ fn handle_json(pool: &Arc<Pool>, peer_addr: String, data: &str, stream: &mut nat
 						if let Some(content) = parsed_value.get("content") {
 							if let Some(action) = content.get("action") {
 								if action == "config" {
-									if let Some(cgfreq) = action.get("config") {
-										if let Some(uid) = cgfreq.get("uid") {
+									if let Some(cfgreq) = action.get("config") {
+										if let Some(uid) = cfgreq.get("uid") {
 											let result: Vec<(i32, String)> = conn.query_map("select MODE,ENABLED from CONFIG where ID = (select ID from CLIENTS.STATUS where UID = ?)",
 												|(mode, enabled)| { (mode, enabled) },
 												).expect("SQL Query failed");
@@ -473,7 +471,6 @@ fn verify_client(pool: &Arc<Pool>, peer_addr: String, data: &str, stream: &mut n
 							}
 						}
 					let mut combined_json = json!({});
-					let newuid = Uuid::new_v4();
 					combined_json["product"] = serde_json::to_value("Luminum Server").unwrap();
 					combined_json["content"]["action"] = serde_json::to_value("verify").unwrap();
 					combined_json["content"]["status"] = serde_json::to_value(&vstat).unwrap();
@@ -542,7 +539,7 @@ fn register_client(pool: &Arc<Pool>, peer_addr: String, data: &str, stream: &mut
 								}
 							}
 						Err(err) => {
-							dbout(debug,2,format!("Registration failed for endpoint \"{}\"",hostname).as_str());
+							dbout(debug,2,format!("Registration failed for endpoint \"{}\": {}",hostname, err).as_str());
 							}
 						}
 					}
@@ -775,7 +772,7 @@ fn generate_private_key(ui_keypass: &str) -> Result<(), ErrorStack> {
 	let mut keyfile = File::create(DKPATH).expect("Could not create private key file");
 	let mut pubkeyfile = File::create(DPPATH).expect("Could not create public key file");
 
-	let prv_key = pkey.private_key_to_pem_pkcs8().unwrap();
+	//let prv_key = pkey.private_key_to_pem_pkcs8().unwrap();
 	let pub_key = pkey.public_key_to_pem().unwrap();
 	let encrypted_key = pkey.private_key_to_pem_pkcs8_passphrase(Cipher::aes_256_cbc(), ui_keypass.as_bytes()).expect("Failed to encrypt private key");
 	keyfile.write_all(str::from_utf8(encrypted_key.as_slice()).unwrap().as_bytes()).expect("Failed to write private key data to file");
@@ -893,7 +890,6 @@ fn generate_certificate(ui_keypass: &str) -> Result<(), ErrorStack> {
 // See if a specific user exists on the system
 fn sysuser_info(username: &str) -> (bool, Option<String>) {
 	let pwpath = Path::new("/etc/passwd");
-	let pwfile = File::open(&pwpath);
 
 	if let Ok(pwfile) = File::open(pwpath) {
 		let reader = io::BufReader::new(pwfile);
