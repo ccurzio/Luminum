@@ -383,7 +383,7 @@ fn main() {
 	dbout(debug,0,format!("Luminum server daemon stopped.").as_str());
 	}
 
-fn handle_nsg(pool: &Arc<Pool>, peer_addr: String, data: &str, stream: &mut native_tls::TlsStream<TcpStream>, debug: bool) {
+fn handle_msg(pool: &Arc<Pool>, peer_addr: String, data: &str, stream: &mut native_tls::TlsStream<TcpStream>, debug: bool) {
 	// {"product": "Luminum Client","version": "0.0.1","module": "Query","data": {"content": "","signature": ""}}
 	//let v: Value = serde_json::from_str(data);
 	//let hostname = String::new();
