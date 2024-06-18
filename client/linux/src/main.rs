@@ -11,15 +11,17 @@ use std::thread;
 use gethostname::gethostname;
 use std::net::{TcpListener, SocketAddr, ToSocketAddrs, TcpStream};
 use native_tls::{TlsConnector, TlsStream};
-use rusqlite::{params, Connection, Result};
+use std::str;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
-use serde_json::{json, to_value, Value};
+use rusqlite::{params, Connection, Result};
+use serde::{Serialize, Deserialize};
+use rmp_serde::to_vec_named;
 
 const VER: &str = "0.0.1";
-const CFGPATH: &str = "/opt/Luminum/LuminumClient/conf/luminum.conf.db";
+const CFGPATH: &str = "/opt/Luminum/LuminumClient/config/luminum.conf.db";
 const DPORT: u16 = 10465;
 const LPORT: u16 = 10461;
 
@@ -27,6 +29,32 @@ struct Config {
 	key: String,
 	value: String
 	}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct ServerMessage {
+	sid: String,
+	version: String,
+	content: MessageContent,
+	contentsig: String
+	}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct ClientMessage {
+	uid: String,
+	product: String,
+	version: String,
+	content: MessageContent
+	}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct MessageContent {
+	module: String,
+	status: String,
+	hostname: String,
+	action: String,
+	data: String
+	}
+
 
 fn main() {
 	let endpointname = gethostname().to_string_lossy().into_owned();
@@ -75,9 +103,10 @@ fn main() {
 	// Client Startup
 	dbout(debug,0,format!("Starting Luminum Client v{}...", VER).as_str());
 
-	fn write_to_server(stream: Arc<Mutex<TlsStream<TcpStream>>>, data: &[u8]) {
+	fn write_to_server(stream: Arc<Mutex<TlsStream<TcpStream>>>, data: ClientMessage) {
 		let mut stream = stream.lock().unwrap();
-		stream.write_all(data).expect("Failed to write to server");
+		let serialized_data = to_vec_named(&data).expect("Error: Failed to serialize message to server.");
+		stream.write_all(&serialized_data).expect("Failed to write to server");
 		}
 
 	if fs::metadata(CFGPATH).is_ok() {
@@ -151,19 +180,24 @@ fn main() {
 
 	let server_stream = Arc::new(Mutex::new(server_stream));
 
-	// Get client status from server
+	// Check client registration status and register with server if necessary
 	let mut uid = String::new();
 	if clientconfig.get("UID").is_none() {
 		dbout(debug,4,format!("Endpoint is not registered with the Luminum server. Sending registration request...").as_str());
-		let mut combined_json = json!({});
-		combined_json["product"] = serde_json::to_value("Luminum Client").unwrap();
-		combined_json["version"] = serde_json::to_value(VER).unwrap();
-		combined_json["content"]["action"] = serde_json::to_value("register").unwrap();
-		combined_json["content"]["hostname"] = serde_json::to_value(endpointname.clone()).unwrap();
-		let ejson = json!({"dtype":"inotify"});
-		let event_info: Value = serde_json::to_value(ejson).unwrap();
-		let json_event = serde_json::to_string(&combined_json).unwrap();
-		write_to_server(server_stream.clone(), json_event.as_bytes());
+		let msgcontent = MessageContent {
+			module: String::from("Client Core"),
+			hostname: String::from(endpointname.clone()),
+			status: String::from("noreg"),
+			action: String::from("register"),
+			data: String::from("")
+			};
+		let clientmsg = ClientMessage {
+			product: String::from("Luminum Client"),
+			version: String::from(VER),
+			uid: String::from("NONE"),
+			content: msgcontent
+			};
+		write_to_server(server_stream.clone(), clientmsg);
 		}
 	else {
 		dbout(debug,3,format!("Endpoint is registered with UID {}.", uid).as_str());
@@ -194,7 +228,6 @@ fn main() {
 					let mut buffer = [0; 1024];
 					let bytes_read = stream.read(&mut buffer).expect("Error: Failure reading input stream");
 					let data_raw = String::from_utf8_lossy(&buffer[..bytes_read]);
-					handle_json(data_raw.as_ref(),debug);
 					let mut shared_stream = shared_stream.lock().unwrap();
 					*shared_stream = Some(stream);
 					});
@@ -256,15 +289,8 @@ fn clientsetup() {
 	process::exit(0);
 	}
 
-fn handle_json(data: &str, debug: bool) {
-	match serde_json::from_str::<Value>(data) {
-		Ok(v) => {
-			if let content = v["content"].to_string() { println!("{}", content); }
-			}
-		Err(err) => {
-			dbout(debug,2,format!("Malformed data received on local listener: {}", err).as_str());
-			}
-		}
+fn file_exists(path: &str) -> bool {
+	fs::metadata(path).is_ok()
 	}
 
 fn dbout(debug: bool, outlvl: i32, output: &str) {
