@@ -146,6 +146,7 @@ fn main() {
 	let mut port = matches.value_of("port").unwrap_or("");
 	let setup = matches.is_present("setup");
 	let debug = matches.is_present("debug");
+	if port == "" { let port = &DPORT.to_string(); }
 
 	dbout(debug,0,format!("Starting Luminum Server Daemon v{}...",VER).as_str());
 
