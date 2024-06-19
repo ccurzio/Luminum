@@ -95,9 +95,9 @@ fn main() {
 	let r = running.clone();
 	ctrlc::set_handler(move || {
 		r.store(false, Ordering::SeqCst);
-		println!();
-		dbout(debug,0,"BREAK");
-		dbout(debug,0,format!("Terminating Luminum Client.").as_str());
+		print!("\r\x1B[K");
+		io::stdout().flush().unwrap_or(());
+		dbout(debug,0,"Received BREAK signal. Terminating Luminum Client...");
 		process::exit(1);
 		}).expect("Error creating break handler");
 

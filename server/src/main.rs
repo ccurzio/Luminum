@@ -165,9 +165,8 @@ fn main() {
 	let r = running.clone();
 	ctrlc::set_handler(move || {
 		r.store(false, Ordering::SeqCst);
-		println!();
-		dbout(debug,0,"BREAK");
-		dbout(debug,0,format!("Terminating Luminum Server Daemon.").as_str());
+		print!("\r\x1B[K");
+		dbout(debug,0,"Received BREAK signal. Terminating Luminum Server...");
 		process::exit(1);
 		}).expect("Error creating break handler");
 
