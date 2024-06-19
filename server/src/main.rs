@@ -34,7 +34,7 @@ use openssl::hash::MessageDigest;
 use openssl::asn1::Asn1Time;
 use openssl::nid::Nid;
 use serde::{Deserialize, Serialize};
-use rmp_serde::{from_read, Deserializer, Serializer};
+use rmp_serde::{from_read, Deserializer, Serializer, to_vec_named};
 
 const VER: &str = "0.0.1";
 const CFGPATH: &str = "/opt/Luminum/LuminumServer/config/server.conf.db";
@@ -51,16 +51,15 @@ struct Config {
 
 #[derive(Serialize, Deserialize, Debug)]
 struct ServerMessage {
-	sid: String,
-	content: MessageContent,
-	contentsig: String
+	version: String,
+	content: MessageContent
 	}
 
 #[derive(Serialize, Deserialize, Debug)]
 struct ClientMessage {
+	uid: String,
 	product: String,
 	version: String,
-	uid: String,
 	content: MessageContent
 	}
 
@@ -69,11 +68,18 @@ struct MessageContent {
 	module: String,
 	status: String,
 	action: String,
-	data: String
+	data: MessageData
 	}
 
 #[derive(Serialize, Deserialize, Debug)]
 struct MessageData {
+	serverkey: Option<String>,
+	hostname: Option<String>,
+	uid: Option<String>,
+	osplat: Option<String>,
+	osver: Option<String>,
+	ipv4: Option<String>,
+	ipv6: Option<String>
 	}
 
 fn main() {
@@ -366,10 +372,13 @@ fn main() {
 	while running.load(Ordering::SeqCst) {
 		match listener.accept() {
 			Ok((stream, peer_addr)) => {
-				dbout(debug,4,format!("Received connection from {}", peer_addr).as_str());
+				dbout(debug,4,format!("Incoming connection from {}", peer_addr).as_str());
 				// Accept TLS connection
 				let mut tls_stream = match acceptor.accept(stream) {
-					Ok(stream) => stream,
+					Ok(stream) => {
+						dbout(debug,3,format!("Connection established with {}", peer_addr).as_str());
+						stream
+						},
 					Err(err) => {
 						dbout(debug,2,format!("Error accepting TLS connection: {}", err).as_str());
 						continue;
@@ -383,7 +392,18 @@ fn main() {
 						if n > 0 {
 							match from_read::<_, ClientMessage>(&buffer[..n]) {
 								Ok(msg) => {
-									println!("Received message: {:?}", msg);
+									//println!("Received from client: {:?}",msg);
+									if msg.product == "Luminum Client" {
+										if msg.uid == "NONE" && msg.content.action == "register" {
+											dbout(debug,4,format!("Received endpoint registration request from {}",&peer_addr).as_str());
+											if msg.content.data.serverkey == Some(String::from(server_key)) {
+												register_client(&clients_db_pool,peer_addr.to_string(),msg.content.data,&mut tls_stream,debug);
+												}
+											else {
+												dbout(debug,2,format!("An invalid server key was provided by {} during registration.", &peer_addr).as_str());
+												}
+											}
+										}
 									},
 								Err(_) => {
 									dbout(debug,2,format!("Malformed data in stream from {}", peer_addr).as_str());
@@ -413,9 +433,46 @@ fn verify_client(pool: &Arc<Pool>, peer_addr: String, data: &str, stream: &mut n
 	let mut vstat = String::new();
 	}
 
-fn register_client(pool: &Arc<Pool>, peer_addr: String, data: &str, stream: &mut native_tls::TlsStream<TcpStream>, debug: bool) {
+fn register_client(pool: &Arc<Pool>, peer_addr: String, data: MessageData, stream: &mut native_tls::TlsStream<TcpStream>, debug: bool) {
 	let mut conn = pool.get_conn().unwrap();
-	let uid = Uuid::new_v4();
+	let new_uid = Uuid::new_v4();
+
+	let hostname = data.hostname.unwrap();
+	let osplat = data.osplat.unwrap();
+	let osver = data.osver.unwrap();
+	let ipv4 = data.ipv4.unwrap();
+	let ipv6 = data.ipv6.unwrap();
+
+	let query = format!("insert into STATUS (UID,HOSTNAME,IPV4,IPV6,OSPLAT,OSVER,REGDATE,LASTSEEN) VALUES ('{}', '{}', '{}', '{}', '{}', '{}',now(),now())", new_uid, hostname, ipv4, ipv6, osplat, osver);
+	match conn.query_drop(query) {
+		Ok(_) => {
+			let mut response_data = MessageData {
+				uid: Some(String::from(new_uid)),
+				serverkey: None,
+				hostname: None,
+				osplat: None,
+				osver: None,
+				ipv4: None,
+				ipv6: None
+				};
+			let response_content = MessageContent {
+				module: String::from("Luminum Core"),
+				status: String::from("OK"),
+				action: String::from("register"),
+				data: response_data
+				};
+			let response = ServerMessage {
+				version: String::from(VER),
+				content: response_content
+				};
+			let serialized_data = to_vec_named(&response).expect("Error: Failed to serialize message to client.");
+			stream.write_all(&serialized_data).expect("Error: Failed to send response to client.");
+			dbout(debug,3,format!("Endpoint \"{}\" successfully registered. (UID {})", hostname,new_uid).as_str());
+			},
+		Err(err) => {
+			dbout(debug,2,format!("Failed to register endpoint \"{}\": {}", hostname,err).as_str());
+			}
+		}
 	}
 
 fn file_exists(path: &str) -> bool {
@@ -590,7 +647,7 @@ fn daemonsetup() {
 		}
 
 	let sid = Uuid::new_v4().to_string();
-	let new_server_key = random_str::get_string(128, true, true, true, true);
+	let new_server_key = random_str::get_string(32, true, true, true, false);
 	let mc = new_magic_crypt!(&new_server_key, 256);
 	let encoded_crypt = mc.encrypt_str_to_base64(setup_passphrase);
 	let dbpass = random_str::get_string(16, true, true, true, true);
@@ -611,7 +668,7 @@ fn daemonsetup() {
 	println!("Private Key: {}", DKPATH);
 	println!("Public Key: {}", DPPATH);
 	println!("Certificate: {}", DCPATH);
-	println!("Databaqse password for user \"luminum\": {}", dbpass);
+	println!("Database password for \"luminum\" user: {}", dbpass);
 	println!("\nNOTE: This will be the only time the database password for the \"luminum\" user will be made available. Please make a note of it!\n\n");
 	println!("Luminum Server setup is complete.");
 	process::exit(0);
