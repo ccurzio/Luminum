@@ -101,14 +101,14 @@ fn main() {
 		process::exit(1);
 		}).expect("Error creating break handler");
 
-	// Client Startup
-	dbout(debug,0,format!("Starting Luminum Client v{}...", VER).as_str());
-
 	fn write_to_server(stream: Arc<Mutex<TlsStream<TcpStream>>>, data: ClientMessage) {
 		let mut stream = stream.lock().unwrap();
 		let serialized_data = to_vec_named(&data).expect("Error: Failed to serialize message to server.");
 		stream.write_all(&serialized_data).expect("Failed to write to server");
 		}
+
+	// Client Startup
+	dbout(debug,0,format!("Starting Luminum Client v{}...", VER).as_str());
 
 	if fs::metadata(CFGPATH).is_ok() {
 		let confconn = Connection::open(CFGPATH).expect("Error: Could not open configuration database.");
@@ -162,6 +162,7 @@ fn main() {
 				},
 			Err(err) => {
 				dbout(debug,2,format!("Connection to Luminum server failed: {}", err).as_str());
+				dbout(debug,4,format!("Retrying connection in 30 seconds...",).as_str());
 				thread::sleep(Duration::from_secs(30));
 				}
 			}
@@ -240,6 +241,7 @@ fn main() {
 				}
 			}
 		}
+
 	println!("FOO");
 	}
 
