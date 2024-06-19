@@ -149,7 +149,7 @@ fn main() {
 			}
 		};
 
-	let server_cert_path = "/opt/Luminum/LuminumServer/config/luminum.crt";
+	let server_cert_path = "/opt/Luminum/LuminumClient/config/server.crt";
 	let mut server_cert = File::open(server_cert_path).expect("Failed to open certificate file");
 	let mut cert_buffer = Vec::new();
 	server_cert.read_to_end(&mut cert_buffer).expect("Failed to read certificate file");
