@@ -385,8 +385,8 @@ fn main() {
 								Ok(msg) => {
 									println!("Received message: {:?}", msg);
 									},
-								Err(err) => {
-									eprintln!("Error deserializing client message: {}", err);
+								Err(_) => {
+									dbout(debug,2,format!("Malformed data in stream from {}", peer_addr).as_str());
 									}
 								}
 							}
