@@ -162,7 +162,7 @@ fn main() {
 				},
 			Err(err) => {
 				dbout(debug,2,format!("Connection to Luminum server failed: {}", err).as_str());
-				thread::sleep(Duration::from_secs(5));
+				thread::sleep(Duration::from_secs(30));
 				}
 			}
 		};
