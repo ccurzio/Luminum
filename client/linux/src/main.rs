@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
+use std::time::Duration;
 use rusqlite::{params, Connection, Result};
 use serde::{Serialize, Deserialize};
 use rmp_serde::to_vec_named;
@@ -153,14 +154,16 @@ fn main() {
 	let mut cert_buffer = Vec::new();
 	server_cert.read_to_end(&mut cert_buffer).expect("Failed to read certificate file");
 
-	let sconn = match TcpStream::connect(server_addr) {
-		Ok(sconn) => {
-			dbout(debug,3,format!("Connected to Luminum server {}",server_addr_str).as_str());
-			sconn
-			},
-		Err(err) => {
-			dbout(debug,1,format!("Connection to Luminum server failed: {}", err).as_str());
-			process::exit(1);
+	let sconn = loop {
+		match TcpStream::connect(server_addr) {
+			Ok(sconn) => {
+				dbout(debug,3,format!("Connected to Luminum server {}",server_addr_str).as_str());
+				break sconn;
+				},
+			Err(err) => {
+				dbout(debug,2,format!("Connection to Luminum server failed: {}", err).as_str());
+				thread::sleep(Duration::from_secs(5));
+				}
 			}
 		};
 
