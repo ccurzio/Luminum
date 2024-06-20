@@ -6,17 +6,31 @@ use std::net::{TcpStream, Shutdown};
 use std::io::{self, BufRead, BufReader, Read, Write, Seek};
 use std::thread;
 use std::collections::HashMap;
-use notify::{RecommendedWatcher, RecursiveMode, Watcher, Event, Config, Result};
+use rusqlite::{params, Connection, Result};
+use notify::{RecommendedWatcher, RecursiveMode, Watcher, Event, Config, Result as NotifyResult};
 use notify::event::{EventKind, MetadataKind};
-use serde::Serialize;
-use serde_json::{json, to_value, Value};
 use std::sync::mpsc::channel;
 use std::time::Duration;
+use serde::{Serialize, Deserialize};
+use rmp_serde::{from_read, Deserializer, Serializer, to_vec_named};
+use rmp_serde::decode::from_slice;
 
 #[derive(Serialize)]
 struct NotifyEvent {
 	kind: String,
 	paths: Vec<String>
+	}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct LumyMessage {
+	lumy: String,
+	version: String,
+	content: LumyContent
+	}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct LumyContent {
+	action: String
 	}
 
 impl From<Event> for NotifyEvent {
@@ -34,6 +48,11 @@ const CFGPATH: &str = "/opt/Luminum/LuminumClient/modules/integrity/integrity.co
 fn main() {
 	let mut lumyconfig: HashMap<String, String> = HashMap::new();
 
+	if file_exists(CFGPATH) {
+		}
+	else {
+		}
+
 	if is_inotify_enabled() {
 		let (tx, rx) = channel();
 
@@ -44,7 +63,15 @@ fn main() {
 			watcher.watch(Path::new(watchpath), RecursiveMode::Recursive);
 			}
 
-		let mut stream = TcpStream::connect("127.0.0.1:10461").expect("Error: Could not connect to Luminum Client process");
+		let mut stream = match TcpStream::connect("127.0.0.1:10461") {
+			Ok(_) => {
+				//println!("Connected to Luminum Client");
+				}
+			Err(err) => { 
+				println!("Error: Could not connect to Luminum Client process: {}", err);
+				}
+			};
+
 /*
 		if !file_exists(CFGPATH) {
 			let mut combined_json = json!({});
@@ -70,6 +97,7 @@ fn main() {
 		loop {
 			match rx.recv() {
 				Ok(Ok(event)) => {
+					/*
 					let mut combined_json = json!({});
 					let notify_event: NotifyEvent = event.into();
 					let eijson = json!({"dtype":"inotify"});
@@ -89,6 +117,7 @@ fn main() {
 						break;
 						}
 					println!("{}", json_event);
+					*/
 					}
 				Ok(Err(e)) => println!("Watch error: {:?}", e),
 				Err(e) => {
