@@ -7,6 +7,7 @@ use chrono::Local;
 use chrono::format::strftime::StrftimeItems;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::process;
+use std::process::{Command, Stdio, Child};
 use std::thread;
 use gethostname::gethostname;
 use etc_os_release::OsRelease;
@@ -26,6 +27,7 @@ use rmp_serde::decode::from_slice;
 
 const VER: &str = "0.0.1";
 const CFGPATH: &str = "/opt/Luminum/LuminumClient/config/client.conf.db";
+const MODPATH: &str = "/opt/Luminum/LuminumClient/modules";
 const DPORT: u16 = 10465;
 const LPORT: u16 = 10461;
 
@@ -67,6 +69,18 @@ struct MessageData {
 	ipv6: Option<String>
 	}
 
+#[derive(Serialize, Deserialize, Debug)]
+struct LumyMessage {
+	lumy: String,
+	version: String,
+	content: LumyContent
+	}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct LumyContent {
+	action: String
+	}
+
 fn main() {
 	let endpointname = gethostname().to_string_lossy().into_owned();
 	let matches = App::new("Luminum Client (Linux)")
@@ -90,6 +104,7 @@ fn main() {
 	let debug = matches.is_present("debug");
 
 	let mut clientconfig: HashMap<String, String> = HashMap::new();
+	let mut lumys: HashMap<String, String> = HashMap::new();
 
 	if setup {
 		dbout(debug,4,format!("Starting client setup...").as_str());
@@ -99,17 +114,6 @@ fn main() {
 			process::exit(1);
 			}
 		}
-
-        // Set up break handler
-	let running = Arc::new(AtomicBool::new(true));
-	let r = running.clone();
-	ctrlc::set_handler(move || {
-		r.store(false, Ordering::SeqCst);
-		print!("\r\x1B[K");
-		io::stdout().flush().unwrap_or(());
-		dbout(debug,0,"Received BREAK signal. Terminating Luminum Client...");
-		process::exit(1);
-		}).expect("Error creating break handler");
 
 	// Client Startup
 	dbout(debug,0,format!("Starting Luminum Client v{}...", VER).as_str());
@@ -293,6 +297,67 @@ fn main() {
 		dbout(debug,3,format!("Endpoint is registered with UID {}", uid).as_str());
 		}
 
+	fn start_lumy(lumy: &str, cmd: &str, debug: bool) {
+		dbout(debug,0,format!("Starting \"{}\" Lumy", lumy).as_str());
+		let mut child = Command::new(cmd)
+		.stdout(Stdio::null())
+		.stderr(Stdio::null())
+		.spawn();
+
+		match child {
+			Ok(mut _child) => {
+				dbout(debug,3,format!("Successfully started \"{}\" Lumy", lumy).as_str());
+				},
+			Err(err) => {
+				dbout(debug,1,format!("Failed to start \"{}\" Lumy: {}", lumy, err).as_str());
+				}
+			}
+		}
+
+	// Review installed Lumys
+	if file_exists(MODPATH) {
+		let mut integrity_path = String::from(MODPATH);
+		integrity_path.push_str("/integrity/Lumy_Integrity");
+
+		if file_exists(&integrity_path) {
+			dbout(debug,4,format!("Found Lumy: Integrity").as_str());
+			lumys.insert(String::from("Integrity"),String::from(integrity_path));
+			}
+		}
+
+	for (lumy, lpath) in &lumys {
+		start_lumy(&lumy, &lpath, debug);
+		if lumys.len() > 1 { thread::sleep(Duration::from_secs(2)); }
+		}
+
+	fn stop_all_lumys(lumys: HashMap::<String, String>, debug: bool) {
+		for (lumy, lpath) in lumys.clone() {
+			dbout(debug,0,format!("Stopping \"{}\" Lumy...",lumy).as_str());
+
+			if lumy == "Integrity" {
+				let cmd = "killall";
+				let args = ["-9", "Lumy_Integrity"];
+				let mut output = Command::new(cmd)
+				//.stdout(Stdio::null())
+				//.stderr(Stdio::null())
+				.spawn();
+				}
+			continue;
+			}
+		}
+
+        // Set up break handler
+	let running = Arc::new(AtomicBool::new(true));
+	let r = running.clone();
+	ctrlc::set_handler(move || {
+		r.store(false, Ordering::SeqCst);
+		print!("\r\x1B[K");
+		io::stdout().flush().unwrap_or(());
+		dbout(debug,0,"Received BREAK signal."); 
+		dbout(debug,0,"Luminum Client Terminated.");
+		process::exit(1);
+		}).expect("Error creating break handler");
+
 	let ipcstream = Arc::new(Mutex::new(None));
 
 	for incoming in ipclistener.incoming() {
@@ -302,8 +367,6 @@ fn main() {
 				thread::spawn(move || {
 					let mut buffer = [0; 1024];
 					let bytes_read = stream.read(&mut buffer).expect("Error: Failure reading input stream");
-					let data_raw = String::from_utf8_lossy(&buffer[..bytes_read]);
-					println!("{}",data_raw);
 					let mut shared_stream = shared_stream.lock().unwrap();
 					*shared_stream = Some(stream);
 					});
