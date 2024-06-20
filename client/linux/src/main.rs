@@ -185,55 +185,6 @@ fn main() {
 
 
 	let server_cert_path = "/opt/Luminum/LuminumClient/config/server.crt";
-/*
-	let mut server_cert = File::open(server_cert_path).expect("Failed to open certificate file");
-	let mut cert_buffer = Vec::new();
-	server_cert.read_to_end(&mut cert_buffer).expect("Failed to read certificate file");
-
-
-	let mut builder = native_tls::TlsConnector::builder();
-	builder.add_root_certificate(native_tls::Certificate::from_pem(&cert_buffer).expect("Failed to parse certificate"));
-	let connector = builder.build().expect("Failed to create TLS connector");
-
-	let mut server_stream;
-
-	let server_stream_clone = Arc::clone(&server_stream);
-	let listener_handle = thread::spawn(move || {
-		let mut buffer = Vec::new();
-		loop {
-			match server_stream_clone.lock() {
-				Ok(mut stream) => {
-					match stream.read_to_end(&mut buffer) {
-						Ok(n) if n > 0 => {
-							match from_slice::<ServerMessage>(&buffer) {
-								Ok(server_message) => {
-									let response: ServerMessage = server_message;
-									//println!("Received from server: {:?}", response);
-										}
-									},
-								Err(err) => {
-									dbout(debug,3,format!("Unable to deserialize ServerMessage: {}",err).as_str());
-									}
-								}
-							},
-						Ok(_) => {
-							dbout(debug,4,format!("Luminum Server closed the connection.").as_str());
-							break;
-							},
-						Err(err) => {
-							dbout(debug,3,format!("Error reading data stream from server: {}" ,err).as_str());
-							break;
-							}
-						}
-					},
-				Err(err) => {
-					dbout(debug,3,format!("Failed to acquire lock on server stream: {}", err).as_str());
-					break;
-					}
-				}
-			}
-		});
-*/
 
 	// Check client registration status and register with server if necessary
 	let mut uid = String::new();
@@ -316,22 +267,6 @@ fn main() {
 	for (lumy, lpath) in &lumys {
 		start_lumy(&lumy, &lpath, debug);
 		if lumys.len() > 1 { thread::sleep(Duration::from_secs(2)); }
-		}
-
-	fn stop_all_lumys(lumys: HashMap::<String, String>, debug: bool) {
-		for (lumy, lpath) in lumys.clone() {
-			dbout(debug,0,format!("Stopping \"{}\" Lumy...",lumy).as_str());
-
-			if lumy == "Integrity" {
-				let cmd = "killall";
-				let args = ["-9", "Lumy_Integrity"];
-				let mut output = Command::new(cmd)
-				//.stdout(Stdio::null())
-				//.stderr(Stdio::null())
-				.spawn();
-				}
-			continue;
-			}
 		}
 
         // Set up break handler
