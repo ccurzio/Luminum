@@ -11,9 +11,11 @@ use std::process::{Command, Stdio, Child};
 use std::thread;
 use gethostname::gethostname;
 use etc_os_release::OsRelease;
+use local_ip_address::local_ip;
 use std::net::{TcpListener, SocketAddr, ToSocketAddrs, TcpStream};
 use native_tls::{TlsConnector, TlsStream};
 use std::str;
+use std::error::Error;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::fs::{self, File};
@@ -118,6 +120,16 @@ fn main() {
 	// Client Startup
 	dbout(debug,0,format!("Starting Luminum Client v{}...", VER).as_str());
 
+	let ip_address = local_ip().unwrap().to_string();
+	let ipv4_regex = Regex::new(r"^(\d{1,3}\.){3}\d{1,3}$").unwrap();
+	let ipv6_regex = Regex::new(r"^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$").unwrap();
+	let mut ipv4_address = String::new();
+	let mut ipv6_address = String::new();
+	if ipv4_regex.is_match(&ip_address) { ipv4_address = ip_address.clone(); }
+	if ipv6_regex.is_match(&ip_address) { ipv6_address = ip_address.clone(); }
+
+	dbout(debug,4,format!("IP address: {}", ip_address).as_str());
+
 	if fs::metadata(CFGPATH).is_ok() {
 		let confconn = Connection::open(CFGPATH).expect("Error: Could not open configuration database.");
 		let mut stmt = confconn.prepare("select KEY,VALUE from CONFIG").unwrap();
@@ -171,53 +183,19 @@ fn main() {
 			}
 		};
 
+
 	let server_cert_path = "/opt/Luminum/LuminumClient/config/server.crt";
+/*
 	let mut server_cert = File::open(server_cert_path).expect("Failed to open certificate file");
 	let mut cert_buffer = Vec::new();
 	server_cert.read_to_end(&mut cert_buffer).expect("Failed to read certificate file");
 
-	let sconn = loop {
-		match TcpStream::connect(server_addr) {
-			Ok(sconn) => {
-				dbout(debug,3,format!("Connected to Luminum server {}",server_addr_str).as_str());
-				break sconn;
-				},
-			Err(err) => {
-				dbout(debug,2,format!("Connection to Luminum server failed: {}", err).as_str());
-				dbout(debug,4,format!("Retrying connection in 30 seconds...",).as_str());
-				thread::sleep(Duration::from_secs(30));
-				}
-			}
-		};
-
-	let sconn_clone = sconn.try_clone().expect("Failed to clone TcpStream");
 
 	let mut builder = native_tls::TlsConnector::builder();
 	builder.add_root_certificate(native_tls::Certificate::from_pem(&cert_buffer).expect("Failed to parse certificate"));
 	let connector = builder.build().expect("Failed to create TLS connector");
 
 	let mut server_stream;
-
-	match connector.connect(server_host, sconn) {
-		Ok(stream) => {
-			server_stream = stream;
-			},
-		Err(err) => {
-			dbout(debug,1,format!("TLS handshake failed: {}", err).as_str());
-			process::exit(1);
-			}
-		};
-
-	let server_stream = Arc::new(Mutex::new(server_stream));
-
-	let local_addr: SocketAddr = sconn_clone.local_addr().expect("Error: Unable to determine local socket address");
-	let ip_address = local_addr.ip().to_string();
-	let ipv4_regex = Regex::new(r"^(\d{1,3}\.){3}\d{1,3}$").unwrap();
-	let ipv6_regex = Regex::new(r"^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$").unwrap();
-	let mut ipv4_address = String::new();
-	let mut ipv6_address = String::new();
-	if ipv4_regex.is_match(&ip_address) { ipv4_address = ip_address.clone(); }
-	if ipv6_regex.is_match(&ip_address) { ipv6_address = ip_address.clone(); }
 
 	let server_stream_clone = Arc::clone(&server_stream);
 	let listener_handle = thread::spawn(move || {
@@ -231,15 +209,6 @@ fn main() {
 								Ok(server_message) => {
 									let response: ServerMessage = server_message;
 									//println!("Received from server: {:?}", response);
-									if response.content.action == "register" {
-										if response.content.status == "OK" {
-											let response_data: MessageData = response.content.data.expect("Error: Unable to parse response data");
-											let new_uid = response_data.uid.expect("Error: Unable to parse UID in response data");
-											let confconn = Connection::open(CFGPATH).expect("Error: Could not open configuration database.");
-											confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)",&[&"UID",new_uid.to_string().as_str()]).expect("Error: Could not insert UID into CONFIG table.");
-											confconn.close().unwrap();
-											dbout(debug,3,format!("Registration successful. (UID: {})", new_uid).as_str());
-											}
 										}
 									},
 								Err(err) => {
@@ -264,6 +233,7 @@ fn main() {
 				}
 			}
 		});
+*/
 
 	// Check client registration status and register with server if necessary
 	let mut uid = String::new();
@@ -290,7 +260,25 @@ fn main() {
 			uid: String::from("NONE"),
 			content: msgcontent
 			};
-		write_to_server(server_stream.clone(), clientmsg);
+		let servermsg: Option<ServerMessage> = match server_send(server_host, server_port, server_cert_path, clientmsg, debug) {
+			Ok(response) => { Some(response) },
+			Err(err) => {
+				dbout(debug,2,format!("Failed to send message to server: {}", err).as_str());
+				None
+				}
+			};
+
+		let response = servermsg.unwrap();
+		if response.content.action == "register" {
+			if response.content.status == "OK" {
+				let response_data: MessageData = response.content.data.expect("Error: Unable to parse response data");
+				let new_uid = response_data.uid.expect("Error: Unable to parse UID in response data");
+				let confconn = Connection::open(CFGPATH).expect("Error: Could not open configuration database.");
+				confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)",&[&"UID",new_uid.to_string().as_str()]).expect("Error: Could not insert UID into CONFIG table.");
+				confconn.close().unwrap();
+				dbout(debug,3,format!("Registration successful. (UID: {})", new_uid).as_str());
+				}
+			}		
 		}
 	else {
 		let uid = clientconfig.get("UID").expect("Error: Unable to parse client UID");
@@ -376,14 +364,45 @@ fn main() {
 				}
 			}
 		}
-
-	println!("FOO");
 	}
 
-fn write_to_server(stream: Arc<Mutex<TlsStream<TcpStream>>>, data: ClientMessage) {
+fn server_send(server_host: &str, server_port: &str, cert_path: &str, message: ClientMessage, debug: bool) -> Result<ServerMessage, Box<dyn Error>> {
+	let server_addr_str = format!("{}:{}", server_host, server_port); 
+	let server_addr = server_addr_str.to_socket_addrs()?.next().ok_or("No addresses found for hostname")?; 
+	let mut server_cert = File::open(cert_path)?;
+	let mut cert_buffer = Vec::new();
+	server_cert.read_to_end(&mut cert_buffer)?;
+
+	let sconn = loop {
+		match TcpStream::connect(server_addr) {
+			Ok(sconn) => break sconn,
+			Err(err) => {
+				dbout(debug,2,format!("Connection to Luminum server failed: {}", err).as_str());
+				dbout(debug,4,format!("Retrying connection in 30 seconds...",).as_str());
+				thread::sleep(Duration::from_secs(30));
+				}
+			}
+		};
+
+	let mut builder = TlsConnector::builder();
+	builder.add_root_certificate(native_tls::Certificate::from_pem(&cert_buffer)?);
+	let connector = builder.build()?;
+	let mut server_stream = connector.connect(server_host, sconn)?;
+
+	let mut stream = Arc::new(Mutex::new(server_stream));
+	let stream_clone = Arc::clone(&stream);
+
+	let serialized_data = to_vec_named(&message)?;
 	let mut stream = stream.lock().unwrap();
-	let serialized_data = to_vec_named(&data).expect("Error: Failed to serialize message to server.");
-	stream.write_all(&serialized_data).expect("Failed to write to server");
+	stream.write_all(&serialized_data)?;
+	stream.flush()?;
+
+	let mut buffer = Vec::new();
+	stream.read_to_end(&mut buffer)?;
+
+	let mut deserializer = Deserializer::new(&buffer[..]);
+	let response: ServerMessage = Deserialize::deserialize(&mut deserializer)?;
+	Ok(response)
 	}
 
 fn clientsetup() {
