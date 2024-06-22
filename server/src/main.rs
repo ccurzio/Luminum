@@ -488,7 +488,11 @@ fn register_client(pool: &Arc<Pool>, data: MessageData, stream: &mut native_tls:
 fn integrity_config(pool: &Arc<Pool>, uid: String, stream: &mut native_tls::TlsStream<TcpStream>, action: String, debug: bool) {
 	let mut conn = pool.get_conn().unwrap();
 	if action == "new" {
-		let query = format!("INSERT INTO WATCHLIST (ID, OS, PATH) SELECT status.ID, status.OSPLAT, wd.PATH FROM (SELECT ID, OSPLAT FROM CLIENTS.STATUS WHERE UID = '{}') AS status CROSS JOIN (SELECT PATH FROM WATCH_DEFAULT WHERE OS = (SELECT OSPLAT FROM CLIENTS.STATUS WHERE UID = '{}')) AS wd", uid, uid);
+		match conn.exec_drop(format!("delete from WATCHLIST where ID = (select ID from CLIENTS.STATUS where UID = '{}')",uid),()) {
+			Ok(_) => { dbout(debug,3,format!("Deleted saved Integrity Lumy configuration for UID \"{}\"", uid).as_str()); }
+			Err(err) => { dbout(debug,2,format!("Error deleting saved Integrity Lumy configuration for UID \"{}\": {}", uid, err).as_str()); }
+			}
+		let query = format!("insert into WATCHLIST (ID, OS, PATH) SELECT status.ID, status.OSPLAT, wd.PATH from (SELECT ID, OSPLAT FROM CLIENTS.STATUS WHERE UID = '{}') AS status CROSS JOIN (SELECT PATH FROM WATCH_DEFAULT WHERE OS = (SELECT OSPLAT FROM CLIENTS.STATUS WHERE UID = '{}')) AS wd", uid, uid);
 		match conn.query_drop(query) {
 			Ok(_) => {
 				let query = format!("select PATH FROM WATCHLIST WHERE ID = (select ID from CLIENTS.STATUS where UID = '{}')", uid);
