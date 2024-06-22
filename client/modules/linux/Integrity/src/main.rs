@@ -4,6 +4,7 @@ use std::os::unix::fs::PermissionsExt;
 use users::get_group_by_gid;
 use users::get_user_by_uid;
 use std::env;
+use std::error::Error;
 use std::process;
 use std::path::Path;
 use std::net::{TcpStream, Shutdown};
@@ -27,6 +28,47 @@ struct NotifyEvent {
 	paths: Vec<String>
 	}
 
+#[derive(Serialize, Deserialize, Debug)]
+struct LumyMessage {
+	lumy: String,
+	version: String,
+	content: LumyContent
+	}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct LumyContent {
+	action: String,
+	data: Option<Vec<String>>
+	}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct ClientMessage {
+	uid: String,
+	product: String,
+	version: String,
+	content: MessageContent
+	}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct MessageContent {
+	lumy: String,
+	status: String,
+	action: String,
+	data: Option<MessageData>
+	}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct MessageData {
+	serverkey: Option<String>,
+	hostname: Option<String>,
+	uid: Option<String>,
+	osplat: Option<String>,
+	osver: Option<String>,
+	ipv4: Option<String>,
+	ipv6: Option<String>,
+	info: Option<Vec<String>>
+	}
+
 impl From<Event> for NotifyEvent {
 	fn from(event: Event) -> Self {
 		NotifyEvent {
@@ -41,17 +83,38 @@ const CFGPATH: &str = "/opt/Luminum/LuminumClient/modules/integrity/integrity.co
 const IMLOGS: &str = "/opt/Luminum/LuminumClient/modules/integrity/imlogs.db";
 
 fn main() {
-	let mut has_config: bool;
+	let mut stream = TcpStream::connect("127.0.0.1:10461").expect("Error: Could not connect to Luminum Client process");
+	
+	if !file_exists(CFGPATH) {
+		let lumycontent = LumyContent {
+			action: String::from("newconfig"),
+			data: None
+			};
+		let lumymsg = LumyMessage {
+			lumy: String::from("Integrity"),
+			version: String::from(VER),
+			content: lumycontent
+			};
+		let clientmsg: Option<LumyMessage> = match client_send(stream, lumymsg) {
+			Ok(response) => Some(response),
+			Err(err) => {
+				println!("Error: Unable to send message to Luminum Client process");
+				None
+				}
+			};
 
-	if file_exists(CFGPATH) {
-		has_config = true;
-		}
-	else {
-		has_config = false;
+		let response = clientmsg.unwrap();
+		println!("{:?}",response);
+
+		if response.content.action == "setconfig" {
+			let confconn = Connection::open(CFGPATH).expect("Error: Could not open configuration database.");
+			confconn.execute("create table if not exists WATCH ( PATH text not null )",[]).expect("Error: Could not create WATCH table in Integrity Lumy configuration database");
+			for value in response.content.data.unwrap() { confconn.execute("insert into WATCH (PATH) values (?)", [&value]).expect("Error: Could not insert watch list values into Lumy configuration"); }
+			confconn.close().unwrap();
+			}
 		}
 
 	if is_inotify_enabled() {
-
 		let (tx, rx) = channel();
 		let mut watcher: RecommendedWatcher = RecommendedWatcher::new(tx, Config::default()).expect("Error: Could not set up watcher.");
 
@@ -63,9 +126,8 @@ fn main() {
 			watcher.watch(Path::new(&watchpath), RecursiveMode::Recursive);
 			}
 
-		for ignorepath in ignorepaths {
+		//for ignorepath in ignorepaths {
 			
-
 		loop {
 			match rx.recv() {
 				Ok(Ok(event)) => {
@@ -105,6 +167,19 @@ fn main() {
 		}
 	}
 
+fn client_send(mut stream: TcpStream, message: LumyMessage) -> Result<LumyMessage, Box<dyn Error>> {
+	let serialized_data = to_vec_named(&message).expect("Error: Unable to serialize data to Luminum Client");
+	stream.write_all(&serialized_data).expect("Error: Unable to send message to Luminum Client process");
+	println!("Sent: {:?}",message);
+
+	let mut buffer = Vec::new();
+	stream.read_to_end(&mut buffer);
+	let mut deserializer = Deserializer::new(&buffer[..]);
+	let response: LumyMessage = Deserialize::deserialize(&mut deserializer)?;
+	println!("Received: {:?}",response);
+	Ok(response)
+	}
+
 fn get_config(list: &str) -> Vec<String> {
 	if list.to_string() == "watch" {
 		let confconn = Connection::open(CFGPATH).expect("Error: Could not open configuration database.");
@@ -129,13 +204,6 @@ fn save_event() {
 	imlogsconn.execute("insert into EVENTS (DATE) values (CURRENT_TIMESTAMP)",[]).expect("Error: Could not save event to Integrity Lumy database");
 	imlogsconn.close().unwrap();
 	}
-/*
-					let mut stream = TcpStream::connect("127.0.0.1:10461").expect("Error: Could not connect to Luminum Client process");
-					let notify_event: NotifyEvent = event.into();
-
-					stream.write_all(&json_event.as_bytes());
-					stream.shutdown(Shutdown::Write);
-*/
 
 fn is_inotify_enabled() -> bool {
 	fs::metadata("/proc/sys/fs/inotify").is_ok()
@@ -148,18 +216,18 @@ fn file_exists(path: &str) -> bool {
 fn octal_to_symbolic(octal: u32) -> String {
 	let mut result = String::new();
 
-    result.push(if (octal & 0o400) != 0 { 'r' } else { '-' });
-    result.push(if (octal & 0o200) != 0 { 'w' } else { '-' });
-    result.push(if (octal & 0o100) != 0 { 'x' } else { '-' });
+	result.push(if (octal & 0o400) != 0 { 'r' } else { '-' });
+	result.push(if (octal & 0o200) != 0 { 'w' } else { '-' });
+	result.push(if (octal & 0o100) != 0 { 'x' } else { '-' });
 
-    // Group permissions
-    result.push(if (octal & 0o040) != 0 { 'r' } else { '-' });
-    result.push(if (octal & 0o020) != 0 { 'w' } else { '-' });
-    result.push(if (octal & 0o010) != 0 { 'x' } else { '-' });
+	// Group permissions
+	result.push(if (octal & 0o040) != 0 { 'r' } else { '-' });
+	result.push(if (octal & 0o020) != 0 { 'w' } else { '-' });
+	result.push(if (octal & 0o010) != 0 { 'x' } else { '-' });
 
-    // Other permissions
-    result.push(if (octal & 0o004) != 0 { 'r' } else { '-' });
-    result.push(if (octal & 0o002) != 0 { 'w' } else { '-' });
-    result.push(if (octal & 0o001) != 0 { 'x' } else { '-' });
+	// Other permissions
+	result.push(if (octal & 0o004) != 0 { 'r' } else { '-' });
+	result.push(if (octal & 0o002) != 0 { 'w' } else { '-' });
+	result.push(if (octal & 0o001) != 0 { 'x' } else { '-' });
 	result
 	}
