@@ -34,7 +34,7 @@ use openssl::hash::MessageDigest;
 use openssl::asn1::Asn1Time;
 use openssl::nid::Nid;
 use serde::{Deserialize, Serialize};
-use rmp_serde::{from_read, Deserializer, Serializer, to_vec_named};
+use rmp_serde::{from_read, to_vec_named};
 
 const VER: &str = "0.0.1";
 const CFGPATH: &str = "/opt/Luminum/LuminumServer/config/server.conf.db";
@@ -42,7 +42,7 @@ const DKPATH: &str = "/opt/Luminum/LuminumServer/config/luminum.key";
 const DPPATH: &str = "/opt/Luminum/LuminumServer/config/luminum.pub";
 const DCPATH: &str = "/opt/Luminum/LuminumServer/config/luminum.crt";
 const DIPATH: &str = "/opt/Luminum/LuminumServer/config/luminum.pfx";
-const DPORT: u16 = 10465;
+const DPORT: &str = "10465";
 
 struct Config {
 	key: String,
@@ -147,7 +147,6 @@ fn main() {
 	let mut port = matches.value_of("port").unwrap_or("");
 	let setup = matches.is_present("setup");
 	let debug = matches.is_present("debug");
-	if port == "" { let port = &DPORT.to_string(); }
 
 	dbout(debug,0,format!("Starting Luminum Server Daemon v{}...",VER).as_str());
 
@@ -304,6 +303,7 @@ fn main() {
 		.db_name(Some("CLIENTS")));
 	let clients_db_pool = Arc::new(Pool::new(copts).unwrap());
 
+/*
 	let clientsconn = match clients_db_pool.get_conn() {
 		Ok(cconn) => {
 			dbout(debug,3,format!("Connected to MySQL database: CLIENTS").as_str());
@@ -314,7 +314,7 @@ fn main() {
 			std::process::exit(1);
 			}
 		};
-
+*/
 	// TODO - Need to create a check for configured modules so we're not creating connections for modules not enabled
 
 	// Open INTEGRITY database
@@ -325,6 +325,7 @@ fn main() {
 		.db_name(Some("INTEGRITY")));
 	let integrity_db_pool = Arc::new(Pool::new(liopts).unwrap());
 
+/*
 	let liconn = match integrity_db_pool.get_conn() {
 		Ok(conn) => {
 			dbout(debug,3,format!("Connected to MySQL database: INTEGRITY").as_str());
@@ -335,7 +336,7 @@ fn main() {
 			std::process::exit(1);
 			}
 		};
-
+*/
 	// Use private key passphrase from server configuration and load PKE identity file
 	let encrypted_passphrase = serverconfig.get("PKPASS").unwrap();
 	let passphrase = mc.decrypt_base64_to_string(&encrypted_passphrase).unwrap();
@@ -399,14 +400,14 @@ fn main() {
 										if msg.uid == "NONE" && msg.content.action == "register" {
 											dbout(debug,4,format!("Received endpoint registration request from {}",&peer_addr).as_str());
 											if msg.content.data.serverkey == Some(String::from(server_key)) {
-												register_client(&clients_db_pool,peer_addr.to_string(),msg.content.data,&mut tls_stream,debug);
+												register_client(&clients_db_pool,msg.content.data,&mut tls_stream,debug);
 												}
 											else {
 												dbout(debug,2,format!("An invalid server key was provided by {} during registration.", &peer_addr).as_str());
 												}
 											}
 										else if msg.content.lumy == "Integrity" {
-											if msg.content.action == "getconfig" {
+											if msg.content.action == "newconfig" {
 												dbout(debug,4,format!("Received Integrity Lumy configuration request from {}",&peer_addr).as_str());
 												integrity_config(&integrity_db_pool,msg.uid,&mut tls_stream,"new".to_string(),debug);
 												}
@@ -433,15 +434,15 @@ fn main() {
 	}
 
 fn handle_msg(pool: &Arc<Pool>, peer_addr: String, data: &str, stream: &mut native_tls::TlsStream<TcpStream>, debug: bool) {
-	let mut conn = pool.get_conn().unwrap();
+	let conn = pool.get_conn().unwrap();
 	}
 
 fn verify_client(pool: &Arc<Pool>, peer_addr: String, data: &str, stream: &mut native_tls::TlsStream<TcpStream>, debug: bool) {
-	let mut conn = pool.get_conn().unwrap();
+	let conn = pool.get_conn().unwrap();
 	let mut vstat = String::new();
 	}
 
-fn register_client(pool: &Arc<Pool>, peer_addr: String, data: MessageData, stream: &mut native_tls::TlsStream<TcpStream>, debug: bool) {
+fn register_client(pool: &Arc<Pool>, data: MessageData, stream: &mut native_tls::TlsStream<TcpStream>, debug: bool) {
 	let mut conn = pool.get_conn().unwrap();
 	let new_uid = Uuid::new_v4();
 
@@ -454,7 +455,7 @@ fn register_client(pool: &Arc<Pool>, peer_addr: String, data: MessageData, strea
 	let query = format!("insert into STATUS (UID,HOSTNAME,IPV4,IPV6,OSPLAT,OSVER,REGDATE,LASTSEEN) VALUES ('{}', '{}', '{}', '{}', '{}', '{}',now(),now())", new_uid, hostname, ipv4, ipv6, osplat, osver);
 	match conn.query_drop(query) {
 		Ok(_) => {
-			let mut response_data = MessageData {
+			let response_data = MessageData {
 				uid: Some(String::from(new_uid)),
 				serverkey: None,
 				hostname: None,
@@ -487,13 +488,13 @@ fn register_client(pool: &Arc<Pool>, peer_addr: String, data: MessageData, strea
 fn integrity_config(pool: &Arc<Pool>, uid: String, stream: &mut native_tls::TlsStream<TcpStream>, action: String, debug: bool) {
 	let mut conn = pool.get_conn().unwrap();
 	if action == "new" {
-		let query = format!("INSERT INTO WATCH (ID, OS, PATH) SELECT status.ID, status.OSPLAT, wd.PATH FROM (SELECT ID, OSPLAT FROM CLIENTS.STATUS WHERE UID = '{}') AS status CROSS JOIN (SELECT PATH FROM WATCH_DEFAULT WHERE OS = (SELECT OSPLAT FROM CLIENTS.STATUS WHERE UID = '{}')) AS wd", uid, uid);
+		let query = format!("INSERT INTO WATCHLIST (ID, OS, PATH) SELECT status.ID, status.OSPLAT, wd.PATH FROM (SELECT ID, OSPLAT FROM CLIENTS.STATUS WHERE UID = '{}') AS status CROSS JOIN (SELECT PATH FROM WATCH_DEFAULT WHERE OS = (SELECT OSPLAT FROM CLIENTS.STATUS WHERE UID = '{}')) AS wd", uid, uid);
 		match conn.query_drop(query) {
 			Ok(_) => {
-				let query = format!("select PATH FROM WATCH WHERE ID = (select ID from CLIENTS.STATUS where UID = '{}')", uid);
+				let query = format!("select PATH FROM WATCHLIST WHERE ID = (select ID from CLIENTS.STATUS where UID = '{}')", uid);
 				let results: Vec<String> = conn.exec(query, ()).expect("Error: Unable to retrieve saved Integrity configuration for endpoint");
 
-				let mut response_data = MessageData {
+				let response_data = MessageData {
 					uid: None,
 					serverkey: None,
 					hostname: None,
@@ -506,7 +507,7 @@ fn integrity_config(pool: &Arc<Pool>, uid: String, stream: &mut native_tls::TlsS
 				let response_content = MessageContent {
 					lumy: String::from("Integrity"),
 					status: String::from("OK"),
-					action: String::from("getconfig"),
+					action: String::from("newconfig"),
 					data: response_data
 					};
 				let response = ServerMessage {
