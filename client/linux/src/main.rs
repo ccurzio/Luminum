@@ -29,6 +29,7 @@ use rmp_serde::decode::from_slice;
 
 const VER: &str = "0.0.1";
 const CFGPATH: &str = "/opt/Luminum/LuminumClient/config/client.conf.db";
+const CRTPATH: &str = "/opt/Luminum/LuminumClient/config/server.crt";
 const MODPATH: &str = "/opt/Luminum/LuminumClient/modules";
 const DPORT: u16 = 10465;
 const LPORT: u16 = 10461;
@@ -187,8 +188,6 @@ fn main() {
 		};
 
 
-	let server_cert_path = "/opt/Luminum/LuminumClient/config/server.crt";
-
 	// Check client registration status and register with server if necessary
 	let mut uid = String::new();
 	if clientconfig.get("UID").is_none() {
@@ -209,13 +208,13 @@ fn main() {
 			action: String::from("register"),
 			data: Some(msgdata)
 			};
-		let clientmsg = ClientMessage {
+			let clientmsg = ClientMessage {
 			product: String::from("Luminum Client"),
 			version: String::from(VER),
 			uid: String::from("NONE"),
 			content: msgcontent
 			};
-		let servermsg: Option<ServerMessage> = match server_send(server_host, server_port, server_cert_path, clientmsg, debug) {
+		let servermsg: Option<ServerMessage> = match server_send(server_host, server_port, CRTPATH, clientmsg, debug) {
 			Ok(response) => { Some(response) },
 			Err(err) => {
 				dbout(debug,2,format!("Failed to sendFF message to server: {}", err).as_str());
@@ -355,7 +354,7 @@ fn main() {
 								uid: String::from(uid),
 								content: msgcontent
 								};
-							let servermsg: Option<ServerMessage> = match server_send(server_host, server_port, server_cert_path, clientmsg, debug) {
+							let servermsg: Option<ServerMessage> = match server_send(server_host, server_port, CRTPATH, clientmsg, debug) {
 								Ok(response) => {
 									Some(response)
 									},
