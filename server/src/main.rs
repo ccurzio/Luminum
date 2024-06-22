@@ -65,7 +65,7 @@ struct ClientMessage {
 
 #[derive(Serialize, Deserialize, Debug)]
 struct MessageContent {
-	module: String,
+	lumy: String,
 	status: String,
 	action: String,
 	data: MessageData
@@ -79,7 +79,8 @@ struct MessageData {
 	osplat: Option<String>,
 	osver: Option<String>,
 	ipv4: Option<String>,
-	ipv6: Option<String>
+	ipv6: Option<String>,
+	info: Option<Vec<String>>
 	}
 
 fn main() {
@@ -404,6 +405,12 @@ fn main() {
 												dbout(debug,2,format!("An invalid server key was provided by {} during registration.", &peer_addr).as_str());
 												}
 											}
+										else if msg.content.lumy == "Integrity" {
+											if msg.content.action == "getconfig" {
+												dbout(debug,4,format!("Received Integrity Lumy configuration request from {}",&peer_addr).as_str());
+												integrity_config(&integrity_db_pool,msg.uid,&mut tls_stream,"new".to_string(),debug);
+												}
+											}
 										}
 									},
 								Err(_) => {
@@ -454,10 +461,11 @@ fn register_client(pool: &Arc<Pool>, peer_addr: String, data: MessageData, strea
 				osplat: None,
 				osver: None,
 				ipv4: None,
-				ipv6: None
+				ipv6: None,
+				info: None
 				};
 			let response_content = MessageContent {
-				module: String::from("Luminum Core"),
+				lumy: String::from("Luminum Core"),
 				status: String::from("OK"),
 				action: String::from("register"),
 				data: response_data
@@ -473,6 +481,46 @@ fn register_client(pool: &Arc<Pool>, peer_addr: String, data: MessageData, strea
 		Err(err) => {
 			dbout(debug,2,format!("Failed to register endpoint \"{}\": {}", hostname,err).as_str());
 			}
+		}
+	}
+
+fn integrity_config(pool: &Arc<Pool>, uid: String, stream: &mut native_tls::TlsStream<TcpStream>, action: String, debug: bool) {
+	let mut conn = pool.get_conn().unwrap();
+	if action == "new" {
+		let query = format!("INSERT INTO WATCH (ID, OS, PATH) SELECT status.ID, status.OSPLAT, wd.PATH FROM (SELECT ID, OSPLAT FROM CLIENTS.STATUS WHERE UID = '{}') AS status CROSS JOIN (SELECT PATH FROM WATCH_DEFAULT WHERE OS = (SELECT OSPLAT FROM CLIENTS.STATUS WHERE UID = '{}')) AS wd", uid, uid);
+		match conn.query_drop(query) {
+			Ok(_) => {
+				let query = format!("select PATH FROM WATCH WHERE ID = (select ID from CLIENTS.STATUS where UID = '{}')", uid);
+				let results: Vec<String> = conn.exec(query, ()).expect("Error: Unable to retrieve saved Integrity configuration for endpoint");
+
+				let mut response_data = MessageData {
+					uid: None,
+					serverkey: None,
+					hostname: None,
+					osplat: None,
+					osver: None,
+					ipv4: None,
+					ipv6: None,
+					info: Some(results)
+					};
+				let response_content = MessageContent {
+					lumy: String::from("Integrity"),
+					status: String::from("OK"),
+					action: String::from("getconfig"),
+					data: response_data
+					};
+				let response = ServerMessage {
+					version: String::from(VER),
+					content: response_content
+					};
+				let serialized_data = to_vec_named(&response).expect("Error: Failed to serialize message to client.");
+				stream.write_all(&serialized_data).expect("Error: Failed to send response to client.");
+				dbout(debug,3,format!("Saved Integrity Lumy configuration for UID \"{}\"", uid).as_str());			
+				}
+	                Err(err) => {
+	                        dbout(debug,2,format!("Failed to save Integrity Lumy configuration: {}", err).as_str());
+				}
+                        }
 		}
 	}
 
