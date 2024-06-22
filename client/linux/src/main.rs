@@ -54,7 +54,7 @@ struct ClientMessage {
 
 #[derive(Serialize, Deserialize, Debug)]
 struct MessageContent {
-	module: String,
+	lumy: String,
 	status: String,
 	action: String,
 	data: Option<MessageData>
@@ -68,7 +68,8 @@ struct MessageData {
 	osplat: Option<String>,
 	osver: Option<String>,
 	ipv4: Option<String>,
-	ipv6: Option<String>
+	ipv6: Option<String>,
+	info: Option<Vec<String>>
 	}
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -150,6 +151,8 @@ fn main() {
 		process::exit(1);
 		}
 
+	let clientconfig_clone = clientconfig.clone();
+
 	// Set up local IPC listener
 	let addr_str = format!("127.0.0.1:{}", LPORT);
 	let addr: SocketAddr = addr_str.parse().expect("Invalid socket address");
@@ -193,14 +196,15 @@ fn main() {
 		let msgdata = MessageData {
 			hostname: Some(String::from(endpointname.clone())),
 			serverkey: Some(String::from(clientconfig.get("SVRKEY").unwrap())),
-			uid: Some(String::from("NONW")),
+			uid: Some(String::from("NONE")),
 			osplat: Some(String::from("Linux")),
 			osver: Some(String::from(get_os_release())),
-			ipv4: Some(String::from(ipv4_address)),
-			ipv6: Some(String::from(ipv6_address))
+			ipv4: Some(String::from("192.168.1.10")),
+			ipv6: None,
+			info: None
 			};
 		let msgcontent = MessageContent {
-			module: String::from("Client Core"),
+			lumy: String::from("Client Core"),
 			status: String::from("noreg"),
 			action: String::from("register"),
 			data: Some(msgdata)
@@ -214,7 +218,7 @@ fn main() {
 		let servermsg: Option<ServerMessage> = match server_send(server_host, server_port, server_cert_path, clientmsg, debug) {
 			Ok(response) => { Some(response) },
 			Err(err) => {
-				dbout(debug,2,format!("Failed to send message to server: {}", err).as_str());
+				dbout(debug,2,format!("Failed to sendFF message to server: {}", err).as_str());
 				None
 				}
 			};
@@ -281,15 +285,95 @@ fn main() {
 		process::exit(1);
 		}).expect("Error creating break handler");
 
+/*
+		let msgdata = MessageData {
+			hostname: Some(String::from(endpointname.clone())),
+			serverkey: Some(String::from(clientconfig.get("SVRKEY").unwrap())),
+			uid: Some(String::from("NONW")),
+			osplat: Some(String::from("Linux")),
+			osver: Some(String::from(get_os_release())),
+			ipv4: Some(String::from(ipv4_address.clone())),
+			ipv6: Some(String::from(ipv6_address.clone()))
+			};
+		let msgcontent = MessageContent {
+			module: String::from("Client Core"),
+			status: String::from("noreg"),
+			action: String::from("register"),
+			data: Some(msgdata)
+			};
+		let clientmsg = ClientMessage {
+			product: String::from("Luminum Client"),
+			version: String::from(VER),
+			uid: String::from("NONE"),
+			content: msgcontent
+			};
+		let servermsg: Option<ServerMessage> = match server_send(server_host, server_port, server_cert_path, clientmsg, debug) {
+			Ok(response) => { Some(response) },
+			Err(err) => {
+				dbout(debug,2,format!("Failed to send message to server: {}", err).as_str());
+				None
+				}
+			};
+*/
 	let ipcstream = Arc::new(Mutex::new(None));
 
 	for incoming in ipclistener.incoming() {
 		match incoming {
 			Ok(mut stream) => {
 				let shared_stream = Arc::clone(&ipcstream);
+				let ccfg = clientconfig_clone.clone();
 				thread::spawn(move || {
+					let uid = ccfg.get("UID").unwrap();
+					let endpointname = gethostname().to_string_lossy().into_owned();
+					let server_host = ccfg.get("SHOST").unwrap();
+					let server_port = ccfg.get("SPORT").unwrap();
 					let mut buffer = [0; 1024];
 					let bytes_read = stream.read(&mut buffer).expect("Error: Failure reading input stream");
+					let mut deserializer = Deserializer::new(&buffer[..]);
+					let lumymsg: LumyMessage = Deserialize::deserialize(&mut deserializer).expect("Error: Failed to parse IPC input stream");
+					if lumymsg.lumy == "Integrity" {
+						if lumymsg.content.action == "getconfig" {
+							let msgdata = MessageData {
+								hostname: Some(String::from(endpointname)),
+								serverkey: None,
+								uid: Some(String::from(uid)),
+								osplat: Some(String::from("Linux")),
+								osver: None,
+								ipv4: None,
+								ipv6: None,
+								info: None
+								};
+							let msgcontent = MessageContent {
+								lumy: String::from("Integrity"),
+								status: String::from("new"),
+								action: String::from("getconfig"),
+								data: Some(msgdata)
+								};
+							let clientmsg = ClientMessage {
+								product: String::from("Luminum Client"),
+								version: String::from(VER),
+								uid: String::from(uid),
+								content: msgcontent
+								};
+							let servermsg: Option<ServerMessage> = match server_send(server_host, server_port, server_cert_path, clientmsg, debug) {
+								Ok(response) => {
+									Some(response)
+									},
+								Err(err) => {
+									dbout(debug,2,format!("Failed to send message to server: {}", err).as_str());
+									None
+									}
+								};
+							if let Some(servermsg) = servermsg {
+								let servermsg: ServerMessage = servermsg;
+								let serverdata: MessageData = servermsg.content.data.expect("Error: Unable to parse message data.");
+								let liconfconn = Connection::open("/opt/Luminum/LuminumClient/modules/integrity/integrity.conf.db").expect("Error: Could not open Integrity Lumy configuration database.");
+								liconfconn.execute("create table if not exists WATCH ( PATH text not null )",[]).expect("Error: Could not create WATCH table in Integrity Lumy configuration database");
+								for value in serverdata.info.unwrap() { liconfconn.execute("insert into WATCH (PATH) values (?)", &[&value]); }
+								liconfconn.close().unwrap();
+								}
+							}
+						}
 					let mut shared_stream = shared_stream.lock().unwrap();
 					*shared_stream = Some(stream);
 					});
