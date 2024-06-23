@@ -449,7 +449,7 @@ fn register_client(pool: &Arc<Pool>, data: MessageData, stream: &mut native_tls:
 	let hostname = data.hostname.unwrap();
 	let osplat = data.osplat.unwrap();
 	let osver = data.osver.unwrap();
-	let ipv4 = data.ipv4.unwrap();
+	let ipv4 = data.ipv4.unwrap_or("".to_string());
 	let ipv6 = data.ipv6.unwrap_or("".to_string());
 
 	let query = format!("insert into STATUS (UID,HOSTNAME,IPV4,IPV6,OSPLAT,OSVER,REGDATE,LASTSEEN) VALUES ('{}', '{}', '{}', '{}', '{}', '{}',now(),now())", new_uid, hostname, ipv4, ipv6, osplat, osver);
