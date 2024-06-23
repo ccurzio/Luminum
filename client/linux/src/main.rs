@@ -9,6 +9,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::process;
 use std::process::{Command, Stdio, Child};
 use std::thread;
+use tokio::task::spawn;
+use tokio::time;
 use gethostname::gethostname;
 use etc_os_release::OsRelease;
 use local_ip_address::local_ip;
@@ -87,7 +89,8 @@ struct LumyContent {
 	data: Option<Vec<String>>
 	}
 
-fn main() {
+#[tokio::main]
+async fn main() {
 	let endpointname = gethostname().to_string_lossy().into_owned();
 	let matches = App::new("Luminum Client (Linux)")
 		.version(VER)
@@ -249,6 +252,14 @@ fn main() {
 	else {
 		let uid = clientconfig.get("UID").unwrap();
 		dbout(debug,3,format!("Endpoint is registered with UID {}", uid).as_str());
+		let dbg = debug;
+		tokio::spawn(async move {
+			let mut interval = time::interval(Duration::from_secs(300));
+			loop {
+				interval.tick().await;
+				heartbeat(dbg).await;
+				}
+			});
 		}
 
 	// Review installed Lumys
@@ -266,8 +277,6 @@ fn main() {
 		start_lumy(&lumy, &lpath, debug);
 		if lumys.len() > 1 { thread::sleep(Duration::from_secs(2)); }
 		}
-
-	println!("FOO");
 
 	// Start IPC listener
 	let dbc = debug.clone();
@@ -339,7 +348,7 @@ fn main() {
 */
 	}
 
-fn heartbeat(debug: bool) {
+async fn heartbeat(debug: bool) {
 	let ccfg = parse_clientconfig(debug);
 	let uid = ccfg.get("UID").unwrap();
 	let endpointname = gethostname().to_string_lossy().into_owned();
