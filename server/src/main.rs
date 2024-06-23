@@ -396,8 +396,14 @@ fn main() {
 							match from_read::<_, ClientMessage>(&buffer[..n]) {
 								Ok(msg) => {
 									//println!("Received from client: {:?}",msg);
-									if msg.product == "Luminum Client" {
-										if msg.uid == "NONE" && msg.content.action == "register" {
+									if msg.product == "Luminum Client" && !msg.uid.is_empty() {
+										let uid = msg.uid.to_string();
+										if msg.content.action == "heartbeat" {
+											let mut conn = clients_db_pool.get_conn().unwrap();
+											conn.exec_drop(format!("update STATUS set LASTSEEN = now() where UID = '{}'",uid),());
+											dbout(debug,4,format!("Received heartbeat from UID \"{}\"", &uid).as_str());
+											}
+										else if msg.uid == "NONE" && msg.content.action == "register" {
 											dbout(debug,4,format!("Received endpoint registration request from {}",&peer_addr).as_str());
 											if msg.content.data.serverkey == Some(String::from(server_key)) {
 												register_client(&clients_db_pool,msg.content.data,&mut tls_stream,debug);
