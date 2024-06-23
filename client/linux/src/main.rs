@@ -246,6 +246,14 @@ async fn main() {
 				confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)",&[&"UID",new_uid.to_string().as_str()]).expect("Error: Could not insert UID into CONFIG table.");
 				confconn.close().unwrap();
 				dbout(debug,3,format!("Registration successful. (UID: {})", new_uid).as_str());
+				let dbg = debug;
+				tokio::spawn(async move {
+					let mut interval = time::interval(Duration::from_secs(300));
+					loop {
+						interval.tick().await;
+						heartbeat(dbg).await;
+						}
+					});
 				}
 			}		
 		}
