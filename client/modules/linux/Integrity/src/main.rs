@@ -95,7 +95,7 @@ fn main() {
 			version: String::from(VER),
 			content: lumycontent
 			};
-		let response: LumyMessage = client_send(stream, lumymsg);
+		let response: LumyMessage = client_send(&stream, lumymsg);
 
 		if response.content.action == "setconfig" {
 			let confconn = Connection::open(CFGPATH).expect("Error: Could not open configuration database.");
@@ -106,7 +106,6 @@ fn main() {
 		}
 
 	if is_inotify_enabled() {
-		println!("Starting Watcher");
 		let (tx, rx) = channel();
 		let mut watcher: RecommendedWatcher = RecommendedWatcher::new(tx, Config::default()).expect("Error: Could not set up watcher.");
 
@@ -158,7 +157,7 @@ fn main() {
 		}
 	}
 
-fn client_send(mut stream: TcpStream, message: LumyMessage) -> LumyMessage {
+fn client_send(mut stream: &TcpStream, message: LumyMessage) -> LumyMessage {
 	let serialized_data = to_vec_named(&message).expect("Error: Unable to serialize data to Luminum Client");
 	stream.write_all(&serialized_data).expect("Error: Unable to send message to Luminum Client process");
 	stream.flush();
