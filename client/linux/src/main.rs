@@ -148,6 +148,7 @@ fn main() {
 
 	dbout(debug,4,format!("Endpoint IP address: {}", ip_address).as_str());
 
+	dbout(debug,3,format!("Using configuration: {}",CFGPATH).as_str());
 	let clientconfig = parse_clientconfig(debug);
 	let clientconfig_clone = clientconfig.clone();
 
@@ -266,6 +267,8 @@ fn main() {
 		if lumys.len() > 1 { thread::sleep(Duration::from_secs(2)); }
 		}
 
+	println!("FOO");
+
 	// Start IPC listener
 	let dbc = debug.clone();
 	for stream in ipclistener.incoming() {
@@ -336,15 +339,48 @@ fn main() {
 */
 	}
 
+fn heartbeat(debug: bool) {
+	let ccfg = parse_clientconfig(debug);
+	let uid = ccfg.get("UID").unwrap();
+	let endpointname = gethostname().to_string_lossy().into_owned();
+	let server_host = ccfg.get("SHOST").unwrap();
+	let server_port = ccfg.get("SPORT").unwrap();
+
+	let msgdata = MessageData {
+		hostname: None,
+		serverkey: None,
+		uid: None,
+		osplat: None,
+		osver: None,
+		ipv4: None,
+		ipv6: None,
+		info: None
+		};
+	let msgcontent = MessageContent {
+		lumy: String::from("Client Core"),
+		status: String::from("online"),
+		action: String::from("heartbeat"),
+		data: Some(msgdata)
+		};
+	let clientmsg = ClientMessage {
+		product: String::from("Luminum Client"),
+		version: String::from(VER),
+		uid: String::from(uid),
+		content: msgcontent
+		};
+
+	dbout(debug,4,format!("Sending heartbeat to Luminum server").as_str());
+	let _ = server_send(server_host, server_port, CRTPATH, clientmsg, debug);
+	thread::sleep(Duration::from_secs(5));
+	}
+
+
 fn parse_clientconfig(debug: bool) -> HashMap<String, String> {
 	let mut clientconfig: HashMap<String, String> = HashMap::new();
 
 	if fs::metadata(CFGPATH).is_ok() {
 		let confconn = match Connection::open(CFGPATH) {
-			Ok(confconn) => {
-				dbout(debug,3,format!("Reading configuration: {}",CFGPATH).as_str());
-				confconn
-				}
+			Ok(confconn) => { confconn }
 			Err(err) => {
 				dbout(debug,1,format!("Could not open client configuration database: {}",err).as_str());
 				process::exit(1);
