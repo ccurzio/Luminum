@@ -95,16 +95,7 @@ fn main() {
 			version: String::from(VER),
 			content: lumycontent
 			};
-		let clientmsg: Option<LumyMessage> = match client_send(stream, lumymsg) {
-			Ok(response) => Some(response),
-			Err(err) => {
-				println!("Error: Unable to send message to Luminum Client process");
-				None
-				}
-			};
-
-		let response = clientmsg.unwrap();
-		println!("{:?}",response);
+		let response: LumyMessage = client_send(stream, lumymsg);
 
 		if response.content.action == "setconfig" {
 			let confconn = Connection::open(CFGPATH).expect("Error: Could not open configuration database.");
@@ -115,6 +106,7 @@ fn main() {
 		}
 
 	if is_inotify_enabled() {
+		println!("Starting Watcher");
 		let (tx, rx) = channel();
 		let mut watcher: RecommendedWatcher = RecommendedWatcher::new(tx, Config::default()).expect("Error: Could not set up watcher.");
 
@@ -122,7 +114,6 @@ fn main() {
 		let ignorepaths = get_config("ignore");
 
 		for watchpath in watchpaths {
-			println!("{:?}",watchpath);
 			watcher.watch(Path::new(&watchpath), RecursiveMode::Recursive);
 			}
 
@@ -167,17 +158,17 @@ fn main() {
 		}
 	}
 
-fn client_send(mut stream: TcpStream, message: LumyMessage) -> Result<LumyMessage, Box<dyn Error>> {
+fn client_send(mut stream: TcpStream, message: LumyMessage) -> LumyMessage {
 	let serialized_data = to_vec_named(&message).expect("Error: Unable to serialize data to Luminum Client");
 	stream.write_all(&serialized_data).expect("Error: Unable to send message to Luminum Client process");
-	println!("Sent: {:?}",message);
+	stream.flush();
 
 	let mut buffer = Vec::new();
 	stream.read_to_end(&mut buffer);
+
 	let mut deserializer = Deserializer::new(&buffer[..]);
-	let response: LumyMessage = Deserialize::deserialize(&mut deserializer)?;
-	println!("Received: {:?}",response);
-	Ok(response)
+	let response: LumyMessage = Deserialize::deserialize(&mut deserializer).expect("Error: Unable to parse client response");
+	return response
 	}
 
 fn get_config(list: &str) -> Vec<String> {
