@@ -209,7 +209,7 @@ fn main() {
 			uid: Some(String::from("NONE")),
 			osplat: Some(String::from("Linux")),
 			osver: Some(String::from(get_os_release())),
-			ipv4: Some(String::from("192.168.1.10")),
+			ipv4: Some(String::from(ip_address)),
 			ipv6: None,
 			info: None
 			};
