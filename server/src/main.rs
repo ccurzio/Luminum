@@ -396,7 +396,7 @@ fn main() {
 							match from_read::<_, ClientMessage>(&buffer[..n]) {
 								Ok(msg) => {
 									//println!("Received from client: {:?}",msg);
-									if msg.product == "Luminum Client" && !msg.uid.is_empty() {
+									if msg.product == "Luminum Client" && valid_uid(&msg.uid) {
 										let uid = msg.uid.to_string();
 										if msg.content.action == "heartbeat" {
 											let mut conn = clients_db_pool.get_conn().unwrap();
@@ -546,6 +546,16 @@ fn contains_no_numbers(variable: &str) -> bool {
 
 fn contains_only_numbers(input: &str) -> bool {
 	let re = Regex::new(r"^\d+$").unwrap();
+	re.is_match(input)
+	}
+
+fn valid_uid(input: &str) -> bool {
+	let re = Regex::new(r"^[a-zA-Z0-9_-]+$").unwrap();
+	re.is_match(input)
+	}
+
+fn valid_product(input: &str) -> bool {
+	let re = Regex::new(r"^[a-zA-Z\s]+$").unwrap();
 	re.is_match(input)
 	}
 
