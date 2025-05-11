@@ -1,6 +1,6 @@
 <?php
-date_default_timezone_set('America/New_York');
 session_start();
+date_default_timezone_set("America/New_York");
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 	if (isset($_GET['logout']) && $_GET['logout'] == "1" && isset($_SESSION['SID'])) {
