@@ -1,5 +1,4 @@
 <div class="footer">
-<!-- <div style="padding-bottom: 10px;"><b>Session Start:</b> 0000-00-00 00:00:00</div><div class="nav-text-right" style="padding-bottom: 10px; color: white; font-size: 15px;"><b>System Health:</b> <img style="vertical-align: text-bottom; width: 18px; height: 18px;" src="icons/sysgreen.png"></div> -->
 <div style="padding-bottom: 10px;"><b>Session Start:</b> <?php print $_SESSION['START']; ?></div><div class="nav-text-right" style="padding-bottom: 10px; color: white; font-size: 15px;"><b>System Health:</b> <img style="vertical-align: text-bottom; width: 18px; height: 18px;" src="icons/sysgreen.png"></div>
 </div>
 

@@ -2,6 +2,10 @@
 session_start();
 date_default_timezone_set("America/New_York");
 
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 	if (isset($_GET['logout']) && $_GET['logout'] == "1" && isset($_SESSION['SID'])) {
 		$db = new mysqli("localhost", "***REMOVED***", "***REMOVED***", '', 0, "/var/run/mysqld/mysqld.sock");
@@ -31,10 +35,10 @@ else {
 			$passhash = password_hash($_POST['password'],PASSWORD_BCRYPT, $options);
 			$db = new mysqli("localhost", "***REMOVED***", "***REMOVED***", '', 0, "/var/run/mysqld/mysqld.sock");
 			mysqli_select_db($db, "AUTH") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
-			$passquery = mysqli_query($db, "select PASSWORD from USERS where USERNAME = '$username'");
-			$storedhash = $passquery->fetch_column();
+			$passquery = mysqli_query($db, "select FULLNAME,PASSWORD from USERS where USERNAME = '$username' and ENABLED = '1'");
+			$storedhash = $passquery->fetch_assoc();
 
-			if (!password_verify($_POST['password'],$storedhash)) {
+			if (!isset($storedhash["PASSWORD"]) || !password_verify($_POST['password'],$storedhash["PASSWORD"])) {
 				$_GET["err"] = "credfail";
 				include ("login.php");
 				}
@@ -46,6 +50,7 @@ else {
 				$_SESSION['SID'] = $newsession;
 				$_SESSION['USER'] = $username;
 				$_SESSION['START'] = date("Y-m-d H:i:s");
+				$_SESSION['NAME'] = $storedhash["FULLNAME"];
 				}
 			mysqli_close($db);
 			}

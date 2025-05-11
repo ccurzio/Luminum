@@ -6,6 +6,7 @@
 			<button class="formgo" style="margin-top: 5px; margin-right: 0;">Create New</button>
 			<button class="formgo" style="margin-top: 5px; margin-right: 0;">Modify Selected</button>
 			<button class="formgo" style="margin-top: 5px; margin-right: 0;">Delete Selected</button>
+			<button class="formgo" style="margin-top: 5px; margin-right: 0;">Get Info</button>
 		</div>
 		<table style="margin-top: 10px;">
 		<tr><td colspan="10"><div style="position: absolute; padding-top: 5px;">0 of 0 items</div><div style="float: right; text-align: right">Content Set: <select id="contentset" name="contentset" style="font-size: 15px; height: 28px; margin-left: 2px; margin-right: 30px;"><option value="all">All</option><option value="core">Luminum Core</option></select> Filter: <input type="text" style="font-size: 12px; padding: 5px;"></div></td></tr>

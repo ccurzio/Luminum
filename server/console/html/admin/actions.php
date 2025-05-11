@@ -6,6 +6,7 @@
 			<button class="formgo" style="margin-top: 5px; margin-right: 0;">Enable</button>
 			<button class="formgo" style="margin-top: 5px; margin-right: 0;">Reissue</button>
 			<button class="formgo" style="margin-top: 5px; margin-right: 0;">Delete Selected</button>
+			<button class="formgo" style="margin-top: 5px; margin-right: 0;">Get Info</button>
 		</div>
 		<table style="margin-top: 10px;">
 		<tr><td colspan="9"><div style="position: absolute; padding-top: 5px; padding-left: 5px;">0 of 0 items <img src="icons/refresh.png" style="cursor: pointer; margin-left: 2px; width: 20px; height: 20px; vertical-align: text-bottom;"></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" style="font-size: 12px; padding: 5px;"></div></td></tr>

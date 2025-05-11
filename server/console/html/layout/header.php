@@ -16,12 +16,28 @@ date_default_timezone_set("America/New_York");
 
 <body>
 
+<div id="overlay">
+	<div style="width: 700px; margin-left: auto; margin-right: auto; margin-top: 12%; background-color: white; border-radius: 8px; padding: 20px; box-shadow: 5px 5px 10px rgba(0,0,0,0.5); text-align: center;">
+		<span style="font-weight: bold; font-size: 20px;">Session Timeout</span><br>
+		<div style="width: 100%; margin-left: auto; margin-right: auto; text-align: center;">
+		</div>
+
+		<div style="width: 100%; margin-left: auto; margin-right: auto; text-align: center;">
+			Your session is about to time out due to inactivity, at which point you will automatically be logged out. You may click "extend" to renew your session,
+			or you can manually log out.
+		</div>
+		<div style="margin-top: 20px; margin-left: auto; margin-right: auto; text-align: center;">
+			<button class="formgo" id="extend" value="extend" style="margin-left: 0; margin-right: 0;">Extend</button> <button class="formgo" id="logout" value="logout" style="margin-left: 0; margin-right: 0;">Log Out</button>
+		</div>
+	</div>
+</div>
+
 <div class="header">
 	<div class="logo">
 		<img src="images/logo-light.png" alt="Luminum" class="logo-img">
 	</div>
 	<div class="user-menu">
-		<button class="user-button">Luminum Admin ▾</button>
+		<button class="user-button"><?php print $_SESSION["NAME"]; ?> <span style="margin-left: 2px; font-size: 18px;">▾</span></button>
 		<div class="user-dropdown">
 			<a href="/user.php">Account</a>
 			<a href="/user.php?view=prefs">Preferences</a>
@@ -41,7 +57,6 @@ date_default_timezone_set("America/New_York");
 				</button>
 			</a>
 		</div>
-
 		<div class="dropdown">
 			<a href="/investigate.php">
 				<button class="dropbtn" style="cursor: pointer;">
