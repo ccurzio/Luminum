@@ -1,0 +1,33 @@
+# Default server configuration
+#
+server {
+	listen 443 ssl default_server;
+	listen [::]:443 ssl default_server;
+
+	root /var/www/html;
+
+	index index.html index.php index.pl;
+
+	server_name luminum.accipiter.org;
+	ssl_certificate		/var/www/ssl/luminum.accipiter.org.crt;
+	ssl_certificate_key	/var/www/ssl/luminum.accipiter.org.key;
+	ssl_protocols		TLSv1 TLSv1.1 TLSv1.2 TLSv1.3;
+	ssl_ciphers		HIGH:!aNULL:!MD5;
+
+	location ~ \.php$ {
+		include snippets/fastcgi-php.conf;
+		fastcgi_pass unix:/var/run/php/php-fpm.sock;
+		}
+
+	location ~ \.pl$ {
+		fastcgi_pass unix:/var/run/fcgiwrap.socket;
+		include fastcgi_params;
+		fastcgi_keep_conn on;
+		}
+
+	location / {
+		# First attempt to serve request as file, then
+		# as directory, then fall back to displaying a 404.
+		try_files $uri $uri/ =404;
+		}
+	}

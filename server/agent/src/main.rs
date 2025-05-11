@@ -1,3 +1,5 @@
+mod ipvalidate;
+
 use chrono::Local;
 use chrono::format::strftime::StrftimeItems;
 use std::collections::HashMap;
@@ -744,22 +746,6 @@ fn daemonsetup() {
 	process::exit(0);
 	}
 
-// IPv4 Address Validation
-fn is_valid_ipv4_address(ip: &str) -> bool {
-	if ip.to_string() != "127.0.0.1" {
-		return ip.parse::<Ipv4Addr>().is_ok()
-		}
-	else { return false; }
-	}
-
-// IPv6 Address Validation
-fn is_valid_ipv6_address(ip: &str) -> bool {
-	if ip.to_string() != "0:0:0:0:0:0:0:1" && ip.to_string() != "::1" {
-		ip.parse::<Ipv6Addr>().is_ok()
-		}
-	else { return false; }
-	}
-
 // Create Private/Public Key PEM Files
 fn generate_private_key(ui_keypass: &str) -> Result<(), ErrorStack> {
 	let rsa = Rsa::generate(2048).unwrap();
@@ -902,6 +888,22 @@ fn sysuser_info(username: &str) -> (bool, Option<String>) {
 			}
 		}
 	return (false,None);
+	}
+
+// IPv4 Address Validation
+fn is_valid_ipv4_address(ip: &str) -> bool {
+	if ip.to_string() != "127.0.0.1" {
+		return ip.parse::<Ipv4Addr>().is_ok()
+		}
+	else { return false; }
+	}
+
+// IPv6 Address Validation
+fn is_valid_ipv6_address(ip: &str) -> bool {
+	if ip.to_string() != "0:0:0:0:0:0:0:1" && ip.to_string() != "::1" {
+		ip.parse::<Ipv6Addr>().is_ok()
+		}
+	else { return false; }
 	}
 
 // Debug Output
