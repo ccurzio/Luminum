@@ -35,7 +35,7 @@ else {
 			$passhash = password_hash($_POST['password'],PASSWORD_BCRYPT, $options);
 			$db = new mysqli("localhost", "***REMOVED***", "***REMOVED***", '', 0, "/var/run/mysqld/mysqld.sock");
 			mysqli_select_db($db, "AUTH") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
-			$passquery = mysqli_query($db, "select FULLNAME,PASSWORD from USERS where USERNAME = '$username' and ENABLED = '1'");
+			$passquery = mysqli_query($db, "select FULLNAME,PASSWORD,ROLE from USERS where USERNAME = '$username' and ENABLED = '1'");
 			$storedhash = $passquery->fetch_assoc();
 
 			if (!isset($storedhash["PASSWORD"]) || !password_verify($_POST['password'],$storedhash["PASSWORD"])) {
@@ -43,10 +43,12 @@ else {
 				include ("login.php");
 				}
 			else {
+				$acctrole = $storedhash["ROLE"];
 				$newsession = session_create_id('SID');
 				setcookie("username",$username,time()+3600, "/","luminum.accipiter.org",0);
 				setcookie("SID",$newsession,time()+3600, "/","luminum.accipiter.org",0);
 				mysqli_query($db, "insert into SESSION (ID,SID,START,EXPIRES) values ((select ID from USERS where USERNAME = '$username'),'$newsession',now(),now()+interval 60 minute)");
+				mysqli_query($db, "update USERS set LASTSEEN = now() where ID = (select ID from USERS where USERNAME = '$username')");
 				$_SESSION['SID'] = $newsession;
 				$_SESSION['USER'] = $username;
 				$_SESSION['START'] = date("Y-m-d H:i:s");
