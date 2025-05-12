@@ -16,12 +16,12 @@ $usercount = mysqli_num_rows($usersquery);
 	<div class="module-content">
 		<div style="display: block; width: 100%; text-align: right;">
 			<button class="formgo" style="margin-top: 5px; margin-right: 0;">Add User</button>
-			<button class="formgo" style="margin-top: 5px; margin-right: 0;">Delete Selected</button>
-			<button class="formgo" style="margin-top: 5px; margin-right: 0;">Get Info</button>
+			<button class="formgo" id="delete" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Delete Selected</button>
+			<button class="formgo" id="getinfo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Get Info</button>
 		</div>
 		<table style="margin-top: 10px;">
 		<tr><td colspan="9"><div style="position: absolute; padding-top: 5px;"> <?php print "$usercount of $usercount items"; ?></div><div style="float: right; text-align: right">Filter: <input type="text" style="font-size: 12px; padding: 5px;"></div></td></tr>
-		<tr><td style="width: 15px;"><input type="checkbox"></td><td style="width: 50px;">UID</td><td style="width: 75px;">Enabled</td><td style="width: 120px;">Username</td><td>Full Name</td><td style="width: 90px;">Role</td><td style="width: 90px;">Type</td><td>Created</td><td>Last Login</td></tr>
+		<tr><td style="width: 15px;"><input type="checkbox" id="checkall" onclick="selectAll()"></td><td style="width: 50px;">UID</td><td style="width: 75px;">Enabled</td><td style="width: 120px;">Username</td><td>Full Name</td><td style="width: 90px;">Role</td><td style="width: 90px;">Type</td><td>Created</td><td>Last Login</td></tr>
 
 		<?php
 			while($row = mysqli_fetch_assoc($usersquery)) {
@@ -31,11 +31,48 @@ $usercount = mysqli_num_rows($usersquery);
 				elseif ($row["ROLE"] == "2") { $acctrole = "Power User"; }
 				elseif ($row["ROLE"] == "3") { $acctrole = "User"; }
 				elseif ($row["ROLE"] == "4") { $acctrole = "Read-Only"; }
-				print "<tr><td style=\"width: 15px; background-color: #494a69;\"><input type=\"checkbox\"></td><td style=\"width: 50px; background-color: #494a69; font-weight: normal;\">" . $row["ID"] . "</td><td style=\"width: 75px; background-color: #494a69; font-weight: normal;\">" . $acctenabled . "</td><td style=\"width: 120px; background-color: #494a69; font-weight: normal;\">" . $row["USERNAME"] . "</td><td style=\"background-color: #494a69; font-weight: normal;\">" . $row["FULLNAME"] . "</td><td style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $acctrole . "</td>" . "<td style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $row["TYPE"] . "</td><td style=\"background-color: #494a69; font-weight: normal;\">" . $row["REGDATE"] . "</td><td style=\"background-color: #494a69; font-weight: normal;\">" . (!isset($row["LASTSEEN"]) ? "Never" : $row["LASTSEEN"]) . "</td></tr>\n";
+				print "<tr><td id=\"" . $row["ID"] . "A\" style=\"width: 15px; background-color: #494a69;\"><input id=\"ID" . $row["ID"] . "\" type=\"checkbox\" onclick=\"rowHighlight(" . $row["ID"] . ")\"></td><td id=\"" . $row["ID"] . "B\" style=\"width: 50px; background-color: #494a69; font-weight: normal;\">" . $row["ID"] . "</td><td id=\"" . $row["ID"] . "C\" style=\"width: 75px; background-color: #494a69; font-weight: normal;\">" . $acctenabled . "</td><td id=\"" . $row["ID"] . "D\" style=\"width: 120px; background-color: #494a69; font-weight: normal;\">" . $row["USERNAME"] . "</td><td id=\"" . $row["ID"] . "E\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["FULLNAME"] . "</td><td id=\"" . $row["ID"] . "F\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $acctrole . "</td>" . "<td id=\"" . $row["ID"] . "G\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $row["TYPE"] . "</td><td id=\"" . $row["ID"] . "H\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["REGDATE"] . "</td><td id=\"" . $row["ID"] . "I\" style=\"background-color: #494a69; font-weight: normal;\">" . (!isset($row["LASTSEEN"]) ? "Never" : $row["LASTSEEN"]) . "</td></tr>\n";
 				}
 		?>
 		<tr style="height: 35px;"><td colspan="9"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right">Query Completed in <?php print $duration; ?> Seconds</div></td></tr>
 		</table>
 	</div>
-
 </div>
+
+<script>
+function rowHighlight(idnum) {
+	var checkBox = document.getElementById("ID" + idnum);
+	const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+	var checkTrigger = 0;
+
+	checkboxes.forEach(checkbox => {
+		if (checkbox.checked == true) { checkTrigger++; }
+		});
+
+	if (checkBox.checked == true) {
+		var bgcolor = "#686993";
+		var buttontoggle = false;
+		}
+	else {
+		var bgcolor = "#494a69";
+		if (checkTrigger == 0) { var buttontoggle = "disabled"; }
+		}
+
+	document.getElementById("delete").disabled = buttontoggle;
+	if (checkTrigger > 1) {
+		document.getElementById("getinfo").disabled = "disabled";
+		}
+	else {
+		document.getElementById("getinfo").disabled = buttontoggle;
+		}
+	document.getElementById(idnum + "A").style.backgroundColor = bgcolor;
+	document.getElementById(idnum + "B").style.backgroundColor = bgcolor;
+	document.getElementById(idnum + "C").style.backgroundColor = bgcolor;
+	document.getElementById(idnum + "D").style.backgroundColor = bgcolor;
+	document.getElementById(idnum + "E").style.backgroundColor = bgcolor;
+	document.getElementById(idnum + "F").style.backgroundColor = bgcolor;
+	document.getElementById(idnum + "G").style.backgroundColor = bgcolor;
+	document.getElementById(idnum + "H").style.backgroundColor = bgcolor;
+	document.getElementById(idnum + "I").style.backgroundColor = bgcolor;
+	}
+</script>
