@@ -8,12 +8,17 @@ use Getopt::Long;
 use Cwd qw(abs_path);
 use FindBin qw($Bin);
 use POSIX qw(strftime);
+use Time::HiRes ("usleep");
 use Term::ANSIColor;
+use DBI;
+use Data::UUID;
+use threads;
 use Socket;
+use IO::Socket;
 use IO::Socket::SSL;
 use IO::Select;
-use Data::UUID;
-use DBI;
+use JSON;
+use Data::Dumper;
 
 #$| = 1;
 
@@ -25,12 +30,12 @@ my $dbuser;
 my $dbpass;
 my %attr;
 my $SID;
+my $SHOST;
 my $LADDR;
 my $LPORT;
 my $SKEY;
 my $sslcert;
 my $sslkey;
-my $listener;
 
 my $handles = new IO::Select();
 $suerror = 0;
@@ -68,15 +73,48 @@ if (!$dbuser || $dbuser eq "") { die "FATAL: Database user not specified in conf
 debugout(0,"Server startup sequence");
 startserver();
 
+debugout(0,"Starting Listener...");
+my $sock = IO::Socket::SSL->new(
+	LocalAddr => $LADDR,
+	LocalPort => $LPORT,
+	Proto => 'tcp',
+	Listen => 20,
+	SSL_hostname => $SHOST,
+	SSL_cert_file => $sslcert,
+	SSL_key_file => $sslkey
+	)
+or do {
+	debugout(3,"Listener could not be started: $SSL_ERROR");
+	$suerror = 1;
+	stopserver();
+	exit 1;
+	};
+
 debugout(1,"Startup Successful");
 debugout(0,"- Luminum Server ID: $SID");
 debugout(0,"- Listening on $LADDR:$LPORT");
-startlistener();
 
+my $buf = "";
+my $rc;
+my $client_data = "";
+while(1) {
+	my $client_socket = $sock->accept() or do {
+		debugout(2,"Client connection failed: $!");
+		};
+	my $client_address = $client_socket->peerhost();
+	my $client_port = $client_socket->peerport();
+	debugout(0,"Inbound connection from $client_address:$client_port");
+	do { $rc = sysread($client_socket, $client_data, 65*1024, length($client_data)); } while ($rc);
 
-#debugout(0,"Server Shutdown Sequence");
-#stopserver();
-#exit 0;
+#	my $rv = sysread($client_socket, $buf, 65*1024, length($buf));
+#	last if !$rv;
+#	while ($buf =~ s/^(.{44})//s) {
+#		my $msg = $1;
+#		$client_data .= "$msg";
+#		}
+	parsedata($client_address,$client_data);
+	debugout(0,"Connection with $client_address closed.");
+	}
 
 # Server Initialization
 #
@@ -138,6 +176,7 @@ sub readconfig {
 		while (my @row = $sth->fetchrow_array()) {
 			if ($row[0] eq "SID") { $SID = $row[1]; }
 			elsif ($row[0] eq "SKEY") { $SKEY = $row[1]; }
+			elsif ($row[0] eq "SHOST") { $SHOST = $row[1]; }
 			elsif ($row[0] eq "LADDR") { $LADDR = $row[1]; }
 			elsif ($row[0] eq "LPORT") { $LPORT = $row[1]; }
 			elsif ($row[0] eq "SSLCERT") { $sslcert = $row[1]; }
@@ -159,6 +198,12 @@ sub readconfig {
 		}
 	if (!$SID || $SID eq "") {
 		debugout(3,"Undefined Server Key! (Run with --setup)");
+		$suerror = 1;
+		stopserver();
+		exit 1;
+		}
+	if (!$SHOST || $SHOST eq "") {
+		debugout(3,"Undefined Server Hostname! (Run with --setup)");
 		$suerror = 1;
 		stopserver();
 		exit 1;
@@ -207,54 +252,19 @@ sub readconfig {
 		}
 
 	debugout(1,"Configuration Successfully Imported.");
+	debugout(0,"- SSL Certificate: $sslcert");
+	debugout(0,"- SSL Key File: $sslkey");
 	}
 
-# Start Listener
+# Handle Client Connections
 #
-sub startlistener {
-#	my $pid = fork;
-#	return if $pid;
-	$listener = IO::Socket::SSL->new(
-		LocalAddr => "$LADDR:$LPORT",
-		Proto => 'tcp',
-		Listen => 10,
-		SSL_cert_file => $sslcert,
-		SSL_key_file => $sslkey
-		) or do {
-			debugout(3,"Listener Initialization Failed: $SSL_ERROR");
-			$suerror = 1;
-			stopserver();
-			exit 1;
-			};
-	$listener->blocking(0);
-	my $sel = IO::Select->new($listener);
-	while (1) {
-		$sel->can_read();
-		READ:
-		my $n = sysread($listener, my $buf, 1);
-		if (!defined($n)) {
-			die $! if not $!{EWOULDBLOCK};
-			next if $SSL_ERROR == SSL_WANT_READ;
-			if ( $SSL_ERROR == SSL_WANT_WRITE ) {
-				$sel->can_write;
-				next;
-				}
-			die "something went wrong: $SSL_ERROR";
-			}
-		elsif (!$n) { last; }
-		else {
-			goto READ if $listener->pending;
-			next;
-			}
-		}
-	}
-
-# Stop Listener
-#
-sub stoplistener {
-	debugout(0,"Terminating Network Listener...");
-
-	debugout(1,"Network Listener Terminated.");
+sub parsedata {
+	my $ihost = $_[0];
+	my $input = $_[1];
+	my $decoded;
+	eval { decode_json($input) };
+	if ($@) { debugout(2,"Malformed message received from $ihost"); }
+	else { $decoded = decode_json($input); }
 	}
 
 # Debugging Output
@@ -287,5 +297,5 @@ sub debugout {
 	open (BLOG, "+>>", $brokerlog);
 	print BLOG "[$DBTIME] [$DBFLAG] $DBMSG\n";
 	if ($debug == 1) { print "[$DBTIME] [$DBCFLAG] $DBMSG\n"; }
-	close BLOG;
+	close (BLOG);
 	}
