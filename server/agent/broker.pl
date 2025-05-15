@@ -39,6 +39,7 @@ my $sslkey;
 
 $suerror = 0;
 
+my $broken = 0;
 $SIG{INT} = \&catchbreak;
 
 # Establish Filesystem Location
@@ -73,8 +74,9 @@ if (!$dbuser || $dbuser eq "") { die "FATAL: Database user not specified in conf
 
 debugout(0,"Server startup sequence");
 startserver();
+startweb();
 
-debugout(0,"Starting Listener...");
+debugout(0,"Starting Network Listener...");
 my $sock = IO::Socket::SSL->new(
 	LocalAddr => $LADDR,
 	LocalPort => $LPORT,
@@ -85,13 +87,14 @@ my $sock = IO::Socket::SSL->new(
 	SSL_key_file => $sslkey
 	)
 or do {
-	debugout(3,"Listener could not be started: $SSL_ERROR");
+	debugout(3,"Network Listener could not be started: $SSL_ERROR");
 	$suerror = 1;
 	stopserver();
 	exit 1;
 	};
+if ($sock) { debugout(1,"Network Listener started successfully."); }
 
-debugout(1,"Startup Successful");
+debugout(1,"Server startup complete.");
 debugout(0,"- Luminum Server ID: $SID");
 debugout(0,"- Listening on $LADDR:$LPORT");
 
@@ -106,13 +109,6 @@ while(1) {
 	my $client_port = $client_socket->peerport();
 	debugout(0,"Inbound connection from $client_address:$client_port");
 	do { $rc = sysread($client_socket, $client_data, 65*1024, length($client_data)); } while ($rc);
-
-#	my $rv = sysread($client_socket, $buf, 65*1024, length($buf));
-#	last if !$rv;
-#	while ($buf =~ s/^(.{44})//s) {
-#		my $msg = $1;
-#		$client_data .= "$msg";
-#		}
 	parsedata($client_address,$client_data);
 	debugout(0,"Connection with $client_address closed.");
 	}
@@ -152,10 +148,34 @@ sub stopserver {
 	if (1 == 0) { stoplistener(); }
 	debugout(0,"Stopping database...");
 	system("/usr/bin/systemctl stop mysqld");
-	if (`/usr/bin/systemctl status mysqld | /usr/bin/grep Active` =~ /inactive/) { debugout(1,"Database Stopped."); }
-	else { debugout(2,"Clean stop of database failed!"); }
-	if ($suerror == 0) { debugout(1,"Server shutdown Complete."); }
-	else { debugout(2,"Server startup was unsuccessful."); }
+	if (`/usr/bin/systemctl status mysqld | /usr/bin/grep Active` =~ /inactive/) { debugout(1,"Database stopped successfully."); }
+	else {
+		$suerror = 1;
+		debugout(2,"Clean stop of database failed!");
+		}
+	if ($suerror == 0) { debugout(1,"Server shutdown complete."); }
+	else { debugout(2,"Server shutdown completed with errors."); }
+	}
+
+sub startweb {
+	if (`/usr/bin/systemctl status nginx | /usr/bin/grep Active` =~ /inactive/) {
+		debugout(0,"Initializing webserver...");
+		system("/usr/bin/systemctl start nginx");
+		if (`/usr/bin/systemctl status nginx | /usr/bin/grep Active` =~ /inactive/) {
+			debugout(3,"Webserver initialization failed: Unable to start service.");
+			}
+		else { debugout(1,"Webserver initialized successfully."); }
+		}
+	}
+
+sub stopweb {
+	debugout(0,"Stopping webserver...");
+	system("/usr/bin/systemctl stop nginx");
+	if (`/usr/bin/systemctl status nginx | /usr/bin/grep Active` =~ /inactive/) { debugout(1,"Webserver stopped successfully."); }
+	else {
+		$suerror = 1;
+		debugout(2,"Clean stop of webserver failed!");
+		}
 	}
 
 # Stop Network Listener
@@ -270,10 +290,11 @@ sub readconfig {
 sub parsedata {
 	my $ihost = $_[0];
 	my $input = $_[1];
-	my $decoded;
+	my $message;
 	eval { decode_json($input) };
 	if ($@) { debugout(2,"Malformed message received from $ihost"); }
-	else { $decoded = decode_json($input); }
+	else { $message = decode_json($input); }
+	$client_data = "";
 	}
 
 # Debugging Output
@@ -314,8 +335,13 @@ sub debugout {
 
 sub catchbreak {
 	$suerror = 0;
-	debugout(2,"Caught SIGINT!");
-	stoplistener();
-	stopserver();
-	exit 0;
+	if ($broken == 0) {
+		debugout (2,"Caught SIGINT! Shutting down...");
+		$broken = 1;
+		stopweb();
+		stoplistener();
+		stopserver();
+		exit 0;
+		}
+	else { debugout (2,"Ignoring duplicate break signal."); }
 	}
