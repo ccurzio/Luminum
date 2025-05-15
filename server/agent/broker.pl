@@ -37,8 +37,9 @@ my $SKEY;
 my $sslcert;
 my $sslkey;
 
-my $handles = new IO::Select();
 $suerror = 0;
+
+$SIG{INT} = \&catchbreak;
 
 # Establish Filesystem Location
 #
@@ -153,8 +154,16 @@ sub stopserver {
 	system("/usr/bin/systemctl stop mysqld");
 	if (`/usr/bin/systemctl status mysqld | /usr/bin/grep Active` =~ /inactive/) { debugout(1,"Database Stopped."); }
 	else { debugout(2,"Clean stop of database failed!"); }
-	if ($suerror == 0) { debugout(1,"Server Shutdown Complete."); }
+	if ($suerror == 0) { debugout(1,"Server shutdown Complete."); }
 	else { debugout(2,"Server startup was unsuccessful."); }
+	}
+
+# Stop Network Listener
+#
+sub stoplistener {
+	debugout(0,"Stopping Network Listener...");
+	close($sock);
+	debugout(1,"Network Listener stopped successfully.");
 	}
 
 # Read Server Configuration
@@ -296,6 +305,17 @@ sub debugout {
 
 	open (BLOG, "+>>", $brokerlog);
 	print BLOG "[$DBTIME] [$DBFLAG] $DBMSG\n";
-	if ($debug == 1) { print "[$DBTIME] [$DBCFLAG] $DBMSG\n"; }
+	if ($debug == 1) {
+		if ($DBMSG =~ /SIGINT/) { print "\n"; }
+		print "[$DBTIME] [$DBCFLAG] $DBMSG\n";
+		}
 	close (BLOG);
+	}
+
+sub catchbreak {
+	$suerror = 0;
+	debugout(2,"Caught SIGINT!");
+	stoplistener();
+	stopserver();
+	exit 0;
 	}
