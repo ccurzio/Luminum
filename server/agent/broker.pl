@@ -295,6 +295,8 @@ sub parsedata {
 	if ($@) { debugout(2,"Malformed message received from $ihost"); }
 	else { $message = decode_json($input); }
 	$client_data = "";
+
+	for my $key (keys %$message) { print "$key\n"; }
 	}
 
 # Debugging Output
