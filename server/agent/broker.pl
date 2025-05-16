@@ -72,7 +72,7 @@ else { die "FATAL: Configuration Directory Missing: $brokerpath\/config\n"; }
 
 if (!$dbuser || $dbuser eq "") { die "FATAL: Database user not specified in config.\n"; }
 
-debugout(0,"Server startup sequence");
+debugout(0,"Server Startup");
 startserver();
 startweb();
 
@@ -96,6 +96,7 @@ if ($sock) { debugout(1,"Network Listener started successfully."); }
 
 debugout(1,"Server startup complete.");
 debugout(0,"- Luminum Server ID: $SID");
+debugout(0,"- Broker Log: $brokerlog");
 debugout(0,"- Listening on $LADDR:$LPORT");
 
 my $buf = "";
@@ -138,7 +139,9 @@ sub startserver {
 		RaiseError=>1
 		);
 
-	debugout(1,"Database initialized successfully.");
+	my $dbpid = `/usr/bin/cat /var/run/mysqld/mysqld.pid`;
+	chomp ($dbpid);
+	debugout(1,"Database initialized successfully. (PID $dbpid)");
 	readconfig();
 	}
 
@@ -164,7 +167,11 @@ sub startweb {
 		if (`/usr/bin/systemctl status nginx | /usr/bin/grep Active` =~ /inactive/) {
 			debugout(3,"Webserver initialization failed: Unable to start service.");
 			}
-		else { debugout(1,"Webserver initialized successfully."); }
+		else {
+			my $wspid = `/usr/bin/cat /var/run/nginx.pid`;
+			chomp ($wspid);
+			debugout(1,"Webserver initialized successfully. (PID $wspid)");
+			}
 		}
 	}
 
@@ -285,18 +292,157 @@ sub readconfig {
 	debugout(0,"- SSL Key File: $sslkey");
 	}
 
+# Set Server Configuration Options
+#
+sub setconfig {
+	my $ckey = $_[0];
+	my $cval = $_[1];
+
+	if ($ckey =~ /^[A-Z]+$/ && $cval =~ /^[A-Za-z0-9_\.\/]+$/) {
+		my $dbh = DBI->connect("DBI:mysql:SYSTEM",$dbuser,$dbpass,\%attr);
+		my $sth = $dbh->prepare("update CONFIG set CVAL = '$cval' where CKEY = '$ckey'");
+		$sth->execute();
+		}
+	}
+
 # Handle Client Connections
 #
 sub parsedata {
 	my $ihost = $_[0];
 	my $input = $_[1];
 	my $message;
+	my $EPID;
+	my $EPNAME;
+	my $EPFPNT;
+	my $function;
+	my $data;
+	my $osplat;
+	my $osrel;
+	my $epkey;
+	my $clientver;
+
 	eval { decode_json($input) };
 	if ($@) { debugout(2,"Malformed message received from $ihost"); }
 	else { $message = decode_json($input); }
 	$client_data = "";
 
-	for my $key (keys %$message) { print "$key\n"; }
+	for my $mkey (keys %$message) {
+		if ($mkey eq "info") {
+			if ($message->{$mkey}{'ID'} =~ /^[0-9]+$/) { $EPID = $message->{$mkey}{'ID'}; }
+			if ($message->{$mkey}{'name'} =~ /^[A-Za-z0-9_\.]+$/) { $EPNAME = $message->{$mkey}{'name'}; }
+			if ($message->{$mkey}{'fingerprint'} =~ /^[a-f0-9]+$/) { $EPFPNT = $message->{$mkey}{'fingerprint'}; }
+			}
+		elsif ($mkey eq "function") {
+			if ($message->{$mkey} =~ /^[A-Za-z]+$/) { $function = $message->{$mkey}; }
+			}
+		elsif ($mkey eq "data") {
+			# REPLACE WITH BASE64 VALIDATION
+			if (1 == 1) { $data = $message->{'data'}; }
+			}
+		}
+
+	if ($EPFPNT ne "") {
+		if (!$EPID || $EPID eq "") {
+			if ($function eq "register") {
+				if ($message->{'info'}{'osplat'} =~ /^[A-Za-z]+$/) { $osplat = $message->{'info'}{'osplat'}; }
+				if ($message->{'info'}{'osrel'} =~ /^[A-Za-z0-9\s\.]+$/) { $osrel = $message->{'info'}{'osrel'}; }
+				if ($message->{'info'}{'clientver'} =~ /^[0-9][0-9]?\.[0-9][0-9]\.[0-9][0-9]$/) { $clientver = $message->{'info'}{'clientver'}; }
+
+				if ($EPFPNT && $epkey && $ihost && $EPNAME && $osplat && $osrel && $clientver) {
+					newreg($EPNAME,$EPFPNT,$epkey,$ihost,$osplat,$osrel,$clientver);
+					}
+				}
+			else {
+				debugout(2,"Message from unregistered client at $ihost\.");
+				}
+			}
+		else {
+			if ($function eq "answer") {
+				}
+			elsif ($function eq "update") {
+				}
+			elsif ($function eq "ping") {
+				my $osplat;
+				my $osrel;
+				my $clientver;
+				if ($message->{'info'}{'osplat'} =~ /^[A-Za-z]+$/) { $osplat = $message->{'info'}{'osplat'}; }
+				if ($message->{'info'}{'osrel'} =~ /^[A-Za-z0-9\s\.]+$/) { $osrel = $message->{'info'}{'osrel'}; }
+				if ($message->{'info'}{'clientver'} =~ /^[0-9][0-9]?\.[0-9][0-9]\.[0-9][0-9]$/) { $clientver = $message->{'info'}{'clientver'}; }
+
+				if ($EPID && $EPFPNT && $ihost && $EPNAME && $osplat && $osrel && $clientver) {
+					checkin($EPID,$EPFPNT,$ihost,$EPNAME,$osplat,$osrel,$clientver);
+					}
+				}
+			}
+		}
+	else {
+		debugout(2,"Fingerprint missing in message from $ihost\.");
+		}
+	}
+
+sub newreg {
+	my $EPNAME = $_[0];
+	my $EPFPNT = $_[1];
+	my $EPPKEY = $_[2];
+	my $EPADDR = $_[3];
+	my $osplat = $_[4];
+	my $osrel = $_[5];
+	my $clientver = $_[6];
+	my $EPID;
+	my $reg = isreg($EPFPNT);
+
+	if ($reg eq "false") {
+		my $dbh = DBI->connect("DBI:mysql:CLIENTS",$dbuser,$dbpass,\%attr);
+		my $sth = $dbh->prepare("insert into AUTH (NAME,FINGERPRINT,PUBKEY) values ('$EPNAME','$EPFPNT','$EPPKEY')");
+		$sth->execute();
+		$sth = $dbh->prepare("select ID from AUTH where FINGERPRINT = '$EPFPNT'");
+		$sth->execute();
+		while (my @regdata = $sth->fetchrow()) { $EPID = $regdata[0]; }
+		$sth = $dbh->prepare("insert into STATUS (ID,HOSTNAME,IPV4,OSPLATFORM,OSRELEASE,CLIENTVER,CSTATE,REGDATE,LASTSEEN) values ($EPID,'$EPNAME','$EPADDR','$osplat','$osrel','$clientver','OK',now(),now())");
+		$sth->execute();
+		debugout(0,"New client registration (ID $EPID)");
+		}
+	else {
+		debugout(2,"Attempted registration from existing client (ID $reg)");
+		}
+	}
+
+sub isreg {
+	my $EPFPNT = shift;
+	my $registered;
+
+	if ($EPFPNT =~ /^[a-f0-9]+$/) {
+		my $dbh = DBI->connect("DBI:mysql:CLIENTS",$dbuser,$dbpass,\%attr);
+		my $sth = $dbh->prepare("select count(ID),ID from AUTH where FINGERPRINT = '$EPFPNT'");
+		$sth->execute();
+		while (my @row = $sth->fetchrow_array()) {
+			if ($row[0] == 0) { $registered = "false"; }
+			else { $registered = $row[1]; }
+			}
+		return $registered;
+		}
+	}
+
+# Client Check-In
+#
+sub checkin {
+	my $EPID = $_[0];
+	my $EPFPNT = $_[1];
+	my $EPADDR = $_[2];
+	my $EPNAME = $_[3];
+	my $osplat = $_[4];
+	my $osrel = $_[5];
+	my $clientver = $_[6];
+
+	if (isreg($EPFPNT) eq $EPID) {
+		my $dbh = DBI->connect("DBI:mysql:CLIENTS",$dbuser,$dbpass,\%attr);
+		my $sth = $dbh->prepare("update STATUS set HOSTNAME = '$EPNAME', IPV4 = '$EPADDR', OSPLAT = '$osplat', OSRELEASE = '$osrel', CLIENTVER = '$clientver', CSTATE = 'OK', LASTSEEN = now() where ID = $EPID");
+		$sth->execute();
+		debugout(0,"Received check-in from client on $EPADDR (ID $EPID)");
+		}
+	else {
+		debugout(2,"Attempted check-in from unregistered client on $EPADDR");
+		}
 	}
 
 # Debugging Output
@@ -345,5 +491,4 @@ sub catchbreak {
 		stopserver();
 		exit 0;
 		}
-	else { debugout (2,"Ignoring duplicate break signal."); }
 	}
