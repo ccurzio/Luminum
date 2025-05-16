@@ -12,6 +12,7 @@ use Time::HiRes ("usleep");
 use Term::ANSIColor;
 use DBI;
 use Data::UUID;
+use MIME::Base64;
 use threads;
 use Socket;
 use IO::Socket;
@@ -103,9 +104,7 @@ my $buf = "";
 my $rc;
 my $client_data = "";
 while(1) {
-	my $client_socket = $sock->accept() or do {
-		debugout(2,"Client connection failed: $!");
-		};
+	my $client_socket = $sock->accept() or do { debugout(2,"Client connection failed: $!"); };
 	my $client_address = $client_socket->peerhost();
 	my $client_port = $client_socket->peerport();
 	debugout(0,"Inbound connection from $client_address:$client_port");
@@ -321,9 +320,9 @@ sub parsedata {
 	my $epkey;
 	my $clientver;
 
-	eval { decode_json($input) };
+	eval { decode_json(decode_base64($input)) };
 	if ($@) { debugout(2,"Malformed message received from $ihost"); }
-	else { $message = decode_json($input); }
+	else { $message = decode_json(decode_base64($input)); }
 	$client_data = "";
 
 	for my $mkey (keys %$message) {
@@ -341,20 +340,19 @@ sub parsedata {
 			}
 		}
 
-	if ($EPFPNT ne "") {
+	if ($EPFPNT && $EPFPNT ne "") {
 		if (!$EPID || $EPID eq "") {
 			if ($function eq "register") {
 				if ($message->{'info'}{'osplat'} =~ /^[A-Za-z]+$/) { $osplat = $message->{'info'}{'osplat'}; }
 				if ($message->{'info'}{'osrel'} =~ /^[A-Za-z0-9\s\.]+$/) { $osrel = $message->{'info'}{'osrel'}; }
-				if ($message->{'info'}{'clientver'} =~ /^[0-9][0-9]?\.[0-9][0-9]\.[0-9][0-9]$/) { $clientver = $message->{'info'}{'clientver'}; }
+				if ($message->{'info'}{'clientver'} =~ /^[0-9][0-9]?\.[0-9][0-9]?\.[0-9][0-9]?$/) { $clientver = $message->{'info'}{'clientver'}; }
 
 				if ($EPFPNT && $epkey && $ihost && $EPNAME && $osplat && $osrel && $clientver) {
 					newreg($EPNAME,$EPFPNT,$epkey,$ihost,$osplat,$osrel,$clientver);
 					}
+				else { debugout(2,"Attempted registration with missing data from $ihost\."); }
 				}
-			else {
-				debugout(2,"Message from unregistered client at $ihost\.");
-				}
+			else { debugout(2,"Message from unregistered client at $ihost\."); }
 			}
 		else {
 			if ($function eq "answer") {
@@ -362,22 +360,25 @@ sub parsedata {
 			elsif ($function eq "update") {
 				}
 			elsif ($function eq "ping") {
-				my $osplat;
-				my $osrel;
-				my $clientver;
-				if ($message->{'info'}{'osplat'} =~ /^[A-Za-z]+$/) { $osplat = $message->{'info'}{'osplat'}; }
-				if ($message->{'info'}{'osrel'} =~ /^[A-Za-z0-9\s\.]+$/) { $osrel = $message->{'info'}{'osrel'}; }
-				if ($message->{'info'}{'clientver'} =~ /^[0-9][0-9]?\.[0-9][0-9]\.[0-9][0-9]$/) { $clientver = $message->{'info'}{'clientver'}; }
+				if ($message->{'info'}{'osplat'} && $message->{'info'}{'osrel'} && $message->{'info'}{'clientver'}) {
+					my $osplat;
+					my $osrel;
+					my $clientver;
+					if ($message->{'info'}{'osplat'} =~ /^[A-Za-z]+$/) { $osplat = $message->{'info'}{'osplat'}; }
+					if ($message->{'info'}{'osrel'} =~ /^[A-Za-z0-9\s\.]+$/) { $osrel = $message->{'info'}{'osrel'}; }
+					if ($message->{'info'}{'clientver'} =~ /^[0-9][0-9]?\.[0-9][0-9]?\.[0-9][0-9]?$/) { $clientver = $message->{'info'}{'clientver'}; }
 
-				if ($EPID && $EPFPNT && $ihost && $EPNAME && $osplat && $osrel && $clientver) {
-					checkin($EPID,$EPFPNT,$ihost,$EPNAME,$osplat,$osrel,$clientver);
+					if ($EPID && $EPFPNT && $ihost && $EPNAME && $osplat && $osrel && $clientver) {
+						checkin($EPID,$EPFPNT,$ihost,$EPNAME,$osplat,$osrel,$clientver);
+						}
+					else { debugout(2,"Malformed data in check-in from $ihost\."); }
 					}
+				else { debugout(2,"Attempted check-in with missing data from $ihost\."); }
 				}
+			else { debugout(2,"Malformed message received from $ihost"); }
 			}
 		}
-	else {
-		debugout(2,"Fingerprint missing in message from $ihost\.");
-		}
+	else { debugout(2,"Fingerprint missing in message from $ihost\."); }
 	}
 
 sub newreg {
@@ -441,7 +442,7 @@ sub checkin {
 		debugout(0,"Received check-in from client on $EPADDR (ID $EPID)");
 		}
 	else {
-		debugout(2,"Attempted check-in from unregistered client on $EPADDR");
+		debugout(2,"Attempted check-in from unregistered client at $EPADDR");
 		}
 	}
 
