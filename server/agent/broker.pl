@@ -320,14 +320,16 @@ sub readconfig {
 		exit 1;
 		}
 	else {
+		my $readkey;
 		open(PK, $sslprvkey) or do {
-			debugout(3,"Failure reading $sslprvkey");
+			debugout(3,"Failure reading private key from: $sslprvkey");
 			$suerror = 1;
 			stopserver();
 			exit 1;
 			};
-		while(<PK>) { $privatekey .= $_; }
+		while(<PK>) { $readkey .= $_; }
 		close(PK);
+		$privatekey = Crypt::OpenSSL::RSA->new_private_key($readkey);
 		}
 	if (!$sslpubkey || $sslpubkey eq "") {
 		debugout(3,"Server public key file is not configured! (Run with --setup)");
