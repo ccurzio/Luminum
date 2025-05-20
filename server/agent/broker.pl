@@ -18,6 +18,7 @@ use MIME::Base64;
 #use IO::Socket;
 use IO::Socket::SSL;
 #use IO::Select;
+use Crypt::OpenSSL::RSA;
 use JSON;
 use Data::Dumper;
 
@@ -446,16 +447,21 @@ sub parsedata {
 	if ($EPFPNT && $EPFPNT ne "") {
 		if ($EPID == 0) {
 			if ($action eq "register") {
+				my $svrkey;
+				if ($message->{'info'}{'serverkey'} =~ /^[A-Za-z0-9]+$/) { $svrkey = $message->{'info'}{'serverkey'}; }
 				if ($message->{'info'}{'osplat'} =~ /^[A-Za-z]+$/) { $osplat = $message->{'info'}{'osplat'}; }
 				if ($message->{'info'}{'osrel'} =~ /^[A-Za-z0-9\s\.]+$/) { $osrel = $message->{'info'}{'osrel'}; }
 				if ($message->{'info'}{'clientver'} =~ /^[0-9][0-9]?\.[0-9][0-9]?\.[0-9][0-9]?[ab]?$/) { $clientver = $message->{'info'}{'clientver'}; }
 				else { $clientver = "Unknown"; }
 				if ($message->{'info'}{'pubkey'} ne "") { $EPKEY = $message->{'info'}{'pubkey'}; }
 
-				if ($EPFPNT && $EPKEY && $EPADDR && $EPNAME && $osplat && $osrel && $clientver) {
-					newreg($EPNAME,$EPFPNT,$EPKEY,$EPADDR,$osplat,$osrel,$clientver);
+				if (serverkey($svrkey) == 1) {
+					if ($EPFPNT && $EPKEY && $EPADDR && $EPNAME && $osplat && $osrel && $clientver) {
+						newreg($EPNAME,$EPFPNT,$EPKEY,$EPADDR,$osplat,$osrel,$clientver);
+						}
+					else { debugout(2,"Attempted registration with missing data from $EPADDR\."); }
 					}
-				else { debugout(2,"Attempted registration with missing data from $EPADDR\."); }
+				else { debugout(2,"Attempted registration with invalid server key from $EPADDR\."); }
 				}
 			else { debugout(2,"Message from unregistered client at $EPADDR\."); }
 			}
@@ -500,6 +506,25 @@ sub parsedata {
 			}
 		}
 	else { debugout(2,"Fingerprint missing in message from $EPADDR\."); }
+	}
+
+# Check Server Key
+#
+# serverkey("X4U33MpgySchn5btKVUqTedO1bCn80LK");
+#
+sub serverkey {
+	my $check = shift;
+	my $goodkey;
+
+	if ($check =~ /^[A-Za-z0-9]+$/) {
+		my $dbh = DBI->connect("DBI:mysql:SYSTEM",$dbuser,$dbpass,\%attr);
+		my $sth = $dbh->prepare("select CVAL from CONFIG where CKEY = 'SKEY'");
+		$sth->execute();
+		my @result = $sth->fetchrow_array();
+		if ($check eq $result[0]) { $goodkey = 1; }
+		else { $goodkey = 0; }
+		}
+	return $goodkey;
 	}
 
 # New Client Registration
