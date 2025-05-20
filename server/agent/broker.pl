@@ -19,6 +19,7 @@ use MIME::Base64;
 use IO::Socket::SSL;
 #use IO::Select;
 use Crypt::OpenSSL::RSA;
+use Crypt::Mode::CBC;
 use JSON;
 use Data::Dumper;
 
@@ -86,6 +87,7 @@ if (!$dbuser || $dbuser eq "") { die "FATAL: Database user not specified in conf
 debugout(0,"Server Startup");
 startserver();
 startweb();
+dereg("c26346ed3e2e4964ac45c22afa7ea342");
 setuplistener();
 
 debugout(1,"Server startup complete.");
@@ -434,9 +436,17 @@ sub parsedata {
 	my $EPKEY;
 	my $clientver;
 
-	eval { decode_json(decode_base64($input)) };
+	eval { decode_json($input) };
 	if ($@) { debugout(2,"Malformed message received from $EPADDR"); }
-	else { $message = decode_json(decode_base64($input)); }
+	#else { $message = decode_json(decode_base64($input)); }
+	else {
+		my $decpkg = decode_json($input);
+		my $aeskey = $privatekey->decrypt(decode_base64($decpkg->{'key'}));
+		my $iv = $decpkg->{'spins'};
+		my $c = Crypt::Mode::CBC->new('AES');
+		my $dcmessage = $c->decrypt(decode_base64($decpkg->{'contents'}),$aeskey,$iv);
+		$message = decode_json(decode_base64($dcmessage));
+		}
 	$client_data = "";
 
 	for my $mkey (keys %$message) {
@@ -466,7 +476,7 @@ sub parsedata {
 				if ($message->{'info'}{'osrel'} =~ /^[A-Za-z0-9\s\.]+$/) { $osrel = $message->{'info'}{'osrel'}; }
 				if ($message->{'info'}{'clientver'} =~ /^[0-9][0-9]?\.[0-9][0-9]?\.[0-9][0-9]?[ab]?$/) { $clientver = $message->{'info'}{'clientver'}; }
 				else { $clientver = "Unknown"; }
-				if ($message->{'info'}{'pubkey'} ne "") { $EPKEY = $message->{'info'}{'pubkey'}; }
+				if ($message->{'info'}{'pubkey'} =~ /^[A-Za-z0-9\-\/\+\s\n]+$/) { $EPKEY = $message->{'info'}{'pubkey'}; }
 
 				if (serverkey($svrkey) == 1) {
 					if ($EPFPNT && $EPKEY && $EPADDR && $EPNAME && $osplat && $osrel && $clientver) {
