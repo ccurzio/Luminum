@@ -39,6 +39,7 @@ my $SKEY;
 my $sslcert;
 my $sslprvkey;
 my $sslpubkey;
+my $privatekey;
 my $sock;
 
 my $listen = 1;
@@ -317,6 +318,16 @@ sub readconfig {
 		$suerror = 1;
 		stopserver();
 		exit 1;
+		}
+	else {
+		open(PK, $sslprvkey) or do {
+			debugout(3,"Failure reading $sslprvkey");
+			$suerror = 1;
+			stopserver();
+			exit 1;
+			};
+		while(<PK>) { $privatekey .= $_; }
+		close(PK);
 		}
 	if (!$sslpubkey || $sslpubkey eq "") {
 		debugout(3,"Server public key file is not configured! (Run with --setup)");
