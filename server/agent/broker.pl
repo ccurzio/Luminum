@@ -37,20 +37,27 @@ my $LPORT;
 my $SKEY;
 my $sslcert;
 my $sslkey;
+my $sock;
+
+my $listen = 1;
+my $client_data = "";
 
 $suerror = 0;
 
 my $broken = 0;
+my $hupped = 0;
 $SIG{INT} = \&catchbreak;
+$SIG{HUP} = \&catchhup;
 
-# Establish Filesystem Location
+# Where Am I? (Establish Filesystem Location)
 #
 my $brokerpath = abs_path($0);
 my $brokername = $brokerpath;
 $brokername =~ s/^(\/.*\/)//;
 $brokerpath =~ s/\/$brokername//;
 
-# Read Broker Config
+# Read Broker Configuration
+#
 if (-e "$brokerpath\/config") {
 	# Check for Broker Configuration
 	if (-e "$brokerpath\/config\/broker.conf") {
@@ -76,53 +83,31 @@ if (!$dbuser || $dbuser eq "") { die "FATAL: Database user not specified in conf
 debugout(0,"Server Startup");
 startserver();
 startweb();
-
-debugout(0,"Starting Network Listener...");
-my $sock = IO::Socket::SSL->new(
-	LocalAddr => $LADDR,
-	LocalPort => $LPORT,
-	Proto => 'tcp',
-	Listen => 20,
-	SSL_hostname => $SHOST,
-	SSL_cert_file => $sslcert,
-	SSL_key_file => $sslkey
-	)
-or do {
-	debugout(3,"Network Listener could not be started: $SSL_ERROR");
-	$suerror = 1;
-	stopserver();
-	exit 1;
-	};
-if ($sock) { debugout(1,"Network Listener started successfully."); }
+setuplistener();
 
 debugout(1,"Server startup complete.");
 debugout(0,"- Luminum Server ID: $SID");
 debugout(0,"- Broker Log: $brokerlog");
 debugout(0,"- Listening on $LADDR:$LPORT");
 
-my $buf = "";
-my $rc;
-my $client_data = "";
-while(1) {
-	my $client_socket = $sock->accept() or do { debugout(2,"Client connection failed: $!"); };
-	my $client_address = $client_socket->peerhost();
-	my $client_port = $client_socket->peerport();
-	debugout(0,"Inbound connection from $client_address:$client_port");
-	do { $rc = sysread($client_socket, $client_data, 65*1024, length($client_data)); } while ($rc);
-	parsedata($client_address,$client_data);
-	debugout(0,"Connection with $client_address closed.");
-	}
+startlistener();
 
-# Server Initialization
+# Luminum Server Initialization
 #
 sub startserver {
-	if (`/usr/bin/systemctl status mysqld | /usr/bin/grep Active` =~ /inactive/) {
+	my $dbstat = `/usr/bin/systemctl status mysqld | /usr/bin/grep Active`;
+	if ($dbstat =~ /inactive/) {
 		debugout(0,"Initializing Database...");
 		system("/usr/bin/systemctl start mysqld");
 		if (`/usr/bin/systemctl status mysqld | /usr/bin/grep Active` =~ /inactive/) {
 			debugout(3,"Database initialization failed: Unable to start service.");
 			exit 1;
 			}
+		}
+	elsif ($dbstat =~ /running/) { debugout(0,"Database service is already running. Validating..."); }
+	else {
+		debugout(3,"Unable to determine database service state. Aborting.");
+		exit 1;
 		}
 
 	my $dbsock = `/usr/bin/grep socket /etc/mysql/my.cnf | /usr/bin/grep -v "#" | /usr/bin/sed -e 's/^socket.*= \\\//\\\//'`;
@@ -144,7 +129,7 @@ sub startserver {
 	readconfig();
 	}
 
-# Stop Server
+# Luminum Server Shutdown
 #
 sub stopserver {
 	if (1 == 0) { stoplistener(); }
@@ -159,6 +144,8 @@ sub stopserver {
 	else { debugout(2,"Server shutdown completed with errors."); }
 	}
 
+# Start Web Server
+#
 sub startweb {
 	if (`/usr/bin/systemctl status nginx | /usr/bin/grep Active` =~ /inactive/) {
 		debugout(0,"Initializing webserver...");
@@ -174,13 +161,58 @@ sub startweb {
 		}
 	}
 
+# Stop Web Server
+#
 sub stopweb {
 	debugout(0,"Stopping webserver...");
 	system("/usr/bin/systemctl stop nginx");
 	if (`/usr/bin/systemctl status nginx | /usr/bin/grep Active` =~ /inactive/) { debugout(1,"Webserver stopped successfully."); }
 	else {
 		$suerror = 1;
-		debugout(2,"Clean stop of webserver failed!");
+		debugout(2,"Unable to stop webserver.");
+		}
+	}
+
+# Set Up Network Listener
+#
+sub setuplistener {
+	debugout(0,"Initializing Network Listener...");
+	$sock = IO::Socket::SSL->new(
+		LocalAddr => $LADDR,
+		LocalPort => $LPORT,
+		Proto => 'tcp',
+		Listen => 20,
+		SSL_hostname => $SHOST,
+		SSL_cert_file => $sslcert,
+		SSL_key_file => $sslkey
+		)
+	or do {
+		debugout(3,"Network Listener could not be initialized: $SSL_ERROR");
+		$suerror = 1;
+		stopserver();
+		exit 1;
+		};
+	if ($sock) { debugout(1,"Network Listener initialized successfully."); }
+	if ($hupped == 1) {
+		debugout(1,"Reload Complete.");
+		$hupped = 0;
+		}
+	}
+
+# Start Network Listener
+#
+sub startlistener {
+	$listen = 1;
+	my $buf = "";
+	my $rc;
+	while($listen == 1) {
+		my $client_socket = $sock->accept() or do { debugout(2,"Client connection failed: $!"); };
+		my $client_address = $client_socket->peerhost();
+		my $client_port = $client_socket->peerport();
+		debugout(0,"Inbound connection from $client_address:$client_port");
+		do { $rc = sysread($client_socket, $client_data, 65*1024, length($client_data)); } while ($rc);
+		parsedata($client_address,$client_data);
+		debugout(0,"Connection with $client_address closed.");
 		}
 	}
 
@@ -188,8 +220,17 @@ sub stopweb {
 #
 sub stoplistener {
 	debugout(0,"Stopping Network Listener...");
+	$listen = 0;
 	close($sock);
-	debugout(1,"Network Listener stopped successfully.");
+	undef($sock);
+	if (!$sock) { debugout(1,"Network Listener stopped successfully."); }
+	else {
+		debugout(3,"Unable to stop Network Listener. Retrying in 3 seconds...");
+		sleep(3);
+		close($sock);
+		if (!$sock) { debugout(1,"Network Listener stopped successfully."); }
+		else { debugout(3,"Retry failed. Forcing shutdown."); }
+		}
 	}
 
 # Read Server Configuration
@@ -292,22 +333,76 @@ sub readconfig {
 	}
 
 # Set Server Configuration Options
+# setconfig("LADDR","172.16.8.10");
+#
+# 1 = OK
+# 2 = Error
 #
 sub setconfig {
 	my $ckey = $_[0];
 	my $cval = $_[1];
+	my $scstat;
 
 	if ($ckey =~ /^[A-Z]+$/ && $cval =~ /^[A-Za-z0-9_\.\/]+$/) {
-		my $dbh = DBI->connect("DBI:mysql:SYSTEM",$dbuser,$dbpass,\%attr);
-		my $sth = $dbh->prepare("update CONFIG set CVAL = '$cval' where CKEY = '$ckey'");
-		$sth->execute();
+		if ($ckey eq "LPORT" && $cval !~ /^([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$/) {
+			debugout(2,"Invalid value specified for configuration change to LPORT: \"$cval\"");
+			$scstat = 2;
+			}
+		else {
+			my $dbh = DBI->connect("DBI:mysql:SYSTEM",$dbuser,$dbpass,\%attr);
+			my $sth = $dbh->prepare("update CONFIG set CVAL = '$cval' where CKEY = '$ckey'");
+			$sth->execute();
+			}
 		}
+	return $scstat;
 	}
 
-# Handle Client Connections
+# Endpoint Fingerprint Validation
+# iafis("451","cfd346d21ef5690deb109beef","172.16.0.1");
+#
+# 1 = Match
+# 2 = Mismatch
+# 3 = Error
+#
+sub iafis {
+	my $EPID = $_[0];
+	my $EPFPNT = $_[1];
+	my $EPADDR = $_[2];
+	my $fvstat;
+
+	if ($EPID =~ /^[0-9]+$/) {
+		if ($EPFPNT =~ /^[a-f0-9]+$/) {
+			my $dbh = DBI->connect("DBI:mysql:CLIENTS",$dbuser,$dbpass,\%attr);
+			my $sth = $dbh->prepare("select FINGERPRINT from AUTH where ID = '$EPID'");
+			$sth->execute();
+			my @result = $sth->fetchrow_array();
+			if ($EPFPNT eq $result[0]) {
+				debugout(0,"Verified fingerprint for client on $EPADDR\.");
+				$fvstat = 1;
+				}
+			else {
+				debugout(2,"Fingerprint mismatch for client on $EPADDR\.");
+				$fvstat = 2;
+				}
+			$dbh->disconnect();
+			}
+		else {
+			debugout(2,"Fingerprint validation failed for client on $EPADDR\: Malformed Fingerprint");
+			$fvstat = 3;
+			}
+		}
+	else {
+		debugout(2,"Fingerprint validation failed for client on $EPADDR\: Invalid ID");
+		$fvstat = 3;
+		}
+
+	return $fvstat;
+	}
+
+# Client Data Handling
 #
 sub parsedata {
-	my $ihost = $_[0];
+	my $EPADDR = $_[0];
 	my $input = $_[1];
 	my $message;
 	my $EPID;
@@ -321,7 +416,7 @@ sub parsedata {
 	my $clientver;
 
 	eval { decode_json(decode_base64($input)) };
-	if ($@) { debugout(2,"Malformed message received from $ihost"); }
+	if ($@) { debugout(2,"Malformed message received from $EPADDR"); }
 	else { $message = decode_json(decode_base64($input)); }
 	$client_data = "";
 
@@ -335,8 +430,10 @@ sub parsedata {
 			if ($message->{$mkey} =~ /^[A-Za-z]+$/) { $function = $message->{$mkey}; }
 			}
 		elsif ($mkey eq "data") {
-			# REPLACE WITH BASE64 VALIDATION
+			##############################################
+			####### REPLACE WITH BASE64 VALIDATION #######
 			if (1 == 1) { $data = $message->{'data'}; }
+			##############################################
 			}
 		}
 
@@ -347,17 +444,16 @@ sub parsedata {
 				if ($message->{'info'}{'osrel'} =~ /^[A-Za-z0-9\s\.]+$/) { $osrel = $message->{'info'}{'osrel'}; }
 				if ($message->{'info'}{'clientver'} =~ /^[0-9][0-9]?\.[0-9][0-9]?\.[0-9][0-9]?$/) { $clientver = $message->{'info'}{'clientver'}; }
 
-				if ($EPFPNT && $epkey && $ihost && $EPNAME && $osplat && $osrel && $clientver) {
-					newreg($EPNAME,$EPFPNT,$epkey,$ihost,$osplat,$osrel,$clientver);
+				if ($EPFPNT && $epkey && $EPADDR && $EPNAME && $osplat && $osrel && $clientver) {
+					newreg($EPNAME,$EPFPNT,$epkey,$EPADDR,$osplat,$osrel,$clientver);
 					}
-				else { debugout(2,"Attempted registration with missing data from $ihost\."); }
+				else { debugout(2,"Attempted registration with missing data from $EPADDR\."); }
 				}
-			else { debugout(2,"Message from unregistered client at $ihost\."); }
+			else { debugout(2,"Message from unregistered client at $EPADDR\."); }
 			}
 		else {
-			if ($function eq "answer") {
-				}
-			elsif ($function eq "update") {
+			if ($function eq "register") {
+				debugout(2,"Attempted registration from existing client on $EPADDR\.");
 				}
 			elsif ($function eq "ping") {
 				if ($message->{'info'}{'osplat'} && $message->{'info'}{'osrel'} && $message->{'info'}{'clientver'}) {
@@ -368,19 +464,31 @@ sub parsedata {
 					if ($message->{'info'}{'osrel'} =~ /^[A-Za-z0-9\s\.]+$/) { $osrel = $message->{'info'}{'osrel'}; }
 					if ($message->{'info'}{'clientver'} =~ /^[0-9][0-9]?\.[0-9][0-9]?\.[0-9][0-9]?$/) { $clientver = $message->{'info'}{'clientver'}; }
 
-					if ($EPID && $EPFPNT && $ihost && $EPNAME && $osplat && $osrel && $clientver) {
-						checkin($EPID,$EPFPNT,$ihost,$EPNAME,$osplat,$osrel,$clientver);
+					if ($EPID && $EPFPNT && $EPADDR && $EPNAME && $osplat && $osrel && $clientver) {
+						checkin($EPID,$EPFPNT,$EPADDR,$EPNAME,$osplat,$osrel,$clientver);
 						}
-					else { debugout(2,"Malformed data in check-in from $ihost\."); }
+					else { debugout(2,"Malformed data in check-in from $EPADDR\."); }
 					}
-				else { debugout(2,"Attempted check-in with missing data from $ihost\."); }
+				else { debugout(2,"Attempted check-in with missing data from $EPADDR\."); }
 				}
-			else { debugout(2,"Malformed message received from $ihost"); }
+			elsif ($function eq "answer") {
+				}
+			elsif ($function eq "update") {
+				}
+			else { debugout(2,"Malformed message received from $EPADDR"); }
 			}
 		}
-	else { debugout(2,"Fingerprint missing in message from $ihost\."); }
+	else { debugout(2,"Fingerprint missing in message from $EPADDR\."); }
 	}
 
+# New Client Registration
+#
+# newreg("tango","cfd346d21ef5690deb109beef",<KEYDATA>,"172.16.0.1","Linux","Debian 12.10","0.0.1");
+#
+# 1 = Success
+# 2 = Already Registered
+# 3 = Error
+#
 sub newreg {
 	my $EPNAME = $_[0];
 	my $EPFPNT = $_[1];
@@ -408,6 +516,13 @@ sub newreg {
 		}
 	}
 
+# Client Registration Check
+#
+# isreg("cfd346d21ef5690deb109beef");
+#
+# 0 = Not Registered
+# 451 = Registered Endpoint ID
+#
 sub isreg {
 	my $EPFPNT = shift;
 	my $registered;
@@ -417,14 +532,15 @@ sub isreg {
 		my $sth = $dbh->prepare("select count(ID),ID from AUTH where FINGERPRINT = '$EPFPNT'");
 		$sth->execute();
 		while (my @row = $sth->fetchrow_array()) {
-			if ($row[0] == 0) { $registered = "false"; }
+			if ($row[0] == 0) { $registered = 0; }
 			else { $registered = $row[1]; }
 			}
 		return $registered;
 		}
+	else { debugout(2,"Invalid fingerprint provided for registration check."); }
 	}
 
-# Client Check-In
+# Record Client Check-In
 #
 sub checkin {
 	my $EPID = $_[0];
@@ -435,14 +551,16 @@ sub checkin {
 	my $osrel = $_[5];
 	my $clientver = $_[6];
 
-	if (isreg($EPFPNT) eq $EPID) {
-		my $dbh = DBI->connect("DBI:mysql:CLIENTS",$dbuser,$dbpass,\%attr);
-		my $sth = $dbh->prepare("update STATUS set HOSTNAME = '$EPNAME', IPV4 = '$EPADDR', OSPLAT = '$osplat', OSRELEASE = '$osrel', CLIENTVER = '$clientver', CSTATE = 'OK', LASTSEEN = now() where ID = $EPID");
-		$sth->execute();
-		debugout(0,"Received check-in from client on $EPADDR (ID $EPID)");
-		}
-	else {
-		debugout(2,"Attempted check-in from unregistered client at $EPADDR");
+	if ($EPID =~ /^[0-9]+$/) {
+		if (isreg($EPFPNT) eq $EPID) {
+			my $dbh = DBI->connect("DBI:mysql:CLIENTS",$dbuser,$dbpass,\%attr);
+			my $sth = $dbh->prepare("update STATUS set HOSTNAME = '$EPNAME', IPV4 = '$EPADDR', OSPLAT = '$osplat', OSRELEASE = '$osrel', CLIENTVER = '$clientver', CSTATE = 'OK', LASTSEEN = now() where ID = $EPID");
+			$sth->execute();
+			debugout(0,"Received check-in from client on $EPADDR (ID $EPID)");
+			}
+		else {
+			debugout(2,"Attempted check-in from unregistered client at $EPADDR");
+			}
 		}
 	}
 
@@ -475,6 +593,13 @@ sub debugout {
 
 	open (BLOG, "+>>", $brokerlog);
 	print BLOG "[$DBTIME] [$DBFLAG] $DBMSG\n";
+
+	# Break signals are usually caused by a CTRL+C. This is here to
+	# print a newline to stdout after the break to keep the debug
+	# stream output tidy.
+	#
+	# This will probably need to eventually be changed from == 1
+	# to > 0 to handle debug levels.  
 	if ($debug == 1) {
 		if ($DBMSG =~ /SIGINT/) { print "\n"; }
 		print "[$DBTIME] [$DBCFLAG] $DBMSG\n";
@@ -482,6 +607,8 @@ sub debugout {
 	close (BLOG);
 	}
 
+# Break Handler
+#
 sub catchbreak {
 	$suerror = 0;
 	if ($broken == 0) {
@@ -491,5 +618,26 @@ sub catchbreak {
 		stoplistener();
 		stopserver();
 		exit 0;
+		}
+	}
+
+# HUP Handler
+#
+sub catchhup {
+	if ($hupped == 0) {
+		debugout (2,"Caught SIGHUP!");
+		$hupped = 1;
+		undef($SID);
+		undef($SKEY);
+		undef($SHOST);
+		undef($LADDR);
+		undef($LPORT);
+		undef($sslcert);
+		undef($sslkey);
+		readconfig();
+		stoplistener();
+		sleep 1;
+		setuplistener();
+		startlistener();
 		}
 	}
