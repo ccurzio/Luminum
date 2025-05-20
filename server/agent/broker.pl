@@ -36,7 +36,8 @@ my $LADDR;
 my $LPORT;
 my $SKEY;
 my $sslcert;
-my $sslkey;
+my $sslprvkey;
+my $sslpubkey;
 my $sock;
 
 my $listen = 1;
@@ -185,7 +186,7 @@ sub setuplistener {
 		Listen => 20,
 		SSL_hostname => $SHOST,
 		SSL_cert_file => $sslcert,
-		SSL_key_file => $sslkey
+		SSL_key_file => $sslprvkey
 		)
 	or do {
 		debugout(3,"Network Listener could not be initialized: $SSL_ERROR");
@@ -257,7 +258,8 @@ sub readconfig {
 			elsif ($row[0] eq "LADDR") { $LADDR = $row[1]; }
 			elsif ($row[0] eq "LPORT") { $LPORT = $row[1]; }
 			elsif ($row[0] eq "SSLCERT") { $sslcert = $row[1]; }
-			elsif ($row[0] eq "SSLKEY") { $sslkey = $row[1]; }
+			elsif ($row[0] eq "SSLPRVKEY") { $sslprvkey = $row[1]; }
+			elsif ($row[0] eq "SSLPUBKEY") { $sslpubkey = $row[1]; }
 			}
 		}
 
@@ -303,14 +305,26 @@ sub readconfig {
 		stopserver();
 		exit 1;
 		}
-	if (!$sslkey || $sslkey eq "") {
-		debugout(3,"Server key file is not configured! (Run with --setup)");
+	if (!$sslprvkey || $sslprvkey eq "") {
+		debugout(3,"Server private key file is not configured! (Run with --setup)");
 		$suerror = 1;
 		stopserver();
 		exit 1;
 		}
-	elsif (!-e $sslkey) {
-		debugout(3,"Server key file is missing: $sslcert");
+	elsif (!-e $sslprvkey) {
+		debugout(3,"Server private key file is missing: $sslprvkey");
+		$suerror = 1;
+		stopserver();
+		exit 1;
+		}
+	if (!$sslpubkey || $sslpubkey eq "") {
+		debugout(3,"Server public key file is not configured! (Run with --setup)");
+		$suerror = 1;
+		stopserver();
+		exit 1;
+		}
+	elsif (!-e $sslpubkey) {
+		debugout(3,"Server public key file is missing: $sslpubkey");
 		$suerror = 1;
 		stopserver();
 		exit 1;
@@ -330,7 +344,8 @@ sub readconfig {
 
 	debugout(1,"Configuration Successfully Imported.");
 	debugout(0,"- SSL Certificate: $sslcert");
-	debugout(0,"- SSL Key File: $sslkey");
+	debugout(0,"- SSL Private Key File: $sslprvkey");
+	debugout(0,"- SSL Public Key File: $sslpubkey");
 	}
 
 # Set Server Configuration Options
@@ -444,10 +459,9 @@ sub parsedata {
 			else { debugout(2,"Message from unregistered client at $EPADDR\."); }
 			}
 		else {
-			if (iafis($EPID,$EPFPNT) == 1) {
-				if ($function eq "register") {
-					debugout(2,"Attempted registration from client with nonzero ID on $EPADDR\.");
-					}
+			my $fpval = iafis($EPID,$EPFPNT);
+			if ($fpval == 1) {
+				if ($function eq "register") { debugout(2,"Attempted registration from client with nonzero ID on $EPADDR\."); }
 				elsif ($function eq "ping") {
 					if ($message->{'info'}{'osplat'} && $message->{'info'}{'osrel'} && $message->{'info'}{'clientver'}) {
 						my $osplat;
@@ -466,14 +480,14 @@ sub parsedata {
 					}
 				elsif ($function eq "answer") {
 					}
-				elsif ($function eq "update") {
+				elsif ($function eq "report") {
 					}
 				else { debugout(2,"Malformed message received from $EPADDR"); }
 				}
-			elsif (iafis($EPID,$EPFPNT) == 2) {
+			elsif ($fpval == 2) {
 				debugout(2,"Fingerprint validation failed for client on $EPADDR\: Mismatch");
 				}
-			elsif (iafis($EPID,$EPFPNT) == 3) {
+			elsif ($fpval == 3) {
 				debugout(2,"Fingerprint validation failed for client on $EPADDR\: Malformed Fingerprint");
 				}
 			else { debugout(2,"Unknown error during fingerprint validation for client on $EPADDR\."); }
@@ -634,7 +648,8 @@ sub catchhup {
 		undef($LADDR);
 		undef($LPORT);
 		undef($sslcert);
-		undef($sslkey);
+		undef($sslprvkey);
+		undef($sslpubkey);
 		readconfig();
 		stoplistener();
 		sleep 1;
