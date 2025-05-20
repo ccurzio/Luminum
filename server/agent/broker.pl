@@ -13,11 +13,11 @@ use Term::ANSIColor;
 use DBI;
 use Data::UUID;
 use MIME::Base64;
-use threads;
-use Socket;
-use IO::Socket;
+#use threads;
+#use Socket;
+#use IO::Socket;
 use IO::Socket::SSL;
-use IO::Select;
+#use IO::Select;
 use JSON;
 use Data::Dumper;
 
@@ -87,6 +87,7 @@ setuplistener();
 
 debugout(1,"Server startup complete.");
 debugout(0,"- Luminum Server ID: $SID");
+debugout(0,"- Web Console: https://$SHOST");
 debugout(0,"- Broker Log: $brokerlog");
 debugout(0,"- Listening on $LADDR:$LPORT");
 
@@ -132,7 +133,6 @@ sub startserver {
 # Luminum Server Shutdown
 #
 sub stopserver {
-	if (1 == 0) { stoplistener(); }
 	debugout(0,"Stopping database...");
 	system("/usr/bin/systemctl stop mysqld");
 	if (`/usr/bin/systemctl status mysqld | /usr/bin/grep Active` =~ /inactive/) { debugout(1,"Database stopped successfully."); }
@@ -177,6 +177,7 @@ sub stopweb {
 #
 sub setuplistener {
 	debugout(0,"Initializing Network Listener...");
+	undef($sock);
 	$sock = IO::Socket::SSL->new(
 		LocalAddr => $LADDR,
 		LocalPort => $LPORT,
@@ -358,7 +359,7 @@ sub setconfig {
 	}
 
 # Endpoint Fingerprint Validation
-# iafis("451","cfd346d21ef5690deb109beef","172.16.0.1");
+# iafis("451","cfd346d21ef5690deb109beef");
 #
 # 1 = Match
 # 2 = Mismatch
@@ -367,7 +368,6 @@ sub setconfig {
 sub iafis {
 	my $EPID = $_[0];
 	my $EPFPNT = $_[1];
-	my $EPADDR = $_[2];
 	my $fvstat;
 
 	if ($EPID =~ /^[0-9]+$/) {
@@ -375,26 +375,16 @@ sub iafis {
 			my $dbh = DBI->connect("DBI:mysql:CLIENTS",$dbuser,$dbpass,\%attr);
 			my $sth = $dbh->prepare("select FINGERPRINT from AUTH where ID = '$EPID'");
 			$sth->execute();
-			my @result = $sth->fetchrow_array();
-			if ($EPFPNT eq $result[0]) {
-				debugout(0,"Verified fingerprint for client on $EPADDR\.");
-				$fvstat = 1;
+			if ($sth->rows > 0) {
+				my @result = $sth->fetchrow_array();
+				if ($EPFPNT eq $result[0]) { $fvstat = 1; }
+				else { $fvstat = 2; }
 				}
-			else {
-				debugout(2,"Fingerprint mismatch for client on $EPADDR\.");
-				$fvstat = 2;
-				}
-			$dbh->disconnect();
+			else { $fvstat = 2; }
 			}
-		else {
-			debugout(2,"Fingerprint validation failed for client on $EPADDR\: Malformed Fingerprint");
-			$fvstat = 3;
-			}
+		else { $fvstat = 3; }
 		}
-	else {
-		debugout(2,"Fingerprint validation failed for client on $EPADDR\: Invalid ID");
-		$fvstat = 3;
-		}
+	else { $fvstat = 3; }
 
 	return $fvstat;
 	}
@@ -412,7 +402,7 @@ sub parsedata {
 	my $data;
 	my $osplat;
 	my $osrel;
-	my $epkey;
+	my $EPKEY;
 	my $clientver;
 
 	eval { decode_json(decode_base64($input)) };
@@ -422,7 +412,8 @@ sub parsedata {
 
 	for my $mkey (keys %$message) {
 		if ($mkey eq "info") {
-			if ($message->{$mkey}{'ID'} =~ /^[0-9]+$/) { $EPID = $message->{$mkey}{'ID'}; }
+			if ($message->{$mkey}{'ID'} == 0) { $EPID = 0; }
+			elsif ($message->{$mkey}{'ID'} =~ /^[1-9]([0-9]+)?$/) { $EPID = $message->{$mkey}{'ID'}; }
 			if ($message->{$mkey}{'name'} =~ /^[A-Za-z0-9_\.]+$/) { $EPNAME = $message->{$mkey}{'name'}; }
 			if ($message->{$mkey}{'fingerprint'} =~ /^[a-f0-9]+$/) { $EPFPNT = $message->{$mkey}{'fingerprint'}; }
 			}
@@ -438,44 +429,54 @@ sub parsedata {
 		}
 
 	if ($EPFPNT && $EPFPNT ne "") {
-		if (!$EPID || $EPID eq "") {
+		if ($EPID == 0) {
 			if ($function eq "register") {
 				if ($message->{'info'}{'osplat'} =~ /^[A-Za-z]+$/) { $osplat = $message->{'info'}{'osplat'}; }
 				if ($message->{'info'}{'osrel'} =~ /^[A-Za-z0-9\s\.]+$/) { $osrel = $message->{'info'}{'osrel'}; }
 				if ($message->{'info'}{'clientver'} =~ /^[0-9][0-9]?\.[0-9][0-9]?\.[0-9][0-9]?$/) { $clientver = $message->{'info'}{'clientver'}; }
+				if ($message->{'info'}{'pubkey'} ne "") { $EPKEY = $message->{'info'}{'pubkey'}; }
 
-				if ($EPFPNT && $epkey && $EPADDR && $EPNAME && $osplat && $osrel && $clientver) {
-					newreg($EPNAME,$EPFPNT,$epkey,$EPADDR,$osplat,$osrel,$clientver);
+				if ($EPFPNT && $EPKEY && $EPADDR && $EPNAME && $osplat && $osrel && $clientver) {
+					newreg($EPNAME,$EPFPNT,$EPKEY,$EPADDR,$osplat,$osrel,$clientver);
 					}
 				else { debugout(2,"Attempted registration with missing data from $EPADDR\."); }
 				}
 			else { debugout(2,"Message from unregistered client at $EPADDR\."); }
 			}
 		else {
-			if ($function eq "register") {
-				debugout(2,"Attempted registration from existing client on $EPADDR\.");
-				}
-			elsif ($function eq "ping") {
-				if ($message->{'info'}{'osplat'} && $message->{'info'}{'osrel'} && $message->{'info'}{'clientver'}) {
-					my $osplat;
-					my $osrel;
-					my $clientver;
-					if ($message->{'info'}{'osplat'} =~ /^[A-Za-z]+$/) { $osplat = $message->{'info'}{'osplat'}; }
-					if ($message->{'info'}{'osrel'} =~ /^[A-Za-z0-9\s\.]+$/) { $osrel = $message->{'info'}{'osrel'}; }
-					if ($message->{'info'}{'clientver'} =~ /^[0-9][0-9]?\.[0-9][0-9]?\.[0-9][0-9]?$/) { $clientver = $message->{'info'}{'clientver'}; }
-
-					if ($EPID && $EPFPNT && $EPADDR && $EPNAME && $osplat && $osrel && $clientver) {
-						checkin($EPID,$EPFPNT,$EPADDR,$EPNAME,$osplat,$osrel,$clientver);
-						}
-					else { debugout(2,"Malformed data in check-in from $EPADDR\."); }
+			if (iafis($EPID,$EPFPNT) == 1) {
+				if ($function eq "register") {
+					debugout(2,"Attempted registration from client with nonzero ID on $EPADDR\.");
 					}
-				else { debugout(2,"Attempted check-in with missing data from $EPADDR\."); }
+				elsif ($function eq "ping") {
+					if ($message->{'info'}{'osplat'} && $message->{'info'}{'osrel'} && $message->{'info'}{'clientver'}) {
+						my $osplat;
+						my $osrel;
+						my $clientver;
+						if ($message->{'info'}{'osplat'} =~ /^[A-Za-z]+$/) { $osplat = $message->{'info'}{'osplat'}; }
+						if ($message->{'info'}{'osrel'} =~ /^[A-Za-z0-9\s\.]+$/) { $osrel = $message->{'info'}{'osrel'}; }
+						if ($message->{'info'}{'clientver'} =~ /^[0-9][0-9]?\.[0-9][0-9]?\.[0-9][0-9]?$/) { $clientver = $message->{'info'}{'clientver'}; }
+
+						if ($EPID && $EPFPNT && $EPADDR && $EPNAME && $osplat && $osrel && $clientver) {
+							checkin($EPID,$EPFPNT,$EPADDR,$EPNAME,$osplat,$osrel,$clientver);
+							}
+						else { debugout(2,"Malformed data in check-in from $EPADDR\."); }
+						}
+					else { debugout(2,"Attempted check-in with missing data from $EPADDR\."); }
+					}
+				elsif ($function eq "answer") {
+					}
+				elsif ($function eq "update") {
+					}
+				else { debugout(2,"Malformed message received from $EPADDR"); }
 				}
-			elsif ($function eq "answer") {
+			elsif (iafis($EPID,$EPFPNT) == 2) {
+				debugout(2,"Fingerprint validation failed for client on $EPADDR\: Mismatch");
 				}
-			elsif ($function eq "update") {
+			elsif (iafis($EPID,$EPFPNT) == 3) {
+				debugout(2,"Fingerprint validation failed for client on $EPADDR\: Malformed Fingerprint");
 				}
-			else { debugout(2,"Malformed message received from $EPADDR"); }
+			else { debugout(2,"Unknown error during fingerprint validation for client on $EPADDR\."); }
 			}
 		}
 	else { debugout(2,"Fingerprint missing in message from $EPADDR\."); }
@@ -500,7 +501,7 @@ sub newreg {
 	my $EPID;
 	my $reg = isreg($EPFPNT);
 
-	if ($reg eq "false") {
+	if ($reg == 0) {
 		my $dbh = DBI->connect("DBI:mysql:CLIENTS",$dbuser,$dbpass,\%attr);
 		my $sth = $dbh->prepare("insert into AUTH (NAME,FINGERPRINT,PUBKEY) values ('$EPNAME','$EPFPNT','$EPPKEY')");
 		$sth->execute();
@@ -509,10 +510,10 @@ sub newreg {
 		while (my @regdata = $sth->fetchrow()) { $EPID = $regdata[0]; }
 		$sth = $dbh->prepare("insert into STATUS (ID,HOSTNAME,IPV4,OSPLATFORM,OSRELEASE,CLIENTVER,CSTATE,REGDATE,LASTSEEN) values ($EPID,'$EPNAME','$EPADDR','$osplat','$osrel','$clientver','OK',now(),now())");
 		$sth->execute();
-		debugout(0,"New client registration (ID $EPID)");
+		debugout(0,"Registered Client ID $EPID\: $EPNAME ($EPADDR)");
 		}
 	else {
-		debugout(2,"Attempted registration from existing client (ID $reg)");
+		debugout(2,"Attempted registration from existing client on $EPADDR (ID $reg)");
 		}
 	}
 
@@ -554,7 +555,7 @@ sub checkin {
 	if ($EPID =~ /^[0-9]+$/) {
 		if (isreg($EPFPNT) eq $EPID) {
 			my $dbh = DBI->connect("DBI:mysql:CLIENTS",$dbuser,$dbpass,\%attr);
-			my $sth = $dbh->prepare("update STATUS set HOSTNAME = '$EPNAME', IPV4 = '$EPADDR', OSPLAT = '$osplat', OSRELEASE = '$osrel', CLIENTVER = '$clientver', CSTATE = 'OK', LASTSEEN = now() where ID = $EPID");
+			my $sth = $dbh->prepare("update STATUS set HOSTNAME = '$EPNAME', IPV4 = '$EPADDR', OSPLATFORM = '$osplat', OSRELEASE = '$osrel', CLIENTVER = '$clientver', CSTATE = 'OK', LASTSEEN = now() where ID = $EPID");
 			$sth->execute();
 			debugout(0,"Received check-in from client on $EPADDR (ID $EPID)");
 			}
@@ -599,7 +600,7 @@ sub debugout {
 	# stream output tidy.
 	#
 	# This will probably need to eventually be changed from == 1
-	# to > 0 to handle debug levels.  
+	# to > 0 to handle debug levels.
 	if ($debug == 1) {
 		if ($DBMSG =~ /SIGINT/) { print "\n"; }
 		print "[$DBTIME] [$DBCFLAG] $DBMSG\n";
