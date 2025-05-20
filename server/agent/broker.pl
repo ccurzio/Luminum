@@ -413,7 +413,7 @@ sub parsedata {
 	my $EPID;
 	my $EPNAME;
 	my $EPFPNT;
-	my $function;
+	my $action;
 	my $data;
 	my $osplat;
 	my $osrel;
@@ -432,8 +432,8 @@ sub parsedata {
 			if ($message->{$mkey}{'name'} =~ /^[A-Za-z0-9_\.]+$/) { $EPNAME = $message->{$mkey}{'name'}; }
 			if ($message->{$mkey}{'fingerprint'} =~ /^[a-f0-9]+$/) { $EPFPNT = $message->{$mkey}{'fingerprint'}; }
 			}
-		elsif ($mkey eq "function") {
-			if ($message->{$mkey} =~ /^[A-Za-z]+$/) { $function = $message->{$mkey}; }
+		elsif ($mkey eq "action") {
+			if ($message->{$mkey} =~ /^[A-Za-z]+$/) { $action = $message->{$mkey}; }
 			}
 		elsif ($mkey eq "data") {
 			##############################################
@@ -445,10 +445,11 @@ sub parsedata {
 
 	if ($EPFPNT && $EPFPNT ne "") {
 		if ($EPID == 0) {
-			if ($function eq "register") {
+			if ($action eq "register") {
 				if ($message->{'info'}{'osplat'} =~ /^[A-Za-z]+$/) { $osplat = $message->{'info'}{'osplat'}; }
 				if ($message->{'info'}{'osrel'} =~ /^[A-Za-z0-9\s\.]+$/) { $osrel = $message->{'info'}{'osrel'}; }
-				if ($message->{'info'}{'clientver'} =~ /^[0-9][0-9]?\.[0-9][0-9]?\.[0-9][0-9]?$/) { $clientver = $message->{'info'}{'clientver'}; }
+				if ($message->{'info'}{'clientver'} =~ /^[0-9][0-9]?\.[0-9][0-9]?\.[0-9][0-9]?[ab]?$/) { $clientver = $message->{'info'}{'clientver'}; }
+				else { $clientver = "Unknown"; }
 				if ($message->{'info'}{'pubkey'} ne "") { $EPKEY = $message->{'info'}{'pubkey'}; }
 
 				if ($EPFPNT && $EPKEY && $EPADDR && $EPNAME && $osplat && $osrel && $clientver) {
@@ -461,15 +462,15 @@ sub parsedata {
 		else {
 			my $fpval = iafis($EPID,$EPFPNT);
 			if ($fpval == 1) {
-				if ($function eq "register") { debugout(2,"Attempted registration from client with nonzero ID on $EPADDR\."); }
-				elsif ($function eq "ping") {
+				if ($action eq "ping") {
 					if ($message->{'info'}{'osplat'} && $message->{'info'}{'osrel'} && $message->{'info'}{'clientver'}) {
 						my $osplat;
 						my $osrel;
 						my $clientver;
 						if ($message->{'info'}{'osplat'} =~ /^[A-Za-z]+$/) { $osplat = $message->{'info'}{'osplat'}; }
 						if ($message->{'info'}{'osrel'} =~ /^[A-Za-z0-9\s\.]+$/) { $osrel = $message->{'info'}{'osrel'}; }
-						if ($message->{'info'}{'clientver'} =~ /^[0-9][0-9]?\.[0-9][0-9]?\.[0-9][0-9]?$/) { $clientver = $message->{'info'}{'clientver'}; }
+						if ($message->{'info'}{'clientver'} =~ /^[0-9][0-9]?\.[0-9][0-9]?\.[0-9][0-9]?[ab]?$/) { $clientver = $message->{'info'}{'clientver'}; }
+						else { $clientver = "Unknown"; }
 
 						if ($EPID && $EPFPNT && $EPADDR && $EPNAME && $osplat && $osrel && $clientver) {
 							checkin($EPID,$EPFPNT,$EPADDR,$EPNAME,$osplat,$osrel,$clientver);
@@ -478,9 +479,14 @@ sub parsedata {
 						}
 					else { debugout(2,"Attempted check-in with missing data from $EPADDR\."); }
 					}
-				elsif ($function eq "answer") {
+				elsif ($action eq "register") { debugout(2,"Attempted registration from client with nonzero ID on $EPADDR\."); }
+				elsif ($action eq "unregister") {
+					debugout(0,"Received deregistration request from client ID $EPID\.");
+					dereg($EPFPNT);
 					}
-				elsif ($function eq "report") {
+				elsif ($action eq "answer") {
+					}
+				elsif ($action eq "report") {
 					}
 				else { debugout(2,"Malformed message received from $EPADDR"); }
 				}
@@ -528,6 +534,40 @@ sub newreg {
 		}
 	else {
 		debugout(2,"Attempted registration from existing client on $EPADDR (ID $reg)");
+		}
+	}
+
+# Client De-Registration
+#
+# dereg("cfd346d21ef5690deb109beef");
+#
+# 1 = Success
+# 2 = Failure
+# 3 = Error
+#
+sub dereg {
+	my $EPFPNT = shift;
+	my $deregistered;
+
+	if ($EPFPNT =~ /^[a-f0-9]+$/) {
+		my $cid = isreg($EPFPNT);
+		if ($cid > 0) {
+			my $dbh = DBI->connect("DBI:mysql:CLIENTS",$dbuser,$dbpass,\%attr);
+			my $sth = $dbh->prepare("delete CA, CS from AUTH CA join STATUS CS on CS.ID = CA.ID where CS.ID = $cid");
+			$sth->execute();
+			if (isreg($EPFPNT) == 0) {
+				debugout(1,"Successfully unregistered client ID $cid\.");
+				$deregistered = 1;
+				}
+			else {
+				debugout(2,"Failure while attempting to unregister client ID $cid\.");
+				$deregistered = 2;
+				}
+			}
+		else {
+			debugout(2,"Request to delete unregistered client with fingerprint $EPFPNT");
+			$deregistered = 3;
+			}
 		}
 	}
 
