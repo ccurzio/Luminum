@@ -42,7 +42,7 @@ $acctrole = $userinfo["ROLE"];
 </div>
 
 <div class="header" style="justify-content: space-between;">
-	<img src="images/logo-light.png" alt="Luminum" class="logo-img">
+	<img src="images/logo-light.png" alt="Luminum" class="logo-img" style="margin-bottom: 4px;">
 	<div style="width: 1200px;">
 		<div class="dropdown">
 			<a href="/index.php">
@@ -92,7 +92,6 @@ $acctrole = $userinfo["ROLE"];
 				Administration
 			</button>
 			<div class="dropdown-content">
-				<a href="/index.php?view=clientstatus">Client Status</a>
 				<div class="submenu">
 					<a href="#" class="submenu-link" style="cursor: default;">Content <span style="margin-left: 100px;" class="arrow">▸</span></a>
 					<div class="submenu-content">
@@ -101,10 +100,10 @@ $acctrole = $userinfo["ROLE"];
 						<a href="/index.php?view=csets">Content Sets</a>
 					</div>
 				</div>
+				<a href="/index.php?view=clientstatus">Client Status</a>
 				<a href="/index.php?view=actions">Scheduled Actions</a>
 				<a href="/index.php?view=actionhistory">Action History</a>
 				<a href="/index.php?view=cgroups">Computer Groups</a>
-				<a href="/index.php?view=ugroups">User Groups</a>
 			</div>
 		</div>
 
@@ -121,9 +120,6 @@ $acctrole = $userinfo["ROLE"];
 					}
 
 				if (isset($acctrole) && $acctrole == "1") {
-					print "<a href=\"/config.php?view=clients\">Client Management</a>\n";
-					print "<a href=\"/index.php?view=users\">User Accounts</a>\n";
-
 					print "<div class=\"submenu\">\n";
 					print "<a href=\"#\" class=\"submenu-link\" style=\"cursor: default;\">Configuration <span style=\"margin-left: 70px;\" class=\"arrow\">▸</span></a>\n";
 					print "<div class=\"submenu-content\">\n";
@@ -144,13 +140,16 @@ $acctrole = $userinfo["ROLE"];
 					print "<a href=\"/maintenance.php?view=logs\">System Logs</a>\n";
 					print "</div>\n";
 					print "</div>\n";
+					print "<a href=\"/config.php?view=clients\">Client Management</a>\n";
+					print "<a href=\"/index.php?view=users\">User Accounts</a>\n";
+					print "<a href=\"/index.php?view=ugroups\">User Groups</a>\n";
 					}
 				?>
 			</div>
 		</div>
 	</div>
 	<div class="user-menu" style="height: 100%;">
-		<button class="user-button" style="width: 175px;"><?php print $_SESSION["NAME"]; ?> <span style="margin-left: 2px; font-size: 18px;">▾</span></button>
+		<button class="user-button" style="width: 175px; padding-bottom: 15px;"><?php print $_SESSION["NAME"]; ?> <span style="margin-left: 2px; font-size: 18px;">▾</span></button>
 		<div class="user-dropdown">
 			<a href="/user.php">Account</a>
 			<a href="/user.php?view=prefs">Preferences</a>
