@@ -128,32 +128,32 @@ sub stopserver {
 	else { Broker::debugout(2,"Server shutdown completed with errors."); }
 	}
 
-# Start Web Server
+# Start Web Console
 #
 sub startweb {
 	if (`/usr/bin/systemctl status nginx | /usr/bin/grep Active` =~ /inactive/) {
-		Broker::debugout(0,"Initializing webserver...");
+		Broker::debugout(0,"Initializing Web Console...");
 		system("/usr/bin/systemctl start nginx");
 		if (`/usr/bin/systemctl status nginx | /usr/bin/grep Active` =~ /inactive/) {
-			Broker::debugout(3,"Webserver initialization failed: Unable to start service.");
+			Broker::debugout(3,"Web console initialization failed: Unable to start service.");
 			}
 		else {
 			my $wspid = `/usr/bin/cat /var/run/nginx.pid`;
 			chomp ($wspid);
-			Broker::debugout(1,"Webserver initialized successfully. (PID $wspid)");
+			Broker::debugout(1,"Web console initialized successfully. (PID $wspid)");
 			}
 		}
 	}
 
-# Stop Web Server
+# Stop Web Console
 #
 sub stopweb {
-	Broker::debugout(0,"Stopping webserver...");
+	Broker::debugout(0,"Stopping Web Console...");
 	system("/usr/bin/systemctl stop nginx");
-	if (`/usr/bin/systemctl status nginx | /usr/bin/grep Active` =~ /inactive/) { Broker::debugout(1,"Webserver stopped successfully."); }
+	if (`/usr/bin/systemctl status nginx | /usr/bin/grep Active` =~ /inactive/) { Broker::debugout(1,"Web console stopped successfully."); }
 	else {
 		$suerror = 1;
-		Broker::debugout(2,"Unable to stop webserver.");
+		Broker::debugout(2,"Unable to stop Web Console.");
 		}
 	}
 
@@ -380,7 +380,7 @@ sub setconfig {
 	my $cval = $_[1];
 	my $scstat;
 
-	if ($ckey =~ /^[A-Z]+$/ && $cval =~ /^[A-Za-z0-9_\.\/]+$/) {
+	if ($ckey =~ /^[A-Z]+$/ && $cval =~ /^[A-Za-z0-9_\.\,\/]+$/) {
 		if ($ckey eq "LPORT" && $cval !~ /^([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$/) {
 			Broker::debugout(2,"Invalid value specified for configuration change to LPORT: \"$cval\"");
 			$scstat = 2;
@@ -423,8 +423,9 @@ sub lumyload {
 						}
 					}
 				if (grep(/^$elname$/,@lumys) && $elver) { Broker::debugout(1,"- Lumy Loaded: $dname v$elver"); }
-				else { Broker::debugout(3,"- Failure loading \"$dname\" Lumy: $elerr"); }
+				else { Broker::debugout(3,"- Failure loading $dname Lumy: $elerr"); }
 				}
+			setconfig("ENLUMYS",join(',',@lumys));
 			}
 		}
 	}
