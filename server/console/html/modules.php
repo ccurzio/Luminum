@@ -1,30 +1,25 @@
 <?php include ("layout/header.php"); ?>
 
-<?php if (!isset($_GET['view']) || $_GET['view'] == "manage"): ?>
-<div class="content">
-	<h1>Lumy Management</h1>
-
-<?php elseif ($_GET['view'] == "delivery"): ?>
-<div class="content">
-	<h1>Luminum Delivery</h1>
-
-<?php elseif ($_GET['view'] == "discovery"): ?>
-<div class="content">
-	<h1>Luminum Discovery</h1>
-
-<?php elseif ($_GET['view'] == "integrity"): ?>
-<div class="content">
-	<h1>Luminum Integrity</h1>
-
-<?php elseif ($_GET['view'] == "inventory"): ?>
-<div class="content">
-	<h1>Luminum Inventory</h1>
-
-<?php elseif ($_GET['view'] == "policy"): ?>
-<div class="content">
-	<h1>Luminum Policy</h1>
-
-<?php endif; ?>
+<?php if (!isset($_GET['view']) || $_GET['view'] == "manage") {
+	print "<div class=\"content\">\n";
+	print "<h1>Lumy Management</h1>\n\n";
+	}
+else {
+	if ($_GET['view'] == "delivery") {
+		print "<div class=\"content\">\n";
+		print "<h1>Luminum Delivery</h1>\n\n";
+		}
+	else {
+		if (preg_match("/^[a-z]+$/",$_GET['view']) && file_exists("/var/www/html/modules/" . $_GET['view'] . ".php")) {
+			include ("/var/www/html/modules/" . $_GET['view'] . ".php");
+			}
+		else {
+			print "<div class=\"content\">\n";
+			print "NOT FOUND";
+			}
+		}
+	}
+?>
 
 </div>
 
