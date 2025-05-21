@@ -29,14 +29,14 @@ $sensorcount = mysqli_num_rows($sensorquery);
 		print "</div>\n";
 		?>
 		<table style="margin-top: 10px;">
-		<tr><td colspan="8"><div style="position: absolute; padding-top: 7px; padding-left: 5px;">0 of 0 items</div><div style="float: right; text-align: right; padding-right: 5px;">Content Set: <select id="contentset" name="contentset" style="background-color: #eee; border-radius: 8px; font-size: 14px; height: 26px; margin-left: 2px; margin-right: 30px; margin-top: 2px; width: 170px;">
+		<tr><td colspan="8"><div style="position: absolute; padding-top: 7px; padding-left: 5px;">0 of 0 items</div><div style="float: right; text-align: right; padding-right: 5px;">Content Set: <select id="contentset" name="contentset" style="background-color: #eee; border-radius: 8px; font-size: 14px; height: 26px; margin-left: 2px; margin-right: 30px; margin-top: 2px; width: 170px;" <?php if ($sensorcount == 0) { print "disabled=\"disabled\""; } ?>>
 			<option value="all">All</option>
 			<?php
 			while ($csrow = mysqli_fetch_assoc($csets)) {
 				print "<option value=\"" . $csrow["ID"] . "\">" . $csrow["NAME"] . "</option>\n";
 				}
 			?>
-		</select> Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;"></div></td></tr>
+		</select> Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($sensorcount == 0) { print "disabled=\"disabled\""; } ?>></div></td></tr>
 		<tr><td style="width: 15px;">
 		<?php
 			if ($sensorcount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }

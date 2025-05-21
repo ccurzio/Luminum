@@ -19,7 +19,7 @@ $wincount = 0;
 		<div style="display: block; width: 100%; text-align: right;">
 			<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled" id="deploy">Deploy Action</button> <button class="formgo" id="connect" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Connect</button> <button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled" id="getinfo">Get Info</button>
 			<table style="margin-top: 10px; text-align: left;">
-			<tr><td colspan="8"><div style="position: absolute; padding-top: 5px; padding-left: 5px;">??? of <?php print "$clientscount"; ?> items <img src="icons/refresh.png" style="cursor: pointer; margin-left: 2px; width: 20px; height: 20px; vertical-align: text-bottom;"></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;"></div></td></tr>
+			<tr><td colspan="8"><div style="position: absolute; padding-top: 5px; padding-left: 5px;">??? of <?php print "$clientscount"; ?> items <img src="icons/refresh.png" style="cursor: pointer; margin-left: 2px; width: 20px; height: 20px; vertical-align: text-bottom;"></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($clientscount == 0) { print "disabled=\"disabled\""; } ?>></div></td></tr>
 			<tr><td style="width: 15px;">
 			<?php 
 			if ($clientscount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
@@ -48,7 +48,7 @@ $wincount = 0;
 
 	<div class="module-content" style="width: 21%; float: right; font-size: 13px;">
 	<p>
-		<b><input type="checkbox" id="checkinfilter" onclick="checkinform()"> Show systems that have checked in within:</b><br>
+		<b><input type="checkbox" id="checkinfilter" onclick="checkinform()" <?php if ($clientscount == 0) { print "disabled=\"disabled\""; } ?>> Show systems that have checked in within:</b><br>
 		<input id="intnum" type="text" style="font-size: 15px; padding: 5px; margin-top: 3px; width: 40px;" value="1" disabled="disabled">
 		<select name="filterint" id="filterint" style="font-size: 15px; height: 30px; margin-left: 2px;" disabled="disabled">
 			 <option value="reg">Registration Interval</option>
@@ -66,9 +66,9 @@ $wincount = 0;
 	</p>
 	<table style="margin-bottom: 20px;">
 	<tr><td style="width: 15px;"></td><td>Platform</td><td style="text-align: center;">Percentage</td><td style="text-align: center;">Count</td></tr>
-	<tr><td class="lfilter" style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filterlinux" onclick="filterHighlight('filterlinux')"></td><td class="lfilter" style="background-color: #494a69;">Linux</td><td class="lfilter" style="background-color: #494a69; text-align: center;"><?php if ($clientscount > 0) { $pct = ($lincount / $clientscount) * 100; print "$pct"; } else { print "0"; } ?>%</td><td class="lfilter" style="background-color: #494a69; text-align: center;"><?php print "$lincount"; ?></td></tr>
-	<tr><td class="mfilter" style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filtermac" onclick="filterHighlight('filtermac')"></td><td class="mfilter" style="background-color: #494a69;">macOS</td><td class="mfilter" style="background-color: #494a69; text-align: center;"><?php if ($clientscount > 0) { $pct = ($maccount / $clientscount) * 100; print "$pct"; } else { print "0"; } ?>%</td><td class="mfilter" style="background-color: #494a69; text-align: center;"><?php print "$maccount"; ?></td></tr>
-	<tr><td class="wfilter" style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filterwin" onclick="filterHighlight('filterwin')"></td><td class="wfilter" style="background-color: #494a69;">Windows</td><td class="wfilter" style="background-color: #494a69; text-align: center;"><?php if ($clientscount > 0) { $pct = ($wincount / $clientscount) * 100; print "$pct"; } else { print "0"; } ?>%</td><td class="wfilter" style="background-color: #494a69; text-align: center;"><?php print "$wincount"; ?></td></tr>
+	<tr><td class="lfilter" style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filterlinux" onclick="filterHighlight('filterlinux')" <?php if ($clientscount == 0) { print "disabled=\"disabled\""; } ?>></td><td class="lfilter" style="background-color: #494a69;">Linux</td><td class="lfilter" style="background-color: #494a69; text-align: center;"><?php if ($clientscount > 0) { $pct = ($lincount / $clientscount) * 100; print "$pct"; } else { print "0"; } ?>%</td><td class="lfilter" style="background-color: #494a69; text-align: center;"><?php print "$lincount"; ?></td></tr>
+	<tr><td class="mfilter" style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filtermac" onclick="filterHighlight('filtermac')" <?php if ($clientscount == 0) { print "disabled=\"disabled\""; } ?>></td><td class="mfilter" style="background-color: #494a69;">macOS</td><td class="mfilter" style="background-color: #494a69; text-align: center;"><?php if ($clientscount > 0) { $pct = ($maccount / $clientscount) * 100; print "$pct"; } else { print "0"; } ?>%</td><td class="mfilter" style="background-color: #494a69; text-align: center;"><?php print "$maccount"; ?></td></tr>
+	<tr><td class="wfilter" style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filterwin" onclick="filterHighlight('filterwin')" <?php if ($clientscount == 0) { print "disabled=\"disabled\""; } ?>></td><td class="wfilter" style="background-color: #494a69;">Windows</td><td class="wfilter" style="background-color: #494a69; text-align: center;"><?php if ($clientscount > 0) { $pct = ($wincount / $clientscount) * 100; print "$pct"; } else { print "0"; } ?>%</td><td class="wfilter" style="background-color: #494a69; text-align: center;"><?php print "$wincount"; ?></td></tr>
 	</table>
 
 	<?php if ($clientscount > 0) {
