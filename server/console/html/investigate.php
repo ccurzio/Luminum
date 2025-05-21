@@ -2,7 +2,7 @@
 <div class="content">
 	<h1>Investigate</h1>
 
-	<div class="module-content" style="width: 60%; margin-left: auto; margin-right: auto;">
+	<div class="module-content" style="width: 60%; margin-left: auto; margin-right: auto; min-width: 850px;">
 		<div style="width: 80%; margin-left: auto; margin-right: auto; margin-top: 10px;">
 			<span style="font-size: 30px; font-weight: bold;">Step 1</span>
 			<img src="/images/stepline.png" style="width: 75px; height: 5px; margin-bottom: 7px; margin-left: 10px; margin-right: 10px; <?php if ($_GET["step"] <= 1) { print "opacity: 0.25"; } ?>">
@@ -18,5 +18,9 @@
 <?php endif; ?>
 
 	</div>
+
+		<div style="margin-top: 10px; margin-left: auto; margin-right: auto; text-align: right; width: 945px;">
+			<button class="formgo" style="width: 75px;">Next</button>
+		</div>
 
 <?php include ("layout/footer.php"); ?>

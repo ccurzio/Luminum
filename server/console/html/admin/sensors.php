@@ -57,30 +57,46 @@ $sensorcount = mysqli_num_rows($sensorquery);
 	</div>
 
 	<?php elseif ($_GET["action"] == "new"): ?>
-	<h1>Create New Sensor</h1>
 
-	<div class="module-content" style="overflow: auto;">
-		<div style="width: 90%; float: left;">
-		<table style="margin-top: 10px; border: 0;">
-		<tr><td style="background-color: transparent; border: 0; color: #444;">Name: <span style="color: red;">*</span></td></tr>
-		<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgname" style="width: 400px;"></td></tr>
-		<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Description: <span style="color: red;">*</span></td></tr>
-		<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgdesc" style="width: 400px;"></td></tr>
-		<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Content Set: <span style="color: red;">*</span></td></tr>
-		<tr><td style="background-color: transparent; border: 0; color: #444;"><select id="contentset" name="contentset" style="font-size: 15px; height: 30px; width: 430px; margin-left: 2px; margin-right: 30px;">
 		<?php
-		while ($csrow = mysqli_fetch_assoc($csets)) {
-			print "<option value=\"" . $csrow["ID"] . "\">" . $csrow["NAME"] . "</option>\n";
-			}
-		?>
-		</select></td></tr>
-		</table>
-		</div>
-		<div style="float: right; width: 10%; text-align: right; position: relative; margin-top: 8px;">
-			<button class="formgo" style="margin-top: 5px; margin-right: 0;">Save</button>
-			<a href="/index.php?view=sensors"><button class="formgo" style="margin-top: 5px; margin-right: 0;">Cancel</button></a>
-		</div>
-	</div>
+		if (isset($acctrole) && $acctrole <= 2): ?>
+		<h1>Create New Sensor</h1>
 
+		<div class="module-content" style="overflow: auto; min-width: 1000px;">
+			<div style="float: left;">
+				<table style="margin-top: 10px; border: 0;">
+				<tr><td style="background-color: transparent; border: 0; color: #444;">Name: <span style="color: red;">*</span></td><td style="background-color: transparent; border: 0; color: #444;">Timeout: <span style="color: red;">*</span></td></tr>
+				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgname" style="width: 400px;"></td><td style="background-color: transparent; border: 0; color: #444;"><input id="timeout" type="text" style="width: 30px;" value="3"><select id="tint" style="width: 100px; margin-left: 10px; height: 33px;"><option value="min">Minutes</option><option value="hour">Hours</option></select></td></tr>
+				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Description: <span style="color: red;">*</span></td></tr>
+				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgdesc" style="width: 400px;"></td></tr>
+				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Content Set: <span style="color: red;">*</span></td></tr>
+				<tr><td style="background-color: transparent; border: 0; color: #444;"><select id="contentset" name="contentset" style="font-size: 15px; height: 33px; width: 430px; margin-left: 2px; margin-right: 30px;">
+				<?php
+				while ($csrow = mysqli_fetch_assoc($csets)) {
+					print "<option value=\"" . $csrow["ID"] . "\">" . $csrow["NAME"] . "</option>\n";
+					}
+				?>
+				</select></td></tr>
+				</table>
+				<p style="margin-top: 30px; margin-left: 5px;">
+				<span style="color: red;"><sub>*</sub></span> <sub>Required Setting</sub>
+				</p>
+			</div>
+
+			<div style="float: right; text-align: right; position: absolute; margin-top: 8px; width: 97%;">
+				<button class="formgo" style="margin-top: 5px; margin-right: 0;">Save</button>
+				<a href="/index.php?view=sensors"><button class="formgo" style="margin-top: 5px; margin-right: 0;">Cancel</button></a>
+			</div>
+		</div>
+
+		<div class="module-content" style="overflow: auto; min-width: 1000px; margin-top: 15px;">
+
+		</div>
+
+		<?php else: ?>
+
+		<h1 style="color: red">Access Denied</h1>
+
+		<?php endif; ?>
 	<?php endif; ?>
 <?php endif; ?>

@@ -27,18 +27,23 @@ if (isset($_GET["err"])) {
 
 <body>
 
-<div style="width: 900px; margin-left: auto; margin-right: auto; margin-top: 12%;">
-	<div style="width: 450px; height: 500px; float: left; background-color: #555; text-align: center; box-shadow: 5px 5px 10px rgba(0,0,0,0.5);">
-		<img src="/images/logo-light.png" style="margin-top: 48%; margin-left: 20px;">
+<div style="width: 800px; margin-left: auto; margin-right: auto; margin-top: 12%;">
+	<div style="width: 400px; height: 420px; float: left; background-color: #222; text-align: center; box-shadow: 5px 5px 10px rgba(0,0,0,0.5);">
+		<img src="/images/logo-light.png" style="margin-top: 46%; margin-left: 15px; width: 250px;">
 	</div>
-	<div style="width: 450px; height: 500px; float: left; background-color: #222; text-align: center; box-shadow: 5px 5px 10px rgba(0,0,0,0.5);">
-		<div style="margin-top: 31%; margin-left: 20px;"><span id="message" style="color: red; opacity: <?php print "$showmsg"; ?>;"><?php print "$message"; ?></span></div>
+	<div style="width: 400px; height: 420px; float: left; background-color: #ccc; text-align: center; box-shadow: 5px 5px 10px rgba(0,0,0,0.5);">
+		<div style="margin-top: 22%; margin-left: 20px;"><span id="message" style="color: red; opacity: <?php print "$showmsg"; ?>;"><?php print "$message"; ?></span></div>
 		<form action="/index.php" method="post" id="loginform">
-			<input type="text" name="username" id="username" style="width: 200px; font-size: 16px; margin-top: 20px; margin-left: 20px;" placeholder="Username">
+			<div style="width: 275px; text-align: left; padding-left: 65px;">
+			<span style="color: #444; font-weight: bold; font-size: 15px;">Username:</span><br>
+			<input type="text" name="username" id="username" style="width: 250px; font-size: 16px; margin-top: 5px;">
+			</div>
+			<div style="width: 277px; text-align: left; margin-top: 20px; padding-left: 65px;">
+			<span style="color: #444; font-weight: bold; font-size: 15px;">Password:</span><br>
+			<input type="password" name="password" id="password" style="width: 250px; font-size: 16px; margin-top: 5px;">
 			<br>
-			<input type="password" name="password" id="password" style="width: 200px; font-size: 16px; margin-top: 15px; margin-left: 20px;" placeholder="Password">
-			<br>
-			<button type="submit" class="formgo" form="loginform" style="width: 90px; margin-top: 15px; margin-left: 35px;">Log In</button>
+			<button type="submit" class="formgo" form="loginform" style="margin-top: 20px; width: 100%; margin-left: 1px;">Sign In</button>
+			</div>
 		</form>
 	</div>
 </div>

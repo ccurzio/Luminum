@@ -8,7 +8,7 @@ $endtime = microtime(true);
 $duration = number_format((float)$endtime - $starttime, 2, '.', '');
 $usercount = mysqli_num_rows($usersquery);
 
-if ($acctrole > 1) {
+if ($acctrole > 2) {
 	print "<div class=\"content\">\n";
 	print "<h1 style=\"color: red\">Access Denied</h1>\n";
 	}
