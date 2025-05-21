@@ -69,8 +69,8 @@ startweb();
 setuplistener();
 
 Broker::debugout(1,"Server startup complete.");
-Broker::debugout(0,"- Luminum Server ID: $SID");
 Broker::debugout(0,"- Web Console: https://$SHOST");
+Broker::debugout(0,"- Luminum Server ID: $SID");
 Broker::debugout(0,"- Broker Log: $brokerlog");
 Broker::debugout(0,"- Listening on $LADDR:$LPORT");
 
@@ -410,15 +410,20 @@ sub lumyload {
 				$dname =~ s/\.lumy//;
 				my $elname = lc($dname);
 				my $elver;
+				my $elerr;
 				require("$brokerpath\/config/lumys_enabled/$lname");
 				if (exists &{"$dname\::checkfunc"}) {
-					if (&{\&{"$dname\::checkfunc"}}() == 1) {
+					my $lstat = &{\&{"$dname\::checkfunc"}}();
+					if ($lstat eq "OK") {
 						push(@lumys,$elname);
 						$elver = &{\&{"$dname\::getver"}}();
 						}
+					else {
+						$elerr = $lstat;
+						}
 					}
 				if (grep(/^$elname$/,@lumys) && $elver) { Broker::debugout(1,"- Lumy Loaded: $dname v$elver"); }
-				else { Broker::debugout(3,"- Unable to load \"$dname\" Lumy."); }
+				else { Broker::debugout(3,"- Failure loading \"$dname\" Lumy: $elerr"); }
 				}
 			}
 		}
@@ -564,7 +569,8 @@ sub parsedata {
 							}
 						else { Broker::debugout(2,"Invalid action specified for \"core\" Lumy in message from $EPADDR\."); }
 						}
-					elsif (grep(/^$lumy$/,@lumys)) {
+					elsif (grep(/^$lumy$/,@lumys) && $data) {
+						&{\&{"$lumy\::pass"}}($EPFPNT,$data);
 						}
 					else { Broker::debugout(2,"Invalid Lumy specified in message from $EPADDR\."); }
 					}
