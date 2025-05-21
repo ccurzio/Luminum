@@ -6,6 +6,11 @@ ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
+$instdir = exec("/usr/bin/grep instdir /opt/Luminum/LuminumServer/config/console.conf | /usr/bin/sed -e 's/^instdir.*\= //'");
+$dbuser = exec("/usr/bin/grep dbuser /opt/Luminum/LuminumServer/config/console.conf | /usr/bin/sed -e 's/^dbuser.*\= //'");
+$dbpass = exec("/usr/bin/grep dbpass /opt/Luminum/LuminumServer/config/console.conf | /usr/bin/sed -e 's/^dbpass.*\= //'");
+$db = new mysqli("localhost", $dbuser, $dbpass, '', 0, "/var/run/mysqld/mysqld.sock");
+
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 	if (isset($_GET['logout']) && $_GET['logout'] == "1" && isset($_SESSION['SID'])) {
 		mysqli_select_db($db, "AUTH") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
@@ -32,10 +37,6 @@ else {
 			$username = $_POST['username'];
 			$options = [ 'cost' => 13, ];
 			$passhash = password_hash($_POST['password'],PASSWORD_BCRYPT, $options);
-			$instdir = exec("/usr/bin/grep instdir /opt/Luminum/LuminumServer/config/console.conf | /usr/bin/sed -e 's/^instdir.*\= //'");
-			$dbuser = exec("/usr/bin/grep dbuser /opt/Luminum/LuminumServer/config/console.conf | /usr/bin/sed -e 's/^dbuser.*\= //'");
-			$dbpass = exec("/usr/bin/grep dbpass /opt/Luminum/LuminumServer/config/console.conf | /usr/bin/sed -e 's/^dbpass.*\= //'");
-			$db = new mysqli("localhost", $dbuser, $dbpass, '', 0, "/var/run/mysqld/mysqld.sock");
 			mysqli_select_db($db, "AUTH") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
 			$passquery = mysqli_query($db, "select FULLNAME,PASSWORD,ROLE from USERS where USERNAME = '$username' and ENABLED = '1'");
 			$storedhash = $passquery->fetch_assoc();

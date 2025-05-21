@@ -1,14 +1,24 @@
 <?php
-if (!isset($_SESSION)) {
-	session_start();
-	}
-date_default_timezone_set("America/New_York");
-
 $instdir = exec("/usr/bin/grep instdir /opt/Luminum/LuminumServer/config/console.conf | /usr/bin/sed -e 's/^instdir.*\= //'");
 $dbuser = exec("/usr/bin/grep dbuser /opt/Luminum/LuminumServer/config/console.conf | /usr/bin/sed -e 's/^dbuser.*\= //'");
 $dbpass = exec("/usr/bin/grep dbpass /opt/Luminum/LuminumServer/config/console.conf | /usr/bin/sed -e 's/^dbpass.*\= //'");
 $db = new mysqli("localhost", $dbuser, $dbpass, '', 0, "/var/run/mysqld/mysqld.sock");
 mysqli_select_db($db, "AUTH") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
+
+date_default_timezone_set("America/New_York");
+
+if (!isset($_SESSION)) { session_start(); }
+
+if (!isset($_SESSION['SID'])) {
+	print "<html lang=\"en\">\n\n";
+	print "<head>\n";
+	print "<meta http-equiv=\"refresh\" content=\"0; url=/index.php\">\n";
+	print "</head>\n\n";
+	print "<body>\n<p>\nRedirecting...\n</p>\n</body>";
+	print "</html>";
+	exit;
+	}
+
 $userquery = mysqli_query($db, "select ROLE from USERS where ID = (select ID from SESSION where SID = '" . $_SESSION["SID"] . "')");
 $userinfo = $userquery->fetch_assoc();
 
