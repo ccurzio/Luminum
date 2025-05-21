@@ -273,6 +273,18 @@ body h1 {
 
 .dropdown:hover .dropdown-content { display: block; }
 
+.refresh {
+	animation: rotate-animation 2s infinite linear;
+	opacity: 0.5;
+	}
+
+.wait { cursor: progress; }
+
+@keyframes rotate-animation {
+	0% { transform: rotate(0deg); }
+	50% { transform: rotate(180deg); }
+	100% { transform: rotate(360deg); }
+	}
 
 /* MenuBar Icons */
 .icon {

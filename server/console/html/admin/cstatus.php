@@ -18,8 +18,8 @@ $wincount = 0;
 	<div class="module-content" style="display: flex; justify-content: space-between; align-items: flex-start; width: 70%; float: left; margin-right: 0px;">
 		<div style="display: block; width: 100%; text-align: right;">
 			<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled" id="deploy">Deploy Action</button> <button class="formgo" id="connect" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Connect</button> <button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled" id="getinfo">Get Info</button>
-			<table style="margin-top: 10px; text-align: left;">
-			<tr><td colspan="8"><div style="position: absolute; padding-top: 5px; padding-left: 5px;">??? of <?php print "$clientscount"; ?> items <img src="icons/refresh.png" style="cursor: pointer; margin-left: 2px; width: 20px; height: 20px; vertical-align: text-bottom;"></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($clientscount == 0) { print "disabled=\"disabled\""; } ?>></div></td></tr>
+			<table id="cstable" style="margin-top: 10px; text-align: left;">
+			<tr><td colspan="8"><div style="position: absolute; padding-top: 5px; padding-left: 5px;">??? of <?php print "$clientscount"; ?> items <img id="refresh" src="icons/refresh.png" style="cursor: pointer; margin-left: 2px; width: 20px; height: 20px; vertical-align: text-bottom;" onclick="reloadTable()"></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($clientscount == 0) { print "disabled=\"disabled\""; } ?>></div></td></tr>
 			<tr><td style="width: 15px;">
 			<?php 
 			if ($clientscount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
@@ -154,5 +154,22 @@ function rowHighlight(idnum) {
 	document.getElementById(idnum + "G").style.backgroundColor = bgcolor;
 	document.getElementById(idnum + "H").style.backgroundColor = bgcolor;
 	}
+
+function wait(ms){
+	var start = new Date().getTime();
+	var end = start;
+	while(end < start + ms) { end = new Date().getTime(); }
+	}
+
+function reloadTable() {
+	var refreshButton = document.getElementById("refresh");
+	if (refreshButton.className != "refresh") {
+		refreshButton.className = "refresh";
+		refreshButton.disabled = "disabled";
+		refreshButton.style.cursor = "progress";
+		document.getElementById('cstable').style.cursor = "progress";
+		}
+	}
+
 </script>
 

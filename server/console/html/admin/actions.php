@@ -15,8 +15,8 @@ $actioncount = 0;
 			<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Delete Selected</button>
 			<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Get Info</button>
 		</div>
-		<table style="margin-top: 10px;">
-		<tr><td colspan="9"><div style="position: absolute; padding-top: 5px; padding-left: 5px;">0 of 0 items <img src="icons/refresh.png" style="cursor: pointer; margin-left: 2px; width: 20px; height: 20px; vertical-align: text-bottom;"></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($actioncount == 0) { print "disabled=\"disabled\""; } ?>></div></td></tr>
+		<table id="satable" style="margin-top: 10px;">
+		<tr><td colspan="9"><div style="position: absolute; padding-top: 5px; padding-left: 5px;">0 of 0 items <img id="refresh" src="icons/refresh.png" style="cursor: pointer; margin-left: 2px; width: 20px; height: 20px; vertical-align: text-bottom;" onclick="reloadTable()"></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($actioncount == 0) { print "disabled=\"disabled\""; } ?>></div></td></tr>
 		<tr><td style="width: 15px;">
 		<?php
 		if ($actioncount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
@@ -27,3 +27,15 @@ $actioncount = 0;
 		<tr style="height: 35px;"><td colspan="10"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;">Query Completed in <?php print $duration; ?> Seconds</div></td></tr>
 		</table>
 	</div>
+
+<script>
+function reloadTable() {
+	var refreshButton = document.getElementById("refresh");
+	if (refreshButton.className != "refresh") {
+		refreshButton.className = "refresh";
+		refreshButton.disabled = "disabled";
+		refreshButton.style.cursor = "progress";
+		document.getElementById('satable').style.cursor = "progress";
+		}
+	}
+</script>
