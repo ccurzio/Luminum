@@ -43,53 +43,48 @@ $acctrole = $userinfo["ROLE"];
 	<div class="logo">
 		<img src="images/logo-light.png" alt="Luminum" class="logo-img">
 	</div>
-	<div class="user-menu">
-		<button class="user-button"><?php print $_SESSION["NAME"]; ?> <span style="margin-left: 2px; font-size: 18px;">▾</span></button>
-		<div class="user-dropdown">
-			<a href="/user.php">Account</a>
-			<a href="/user.php?view=prefs">Preferences</a>
-			<a href="/index.php?logout=1">Logout</a>
-		</div>
-	</div>
-</div>
+		<button class="menu-toggle" onclick="toggleMenu()">☰</button>
+		<div style="position: absolute; margin-left: 175px;">
+			<div class="dropdown">
+				<a href="/index.php">
+					<button class="dropbtn" style="cursor: pointer;">
+						<img src="icons/home.png" class="icon">
+						Home
+					</button>
+				</a>
+			</div>
+			<div class="dropdown">
+				<a href="/investigate.php">
+					<button class="dropbtn" style="cursor: pointer;">
+						<img src="icons/investigate.png" class="icon">
+						Investigate
+					</button>
+				</a>
+			</div>
 
-<nav class="navbar">
-	<button class="menu-toggle" onclick="toggleMenu()">☰</button>
-	<div id="navbar-links" class="nav-links">
-		<div class="dropdown">
-			<a href="/index.php">
-				<button class="dropbtn" style="cursor: pointer;">
-					<img src="icons/home.png" class="icon">
-					Home
-				</button>
-			</a>
-		</div>
-		<div class="dropdown">
-			<a href="/investigate.php">
-				<button class="dropbtn" style="cursor: pointer;">
-					<img src="icons/investigate.png" class="icon">
-					Investigate
-				</button>
-			</a>
-		</div>
-
-		<div class="dropdown">
-			<button class="dropbtn">
-				<img src="icons/modules.png" class="icon">
-				Modules
+			<div class="dropdown">
+				<button class="dropbtn">
+					<img src="icons/modules.png" class="icon">
+					Modules
 			</button>
 			<div class="dropdown-content">
 				<?php
 				if (isset($acctrole) && $acctrole == "1") {
 					print "<a href=\"/modules.php\">Management</a>\n";
-					print "<div class=\"dropdown-divider\" style=\"width: 180px;\"></div>\n";
+					print "<div class=\"dropdown-divider\" style=\"width: 200px;\"></div>\n";
 					}
 				?>
 				<a href="/modules.php?view=delivery">Delivery</a>
-				<a href="/modules.php?view=discovery">Discovery</a>
-				<a href="/modules.php?view=integrity">Integrity</a>
-				<a href="/modules.php?view=inventory">Inventory</a>
-				<a href="/modules.php?view=policy">Policy</a>
+				<?php
+				mysqli_select_db($db, "SYSTEM") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
+				$lumyquery = mysqli_query($db, "select CVAL from CONFIG where CKEY = 'ENLUMYS'");
+				$lumyinfo = $lumyquery->fetch_assoc();
+				$lumys = explode(',', $lumyinfo["CVAL"]);
+
+				foreach ($lumys as $lumy) {
+					print "<a href=\"/modules.php?view=$lumy\">" . ucfirst($lumy) . "</a>\n";
+					}
+				?>
 			</div>
 		</div>
 
@@ -110,7 +105,8 @@ $acctrole = $userinfo["ROLE"];
 				</div>
 				<a href="/index.php?view=actions">Scheduled Actions</a>
 				<a href="/index.php?view=actionhistory">Action History</a>
-				<a href="/index.php?view=groups">Computer Groups</a>
+				<a href="/index.php?view=cgroups">Computer Groups</a>
+				<a href="/index.php?view=ugroups">User Groups</a>
 			</div>
 		</div>
 
@@ -142,7 +138,8 @@ $acctrole = $userinfo["ROLE"];
 					print "<div class=\"submenu\">\n";
 					print "<a href=\"#\" class=\"submenu-link\" style=\"cursor: default;\">Maintenance <span style=\"margin-left: 70px;\" class=\"arrow\">▸</span></a>\n";
 					print "<div class=\"submenu-content\">\n";
-					print "<a href=\"/maintenance.php?view=updates\">System Updates</a>\n";
+					print "<a href=\"/maintenance.php?view=diagnostics\">Diagnostics</a>\n";
+					print "<a href=\"/maintenance.php?view=updates\">System Update</a>\n";
 					print "<a href=\"/maintenance.php?view=downtime\">Outage Management</a>\n";
 					print "<a href=\"/maintenance.php?view=services\">Back-End Services</a>\n";
 					print "<a href=\"/maintenance.php?view=os\">Operating System</a>\n";
@@ -153,9 +150,15 @@ $acctrole = $userinfo["ROLE"];
 				?>
 			</div>
 		</div>
+	<div class="user-menu" style="padding-top: 10px; margin-left: 680px;">
+		<button class="user-button"><?php print $_SESSION["NAME"]; ?> <span style="margin-left: 2px; font-size: 18px;">▾</span></button>
+		<div class="user-dropdown">
+			<a href="/user.php">Account</a>
+			<a href="/user.php?view=prefs">Preferences</a>
+			<a href="/index.php?logout=1">Logout</a>
+		</div>
 	</div>
-	<div class="nav-text-right">
-		Console v0.0.1
 	</div>
-</nav>
+</div>
+
 
