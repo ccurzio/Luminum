@@ -38,11 +38,11 @@ my $sslprvkey;
 my $sslpubkey;
 my $privatekey;
 my $sock;
+my @lumys;
 
 our $dbuser;
 our $dbpass;
 our %attr;
-our @lumys;
 
 my $listen = 1;
 my $client_data = "";
@@ -393,6 +393,7 @@ sub setconfig {
 # Load Server Modules
 #
 sub lumyload {
+	@lumys = ();
 	if (-e "$brokerpath\/config/lumys_enabled" && -d "$brokerpath\/config/lumys_enabled") {
 		opendir(my $dir, "$brokerpath\/config/lumys_enabled");
 		my @lumylist = readdir $dir;
@@ -405,9 +406,11 @@ sub lumyload {
 				$dname =~ s/\.lumy//;
 				my $elname = lc($dname);
 				require("$brokerpath\/config/lumys_enabled/$lname");
+				if (exists &{"$dname\::checkfunc"}) {
+					if (&{\&{"$dname\::checkfunc"}}() == 1) { push(@lumys,$elname); }
+					}
 				if (grep(/^$elname$/,@lumys)) { Broker::debugout(1,"- Loaded \"$dname\" Lumy."); }
-				else { Broker::debugout(3,"Unable to load \"$dname\" Lumy."); }
-				if (exists &{"$dname\::pass"}) { &{\&{"$dname\::pass"}}(); }
+				else { Broker::debugout(3,"- Unable to load \"$dname\" Lumy."); }
 				}
 			}
 		}
@@ -733,7 +736,7 @@ sub catchhup {
 		undef($sslcert);
 		undef($sslprvkey);
 		undef($sslpubkey);
-		@lumys = ();
+		#@lumys = ();
 		readconfig();
 		stoplistener();
 		sleep 1;
