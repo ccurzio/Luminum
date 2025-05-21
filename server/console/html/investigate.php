@@ -16,9 +16,11 @@
 <?php if (!isset($_GET['step']) || $_GET['step'] == "1"): ?>
 
 <?php endif; ?>
-
 		<div style="margin-top: 10px; text-align: right; width: 102%; margin-left: 0;">
-			<button class="formgo" style="width: 75px;">Next</button>
+			<?php
+			if ($_GET['step'] == "4") { "<button class=\"formgo\" style=\"width: 90px;\">Start</button>\n"; }
+			else { print "<button class=\"formgo\" style=\"width: 90px;\">Next</button>\n"; }
+			?>
 		</div>
 	</div>
 
