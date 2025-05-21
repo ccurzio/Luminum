@@ -23,7 +23,7 @@ $actioncount = 0;
 		if ($actioncount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
 		else { print "<input type=\"checkbox\">"; }
 		?>
-		</td><td style="width: 30px;">Status</td><td style="width: 300px;">Name</td><td style="width: 75px;">Type</td><td style="width: 100px;">Issuer</td><td style="width: 175px;">Start Date</td><td style="width: 175px;">End Date</td><td style="width: 175px;">Last Modification</td><td style="width: 100px;">Modified By</tr>
+		</td><td style="width: 30px; text-align: center;">Enabled</td><td style="width: 300px;">Name</td><td style="width: 75px;">Type</td><td style="width: 100px;">Issuer</td><td style="width: 175px;">Start Date</td><td style="width: 175px;">End Date</td><td style="width: 175px;">Last Modification</td><td style="width: 100px;">Modified By</tr>
 		<tr><td colspan="9" style="text-align: center; background-color: #494a69; font-weight: normal; font-style: italic;">No Results</td></tr>
 		<tr style="height: 35px;"><td colspan="10"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;">Query Completed in <?php print $duration; ?> Seconds</div></td></tr>
 		</table>

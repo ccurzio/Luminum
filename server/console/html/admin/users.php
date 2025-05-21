@@ -48,7 +48,6 @@ else {
 		<tr style="height: 35px;"><td colspan="9"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; font-weight: normal; padding-right: 5px; padding-bottom: 2px;">Query Completed in <?php print $duration; ?> Seconds</div></td></tr>
 		</table>
 	</div>
-</div>
 
 <script>
 function rowHighlight(idnum) {

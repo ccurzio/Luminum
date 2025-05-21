@@ -41,14 +41,11 @@ $acctrole = $userinfo["ROLE"];
 	</div>
 </div>
 
-<div class="header">
-	<div class="logo">
-		<img src="images/logo-light.png" alt="Luminum" class="logo-img">
-	</div>
-		<button class="menu-toggle" onclick="toggleMenu()">☰</button>
-		<div style="position: absolute; margin-left: 175px;">
-			<div class="dropdown">
-				<a href="/index.php">
+<div class="header" style="justify-content: space-between;">
+	<img src="images/logo-light.png" alt="Luminum" class="logo-img">
+	<div style="width: 1200px;">
+		<div class="dropdown">
+			<a href="/index.php">
 					<button class="dropbtn" style="cursor: pointer;">
 						<img src="icons/home.png" class="icon">
 						Home
@@ -151,14 +148,14 @@ $acctrole = $userinfo["ROLE"];
 				?>
 			</div>
 		</div>
-	<div class="user-menu" style="padding-top: 10px; margin-left: 680px;">
-		<button class="user-button"><?php print $_SESSION["NAME"]; ?> <span style="margin-left: 2px; font-size: 18px;">▾</span></button>
+	</div>
+	<div class="user-menu" style="height: 100%;">
+		<button class="user-button" style="width: 175px;"><?php print $_SESSION["NAME"]; ?> <span style="margin-left: 2px; font-size: 18px;">▾</span></button>
 		<div class="user-dropdown">
 			<a href="/user.php">Account</a>
 			<a href="/user.php?view=prefs">Preferences</a>
 			<a href="/index.php?logout=1">Logout</a>
 		</div>
-	</div>
 	</div>
 </div>
 
