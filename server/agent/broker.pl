@@ -29,20 +29,21 @@ my $debug;
 my $suerror;
 my $logdir;
 my $brokerlog;
-my $dbuser;
-my $dbpass;
-my %attr;
 my $SID;
 my $SHOST;
 my $LADDR;
 my $LPORT;
 my $SKEY;
-my @lumys;
 my $sslcert;
 my $sslprvkey;
 my $sslpubkey;
 my $privatekey;
 my $sock;
+
+our $dbuser;
+our $dbpass;
+our %attr;
+our @lumys;
 
 my $listen = 1;
 my $client_data = "";
@@ -397,16 +398,17 @@ sub lumyload {
 		opendir(my $dir, "$brokerpath\/config/lumys_enabled");
 		my @lumylist = readdir $dir;
 		close($dir);
-		@lumylist = grep ! /^\.$/, @lumylist;
-		@lumylist = grep ! /^\.\.$/, @lumylist;
+		@lumylist = grep ! /^\..*$/, @lumylist;
 		if (scalar(@lumylist) > 0) {
 			debugout(0,"Initializing Lumys...");
 			for my $lname (@lumylist) {
 				my $dname = $lname;
 				$dname =~ s/\.lumy//;
+				my $elname = lc($dname);
 				require("$brokerpath\/config/lumys_enabled/$lname");
-				push(@lumys,lc($dname));
-				debugout(1,"- Loaded \"$dname\" Lumy.");
+				if (grep(/^$elname$/,@lumys)) { debugout(1,"- Loaded \"$dname\" Lumy."); }
+				else { debugout(3,"Unable to load \"$dname\" Lumy."); }
+				if (exists &{"$dname\::pass"}) { &{\&{"$dname\::pass"}}(); }
 				}
 			}
 		}
@@ -775,9 +777,11 @@ sub catchhup {
 		undef($sslcert);
 		undef($sslprvkey);
 		undef($sslpubkey);
+		@lumys = ();
 		readconfig();
 		stoplistener();
 		sleep 1;
+		lumyload();
 		setuplistener();
 		startlistener();
 		}
