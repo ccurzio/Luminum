@@ -93,7 +93,7 @@ $acctrole = $userinfo["ROLE"];
 			</button>
 			<div class="dropdown-content">
 				<div class="submenu">
-					<a href="#" class="submenu-link" style="cursor: default;">Content <span style="margin-left: 100px;" class="arrow">▸</span></a>
+					<a href="#" class="submenu-link" style="cursor: default;">Content <span class="arrow" style="margin-left: 65%;">▸</span></a>
 					<div class="submenu-content">
 						<a href="/index.php?view=packages">Packages</a>
 						<a href="/index.php?view=sensors">Sensors</a>
@@ -120,8 +120,8 @@ $acctrole = $userinfo["ROLE"];
 					}
 
 				if (isset($acctrole) && $acctrole == "1") {
-					print "<div class=\"submenu\">\n";
-					print "<a href=\"#\" class=\"submenu-link\" style=\"cursor: default;\">Configuration <span style=\"margin-left: 70px;\" class=\"arrow\">▸</span></a>\n";
+					print "<div class=\"submenu\" style=\"justify-content: space-between;\">\n";
+					print "<a href=\"#\" class=\"submenu-link\" style=\"cursor: default;\">Configuration<span class=\"arrow\" style=\"margin-left: 48%;\">▸</span></a>\n";
 					print "<div class=\"submenu-content\">\n";
 					print "<a href=\"/config.php?view=options\">Server Options</a>\n";
 					print "<a href=\"/config.php?view=network\">Network</a>\n";
@@ -130,7 +130,7 @@ $acctrole = $userinfo["ROLE"];
 					print "</div>\n";
 					print "</div>\n";
 					print "<div class=\"submenu\">\n";
-					print "<a href=\"#\" class=\"submenu-link\" style=\"cursor: default;\">Maintenance <span style=\"margin-left: 70px;\" class=\"arrow\">▸</span></a>\n";
+					print "<a href=\"#\" class=\"submenu-link\" style=\"cursor: default;\">Maintenance <span class=\"arrow\" style=\"margin-left: 48%;\">▸</span></a>\n";
 					print "<div class=\"submenu-content\">\n";
 					print "<a href=\"/maintenance.php?view=diagnostics\">Diagnostics</a>\n";
 					print "<a href=\"/maintenance.php?view=updates\">System Update</a>\n";
