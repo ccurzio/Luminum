@@ -87,7 +87,6 @@ if (!$dbuser || $dbuser eq "") { die "FATAL: Database user not specified in conf
 debugout(0,"Server Startup");
 startserver();
 startweb();
-dereg("c26346ed3e2e4964ac45c22afa7ea342");
 setuplistener();
 
 debugout(1,"Server startup complete.");
@@ -430,6 +429,7 @@ sub parsedata {
 	my $EPNAME;
 	my $EPFPNT;
 	my $action;
+	my $lumy;
 	my $data;
 	my $osplat;
 	my $osrel;
@@ -456,6 +456,9 @@ sub parsedata {
 			if ($message->{$mkey}{'name'} =~ /^[A-Za-z0-9_\.]+$/) { $EPNAME = $message->{$mkey}{'name'}; }
 			if ($message->{$mkey}{'fingerprint'} =~ /^[a-f0-9]+$/) { $EPFPNT = $message->{$mkey}{'fingerprint'}; }
 			}
+		elsif ($mkey eq "lumy") {
+			if ($message->{$mkey} =~ /^[A-Za-z]+$/) { $lumy = $message->{$mkey}; }
+			}
 		elsif ($mkey eq "action") {
 			if ($message->{$mkey} =~ /^[A-Za-z]+$/) { $action = $message->{$mkey}; }
 			}
@@ -469,7 +472,7 @@ sub parsedata {
 
 	if ($EPFPNT && $EPFPNT ne "") {
 		if ($EPID == 0) {
-			if ($action eq "register") {
+			if ($action eq "register" && !$lumy) {
 				my $svrkey;
 				if ($message->{'info'}{'serverkey'} =~ /^[A-Za-z0-9]+$/) { $svrkey = $message->{'info'}{'serverkey'}; }
 				if ($message->{'info'}{'osplat'} =~ /^[A-Za-z]+$/) { $osplat = $message->{'info'}{'osplat'}; }
@@ -491,33 +494,41 @@ sub parsedata {
 		else {
 			my $fpval = iafis($EPID,$EPFPNT);
 			if ($fpval == 1) {
-				if ($action eq "ping") {
-					if ($message->{'info'}{'osplat'} && $message->{'info'}{'osrel'} && $message->{'info'}{'clientver'}) {
-						my $osplat;
-						my $osrel;
-						my $clientver;
-						if ($message->{'info'}{'osplat'} =~ /^[A-Za-z]+$/) { $osplat = $message->{'info'}{'osplat'}; }
-						if ($message->{'info'}{'osrel'} =~ /^[A-Za-z0-9\s\.]+$/) { $osrel = $message->{'info'}{'osrel'}; }
-						if ($message->{'info'}{'clientver'} =~ /^[0-9][0-9]?\.[0-9][0-9]?\.[0-9][0-9]?[ab]?$/) { $clientver = $message->{'info'}{'clientver'}; }
-						else { $clientver = "Unknown"; }
-
-						if ($EPID && $EPFPNT && $EPADDR && $EPNAME && $osplat && $osrel && $clientver) {
-							checkin($EPID,$EPFPNT,$EPADDR,$EPNAME,$osplat,$osrel,$clientver);
-							}
-						else { debugout(2,"Malformed data in check-in from $EPADDR\."); }
+				if (!$lumy || $lumy eq "") {
+					if ($action eq "register") { debugout(2,"Attempted registration from client with nonzero ID on $EPADDR\."); }
+					elsif ($action eq "unregister") {
+						debugout(0,"Received deregistration request from client ID $EPID\.");
+						dereg($EPFPNT);
 						}
-					else { debugout(2,"Attempted check-in with missing data from $EPADDR\."); }
+					elsif ($action eq "ping") {
+						if ($message->{'info'}{'osplat'} && $message->{'info'}{'osrel'} && $message->{'info'}{'clientver'}) {
+							my $osplat;
+							my $osrel;
+							my $clientver;
+							if ($message->{'info'}{'osplat'} =~ /^[A-Za-z]+$/) { $osplat = $message->{'info'}{'osplat'}; }
+							if ($message->{'info'}{'osrel'} =~ /^[A-Za-z0-9\s\.]+$/) { $osrel = $message->{'info'}{'osrel'}; }
+							if ($message->{'info'}{'clientver'} =~ /^[0-9][0-9]?\.[0-9][0-9]?\.[0-9][0-9]?[ab]?$/) { $clientver = $message->{'info'}{'clientver'}; }
+							else { $clientver = "Unknown"; }
+
+							if ($EPID && $EPFPNT && $EPADDR && $EPNAME && $osplat && $osrel && $clientver) {
+								checkin($EPID,$EPFPNT,$EPADDR,$EPNAME,$osplat,$osrel,$clientver);
+								}
+							else { debugout(2,"Malformed data in check-in from $EPADDR\."); }
+							}
+						else { debugout(2,"Attempted check-in with missing data from $EPADDR\."); }
+						}
+					else { debugout(2,"Malformed message received from $EPADDR\."); }
 					}
-				elsif ($action eq "register") { debugout(2,"Attempted registration from client with nonzero ID on $EPADDR\."); }
-				elsif ($action eq "unregister") {
-					debugout(0,"Received deregistration request from client ID $EPID\.");
-					dereg($EPFPNT);
+				else {
+					if ($lumy eq "core") {
+						if ($action eq "answer") {
+							}
+						elsif ($action eq "report") {
+							}
+						else { debugout(2,"Invalid action specified for \"core\" Lumy in message from $EPADDR\."); }
+						}
+					else { debugout(2,"Invalid Lumy specified in message from $EPADDR\."); }
 					}
-				elsif ($action eq "answer") {
-					}
-				elsif ($action eq "report") {
-					}
-				else { debugout(2,"Malformed message received from $EPADDR"); }
 				}
 			elsif ($fpval == 2) {
 				debugout(2,"Fingerprint validation failed for client on $EPADDR\: Mismatch");
