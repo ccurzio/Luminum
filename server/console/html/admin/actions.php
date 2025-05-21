@@ -10,9 +10,8 @@ $actioncount = 0;
 	<h1>Scheduled Actions</h1>
 	<div class="module-content">
 		<div style="display: block; width: 100%; text-align: right;">
-			<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Disable</button>
-			<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Enable</button>
 			<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Reissue</button>
+			<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Modify Selected</button>
 			<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Delete Selected</button>
 			<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Get Info</button>
 		</div>
