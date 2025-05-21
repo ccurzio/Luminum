@@ -17,7 +17,7 @@ $wincount = 0;
 
 	<div class="module-content" style="display: flex; justify-content: space-between; align-items: flex-start; width: 70%; float: left; margin-right: 0px;">
 		<div style="display: block; width: 100%; text-align: right;">
-			<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Deploy Action</button> <button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Connect</button> <button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Get Info</button>
+			<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled" id="deploy">Deploy Action</button> <button class="formgo" id="connect" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Connect</button> <button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled" id="getinfo">Get Info</button>
 			<table style="margin-top: 10px; text-align: left;">
 			<tr><td colspan="8"><div style="position: absolute; padding-top: 5px; padding-left: 5px;">??? of <?php print "$clientscount"; ?> items <img src="icons/refresh.png" style="cursor: pointer; margin-left: 2px; width: 20px; height: 20px; vertical-align: text-bottom;"></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;"></div></td></tr>
 			<tr><td style="width: 15px;">
@@ -35,7 +35,10 @@ $wincount = 0;
 					if ($row["OSPLATFORM"] == "Linux") { $lincount++; }
 					else if ($row["OSPLATFORM"] == "macOS") { $maccount++; }
 					else if ($row["OSPLATFORM"] == "Windows") { $wincount++; }
-					print "<tr><td id=\"" . $row["ID"] . "A\" style=\"width: 15px; background-color: #494a69;\"><input id=\"ID" . $row["ID"] . "\" type=\"checkbox\" onclick=\"rowHighlight(" . $row["ID"] . ")\"></td><td id=\"" . $row["ID"] . "B\" style=\"width: 50px; background-color: #494a69; font-weight: normal;\">" . $row["HOSTNAME"] . "</td><td id=\"" . $row["ID"] . "C\" style=\"width: 75px; background-color: #494a69; font-weight: normal;\">" . $row["IPV4"] . "</td><td id=\"" . $row["ID"] . "D\" style=\"width: 120px; background-color: #494a69; font-weight: normal;\"><img src=\"images/" . $row["OSPLATFORM"] . ".png\" style=\"width: 24px; height: 24px;\"></td><td id=\"" . $row["ID"] . "E\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["OSRELEASE"] . "</td><td id=\"" . $row["ID"] . "F\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $row["CLIENTVER"] . "</td>" . "<td id=\"" . $row["ID"] . "G\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $row["CSTATE"] . "</td><td id=\"" . $row["ID"] . "H\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["LASTSEEN"] . "</td></tr>\n";
+					if ($row["CSTATE"] == "OK") { $staticon = "sysgreen.png"; }
+					else if ($row["CSTATE"] == "WARN") { $staticon = "sysyellow.png"; }
+					else if ($row["CSTATE"] == "CRIT") { $staticon = "sysred.png"; }
+					print "<tr><td id=\"" . $row["ID"] . "A\" style=\"width: 15px; background-color: #494a69;\"><input class=\"client\" id=\"ID" . $row["ID"] . "\" type=\"checkbox\" onclick=\"rowHighlight(" . $row["ID"] . ")\"></td><td id=\"" . $row["ID"] . "B\" style=\"width: 50px; background-color: #494a69; font-weight: normal;\">" . $row["HOSTNAME"] . "</td><td id=\"" . $row["ID"] . "C\" style=\"width: 75px; background-color: #494a69; font-weight: normal;\">" . $row["IPV4"] . "</td><td id=\"" . $row["ID"] . "D\" style=\"width: 24px; background-color: #494a69; font-weight: normal; text-align: center;\"><img src=\"images/" . strtolower($row["OSPLATFORM"]) . ".png\" style=\"width: 24px; height: 24px; margin-top: 2px;\"></td><td id=\"" . $row["ID"] . "E\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["OSRELEASE"] . "</td><td id=\"" . $row["ID"] . "F\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $row["CLIENTVER"] . "</td>" . "<td id=\"" . $row["ID"] . "G\" style=\"width: 24px; background-color: #494a69; font-weight: normal; text-align: center; padding-top: 7px;\"><img src=\"/icons/" . $staticon . "\" alt=\"" . $row["CSTATE"] . "\"></td><td id=\"" . $row["ID"] . "H\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["LASTSEEN"] . "</td></tr>\n";
 					}
 				}
 			?>
@@ -45,7 +48,7 @@ $wincount = 0;
 
 	<div class="module-content" style="width: 21%; float: right; font-size: 13px;">
 	<p>
-		<b><input type="checkbox" checked> Show systems that have checked in within:</b><br>
+		<b><input type="checkbox"> Show systems that have checked in within:</b><br>
 		<input type="text" style="font-size: 15px; padding: 5px; margin-top: 3px; width: 40px;" value="1">
 		<select name="filterint" id="filterint" style="font-size: 15px; height: 30px; margin-left: 2px;">
 			 <option value="reg">Registration Interval</option>
@@ -62,10 +65,10 @@ $wincount = 0;
 	<span style="font-size: 15px; font-weight: bold;">Filter by Operating System:</span>
 	</p>
 	<table style="margin-bottom: 20px;">
-	<tr><td style="width: 15px;"></td><td>Platform</td><td>Percentage</td><td>Count</td></tr>
-	<tr><td style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filterlinux"></td><td style="background-color: #494a69;">Linux</td><td style="background-color: #494a69; text-align: center;">0%</td><td style="background-color: #494a69;"><?php print "$lincount"; ?></td></tr>
-	<tr><td style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filtermac"></td><td style="background-color: #494a69;">macOS</td><td style="background-color: #494a69; text-align: center;">0%</td><td style="background-color: #494a69;"><?php print "$maccount"; ?></td></tr>
-	<tr><td style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filterwin"></td><td style="background-color: #494a69;">Windows</td><td style="background-color: #494a69; text-align: center;">0%</td><td style="background-color: #494a69;"><?php print "$wincount"; ?></td></tr>
+	<tr><td style="width: 15px;"></td><td>Platform</td><td style="text-align: center;">Percentage</td><td style="text-align: center;">Count</td></tr>
+	<tr><td style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filterlinux"></td><td style="background-color: #494a69;">Linux</td><td style="background-color: #494a69; text-align: center;"><?php $pct = ($lincount / $clientscount) * 100; print "$pct" ?>%</td><td style="background-color: #494a69; text-align: center;"><?php print "$lincount"; ?></td></tr>
+	<tr><td style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filtermac"></td><td style="background-color: #494a69;">macOS</td><td style="background-color: #494a69; text-align: center;"><?php $pct = ($maccount / $clientscount) * 100; print "$pct" ?>%</td><td style="background-color: #494a69; text-align: center;"><?php print "$maccount"; ?></td></tr>
+	<tr><td style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filterwin"></td><td style="background-color: #494a69;">Windows</td><td style="background-color: #494a69; text-align: center;"><?php $pct = ($wincount / $clientscount) * 100; print "$pct" ?>%</td><td style="background-color: #494a69; text-align: center;"><?php print "$wincount"; ?></td></tr>
 	</table>
 
 	<span style="font-size: 15px; font-weight: bold;">Filter by Client Version:</span>
@@ -78,7 +81,8 @@ $wincount = 0;
 <script>
 function rowHighlight(idnum) {
 	var checkBox = document.getElementById("ID" + idnum);
-	const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+	//const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+	const checkboxes = document.querySelectorAll('input[class="client"]');
 	var checkTrigger = 0;
 
 	checkboxes.forEach(checkbox => {
@@ -87,20 +91,23 @@ function rowHighlight(idnum) {
 
 	if (checkBox.checked == true) {
 		var bgcolor = "#686993";
-		var buttontoggle = false;
+		buttontoggle = false;
 		}
 	else {
 		var bgcolor = "#494a69";
-		if (checkTrigger == 0) { var buttontoggle = "disabled"; }
+		buttontoggle = true;
 		}
 
-	document.getElementById("delete").disabled = buttontoggle;
+        document.getElementById("connect").disabled = buttontoggle;
+	document.getElementById("getinfo").disabled = buttontoggle;
+	document.getElementById("deploy").disabled = buttontoggle;
+
 	if (checkTrigger > 1) {
+		document.getElementById("connect").disabled = "disabled";
 		document.getElementById("getinfo").disabled = "disabled";
+		document.getElementById("deploy").disabled = false;
 		}
-	else {
-		document.getElementById("getinfo").disabled = buttontoggle;
-		}
+
 	document.getElementById(idnum + "A").style.backgroundColor = bgcolor;
 	document.getElementById(idnum + "B").style.backgroundColor = bgcolor;
 	document.getElementById(idnum + "C").style.backgroundColor = bgcolor;
@@ -109,7 +116,6 @@ function rowHighlight(idnum) {
 	document.getElementById(idnum + "F").style.backgroundColor = bgcolor;
 	document.getElementById(idnum + "G").style.backgroundColor = bgcolor;
 	document.getElementById(idnum + "H").style.backgroundColor = bgcolor;
-	document.getElementById(idnum + "I").style.backgroundColor = bgcolor;
 	}
 </script>
 
