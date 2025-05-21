@@ -64,34 +64,64 @@ $sensorcount = mysqli_num_rows($sensorquery);
 
 		<div class="module-content" style="overflow: auto; min-width: 1000px;">
 			<div style="float: left;">
-				<table style="margin-top: 10px; border: 0;">
+				<table style="margin-top: 10px; margin-bottom: 20px; border: 0;">
 				<tr><td style="background-color: transparent; border: 0; color: #444;">Name: <span style="color: red;">*</span></td><td style="background-color: transparent; border: 0; color: #444;">Timeout: <span style="color: red;">*</span></td></tr>
 				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgname" style="width: 400px;"></td><td style="background-color: transparent; border: 0; color: #444;"><input id="timeout" type="text" style="width: 30px;" value="30"><select id="tint" style="width: 100px; margin-left: 10px; height: 33px;"><option value="sec">Seconds</option><option value="min">Minutes</option></select></td></tr>
-				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Description: <span style="color: red;">*</span></td></tr>
-				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgdesc" style="width: 400px;"></td></tr>
-				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Content Set: <span style="color: red;">*</span></td></tr>
+				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Description: <span style="color: red;">*</span></td><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Result Type:</td></tr>
+				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgdesc" style="width: 400px;"></td><td style="background-color: transparent; border: 0; color: #444;"><select id="rtype" style="font-size: 15px; height: 33px; width: 300px; margin-left: 2px; margin-right: 30px;"><option value="text">Text</option><option value="number">Number</option><option value="ipaddress">IP Address</option><option value="datetime">DateTime</option></td></tr>
+				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Content Set: <span style="color: red;">*</span></td><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Category:</td></tr>
 				<tr><td style="background-color: transparent; border: 0; color: #444;"><select id="contentset" name="contentset" style="font-size: 15px; height: 33px; width: 430px; margin-left: 2px; margin-right: 30px;">
 				<?php
 				while ($csrow = mysqli_fetch_assoc($csets)) {
 					print "<option value=\"" . $csrow["ID"] . "\">" . $csrow["NAME"] . "</option>\n";
 					}
 				?>
-				</select></td></tr>
+				</select></td><td style="background-color: transparent; border: 0; color: #444;"><select id="category" style="font-size: 15px; height: 33px; width: 430px; margin-left: 2px; margin-right: 30px;"></select></td></tr>
+				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;" colspan="2"><input type="checkbox" id="case"> Results are Case Sensitive</td></tr>
+				<tr><td style="background-color: transparent; border: 0; color: #444;" colspan="2"><input type="checkbox" id="split" onclick="toggleSplit()"> Split Results into Columns <span class="delform" style="margin-left: 50px; opacity: 0;">Delimeter: </span><span class="delform" style="opacity: 0; color: red;">*</span><input class="delform" id="delimeter" type="text" style="opacity: 0; margin-left: 15px; width: 30px;"></td></tr>
 				</table>
-				<p style="margin-top: 30px; margin-left: 5px;">
-				<span style="color: red;"><sub>*</sub></span> <sub>Required Setting</sub>
-				</p>
+
 			</div>
 
 			<div style="float: right; text-align: right; position: absolute; margin-top: 8px; width: 97%;">
 				<button class="formgo" style="margin-top: 5px; margin-right: 0;">Save</button>
 				<a href="/index.php?view=sensors"><button class="formgo" style="margin-top: 5px; margin-right: 0;">Cancel</button></a>
 			</div>
+
+		<hr style="width: 99%; margin-bottom: 20px;">
+
+		<table style="border: 0; margin-bottom: 20px;">
+		<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="checkbox" id="useparams"> Parameter Inputs</td></tr>
+		</table>
+
+		<hr style="width: 99%; margin-bottom: 20px;">
+
+		<div style="border-radius: 6px; width: 90%; border: 1px solid #33a; margin-left: auto; margin-right: auto; background-color: #eee; margin-bottom: 30px; padding-right: 0;">
+			<div style="background-color: #fff; border-radius: 6px 0 0 0; width: 15%; border-bottom: 1px solid #000; float: left; padding-top: 10px; padding-bottom: 10px; text-align: left; overflow: auto;">
+			<span style="margin: 10px;"><b>Linux</b></span>
+			</div>
+			<textarea style="width: 80%; border: 0; margin-right: 0;" rows="30"></textarea>
 		</div>
 
-		<div class="module-content" style="overflow: auto; min-width: 1000px; margin-top: 15px;">
+		<hr style="width: 99%; margin-bottom: 20px;">
 
 		</div>
+
+<script>
+function toggleSplit() {
+	const delements = document.getElementsByClassName("delform");
+	const checkBox = document.getElementById("split");
+	var len = delements.length;
+
+	if (checkBox.checked == true) { var ol = 1; }
+	else { var ol = 0; }
+
+	for (var i=0 ; i<len; i++) {
+		delements[i].style.opacity = ol;
+		}
+	}
+
+</script>
 
 		<?php else: ?>
 
