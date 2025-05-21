@@ -2,7 +2,7 @@
 
 <?php if (!isset($_GET['view']) || $_GET['view'] == "manage"): ?>
 <div class="content">
-	<h1>Module Management</h1>
+	<h1>Lumy Management</h1>
 
 <?php elseif ($_GET['view'] == "delivery"): ?>
 <div class="content">
