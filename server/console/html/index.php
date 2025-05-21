@@ -38,7 +38,7 @@ else {
 			$options = [ 'cost' => 13, ];
 			$passhash = password_hash($_POST['password'],PASSWORD_BCRYPT, $options);
 			mysqli_select_db($db, "AUTH") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
-			$passquery = mysqli_query($db, "select FULLNAME,PASSWORD,ROLE from USERS where USERNAME = '$username' and ENABLED = '1'");
+			$passquery = mysqli_query($db, "select FULLNAME,PASSWORD,ROLE from USERS where USERNAME = '$username' and ENABLED = 1");
 			$storedhash = $passquery->fetch_assoc();
 
 			if (!isset($storedhash["PASSWORD"]) || !password_verify($_POST['password'],$storedhash["PASSWORD"])) {

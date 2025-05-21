@@ -32,7 +32,7 @@ if (isset($_GET["err"])) {
 		<img src="/images/logo-light.png" style="margin-top: 46%; margin-left: 15px; width: 250px;">
 	</div>
 	<div style="width: 400px; height: 420px; float: left; background-color: #ccc; text-align: center; box-shadow: 5px 5px 10px rgba(0,0,0,0.5);">
-		<div style="margin-top: 22%; margin-left: 20px;"><span id="message" style="color: red; opacity: <?php print "$showmsg"; ?>;"><?php print "$message"; ?></span></div>
+		<div style="margin-top: 15%; margin-left: 20px; margin-bottom: 7%;"><span id="message" style="color: red; opacity: <?php print "$showmsg"; ?>;"><?php print "$message"; ?></span></div>
 		<form action="/index.php" method="post" id="loginform">
 			<div style="width: 275px; text-align: left; padding-left: 65px;">
 			<span style="color: #444; font-weight: bold; font-size: 15px;">Username:</span><br>

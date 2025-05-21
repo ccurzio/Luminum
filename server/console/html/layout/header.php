@@ -19,7 +19,7 @@ if (!isset($_SESSION['SID'])) {
 	exit;
 	}
 
-$userquery = mysqli_query($db, "select ROLE from USERS where ID = (select ID from SESSION where SID = '" . $_SESSION["SID"] . "')");
+$userquery = mysqli_query($db, "select ROLE from USERS where ENABLED = 1 and ID = (select ID from SESSION where SID = '" . $_SESSION["SID"] . "')");
 $userinfo = $userquery->fetch_assoc();
 
 $acctrole = $userinfo["ROLE"];
