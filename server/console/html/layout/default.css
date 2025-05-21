@@ -324,7 +324,7 @@ select:disabled {
 	cursor: not-allowed;
 	}
 
-input[type="checkbox"] {
+input[type="checkbox"]:disabled {
 	cursor: not-allowed;
 	}
 
