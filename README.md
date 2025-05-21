@@ -19,6 +19,7 @@ The current planned modules include:
 - **Delivery:** Automatically send result data to various logging, reporting, and communication systems
 - **Discovery:** Performs network scanning from the server as well as endpoints to discover devices and running services
 - **Integrity:** Provides file integrity monitoring on endpoints
+- **Efficiency:** Analyzes and logs various aspects of endpoint performance
 - **Inventory:** Allows administrators to compile a full inventory of both network-connected devices as well as software installed on those devices
 - **Policy:** Enforcement of endpoint security and system management policies
 
