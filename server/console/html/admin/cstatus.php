@@ -49,7 +49,7 @@ $wincount = 0;
 	<div class="module-content" style="width: 21%; float: right; font-size: 13px;">
 	<p>
 		<b><input type="checkbox" id="checkinfilter" onclick="checkinform()" <?php if ($clientscount == 0) { print "disabled=\"disabled\""; } ?>> Show systems that have checked in within:</b><br>
-		<input id="intnum" type="text" style="font-size: 15px; padding: 5px; margin-top: 3px; width: 40px;" value="1" disabled="disabled">
+		<input id="intnum" type="text" style="font-size: 15px; padding: 5px; margin-top: 3px; width: 20px;" value="1" disabled="disabled">
 		<select name="filterint" id="filterint" style="font-size: 15px; height: 30px; margin-left: 2px;" disabled="disabled">
 			 <option value="reg">Registration Interval</option>
 			 <option value="minutes">Minute(s)</option>

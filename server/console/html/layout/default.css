@@ -373,7 +373,7 @@ input[type="password"]::placeholder { color: #ddd; }
 	border: 2px solid #333;
 	border-radius: 8px;
 	color: #777;
-	cursor: normal;
+	cursor: not-allowed;
 	}
 
 table {
