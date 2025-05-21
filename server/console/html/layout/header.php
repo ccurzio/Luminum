@@ -65,7 +65,7 @@ $acctrole = $userinfo["ROLE"];
 			<div class="dropdown">
 				<button class="dropbtn">
 					<img src="icons/modules.png" class="icon">
-					Modules
+					Lumys
 			</button>
 			<div class="dropdown-content">
 				<?php
@@ -73,9 +73,7 @@ $acctrole = $userinfo["ROLE"];
 					print "<a href=\"/modules.php\">Management</a>\n";
 					print "<div class=\"dropdown-divider\" style=\"width: 200px;\"></div>\n";
 					}
-				?>
-				<a href="/modules.php?view=delivery">Delivery</a>
-				<?php
+				print "<a href=\"/modules.php?view=delivery\">Delivery</a>\n";
 				mysqli_select_db($db, "SYSTEM") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
 				$lumyquery = mysqli_query($db, "select CVAL from CONFIG where CKEY = 'ENLUMYS'");
 				$lumyinfo = $lumyquery->fetch_assoc();
