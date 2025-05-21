@@ -8,13 +8,9 @@ error_reporting(E_ALL);
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 	if (isset($_GET['logout']) && $_GET['logout'] == "1" && isset($_SESSION['SID'])) {
-<<<<<<< HEAD
-		$db = new mysqli("localhost", "***REMOVED***", "***REMOVED***", '', 0, "/var/run/mysqld/mysqld.sock");
-=======
 		$dbuser = system("/usr/bin/grep dbuser /opt/Luminum/LuminumServer/config/console.conf | /usr/bin/sed -e 's/^dbuser.*\= //'");
 		$dbpass = system("/usr/bin/grep dbpass /opt/Luminum/LuminumServer/config/console.conf | /usr/bin/sed -e 's/^dbpass.*\= //'");
 		$db = new mysqli("localhost", $dbuser, $dbpass, '', 0, "/var/run/mysqld/mysqld.sock");
->>>>>>> cdefca4 (Replaced hard-coded DB username/password with values from a config file)
 		mysqli_select_db($db, "AUTH") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
 		mysqli_query($db, "delete from SESSION where ID = (select ID from USERS where USERNAME = '" . $_SESSION['USER'] . "')");
 		mysqli_close($db);
@@ -39,14 +35,10 @@ else {
 			$username = $_POST['username'];
 			$options = [ 'cost' => 13, ];
 			$passhash = password_hash($_POST['password'],PASSWORD_BCRYPT, $options);
-<<<<<<< HEAD
-			$db = new mysqli("localhost", "***REMOVED***", "***REMOVED***", '', 0, "/var/run/mysqld/mysqld.sock");
-=======
 
 			$dbuser = system("/usr/bin/grep dbuser /opt/Luminum/LuminumServer/config/console.conf | /usr/bin/sed -e 's/^dbuser.*\= //'");
 			$dbpass = system("/usr/bin/grep dbpass /opt/Luminum/LuminumServer/config/console.conf | /usr/bin/sed -e 's/^dbpass.*\= //'");
 			$db = new mysqli("localhost", $dbuser, $dbpass, '', 0, "/var/run/mysqld/mysqld.sock");
->>>>>>> cdefca4 (Replaced hard-coded DB username/password with values from a config file)
 			mysqli_select_db($db, "AUTH") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
 			$passquery = mysqli_query($db, "select FULLNAME,PASSWORD,ROLE from USERS where USERNAME = '$username' and ENABLED = '1'");
 			$storedhash = $passquery->fetch_assoc();
