@@ -10,8 +10,8 @@ else {
 		print "<h1>Luminum Delivery</h1>\n\n";
 		}
 	else {
-		if (preg_match("/^[a-z]+$/",$_GET['view']) && file_exists("/var/www/html/modules/" . $_GET['view'] . ".php")) {
-			include ("/var/www/html/modules/" . $_GET['view'] . ".php");
+		if (preg_match("/^[a-z]+$/",$_GET['view']) && file_exists($instdir . "/modules/" . $_GET['view'] . ".php")) {
+			include ($instdir . "/modules/" . $_GET['view'] . ".php");
 			}
 		else {
 			print "<div class=\"content\">\n";

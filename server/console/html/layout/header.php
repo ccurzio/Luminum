@@ -4,6 +4,7 @@ if (!isset($_SESSION)) {
 	}
 date_default_timezone_set("America/New_York");
 
+$instdir = exec("/usr/bin/grep instdir /opt/Luminum/LuminumServer/config/console.conf | /usr/bin/sed -e 's/^instdir.*\= //'");
 $dbuser = exec("/usr/bin/grep dbuser /opt/Luminum/LuminumServer/config/console.conf | /usr/bin/sed -e 's/^dbuser.*\= //'");
 $dbpass = exec("/usr/bin/grep dbpass /opt/Luminum/LuminumServer/config/console.conf | /usr/bin/sed -e 's/^dbpass.*\= //'");
 $db = new mysqli("localhost", $dbuser, $dbpass, '', 0, "/var/run/mysqld/mysqld.sock");
