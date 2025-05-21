@@ -37,6 +37,7 @@ my $SHOST;
 my $LADDR;
 my $LPORT;
 my $SKEY;
+my @lumys;
 my $sslcert;
 my $sslprvkey;
 my $sslpubkey;
@@ -404,6 +405,7 @@ sub lumyload {
 				my $dname = $lname;
 				$dname =~ s/\.lumy//;
 				require("$brokerpath\/config/lumys_enabled/$lname");
+				push(@lumys,lc($dname));
 				debugout(1,"- Loaded \"$dname\" Lumy.");
 				}
 			}
@@ -479,7 +481,7 @@ sub parsedata {
 			if ($message->{$mkey}{'fingerprint'} =~ /^[a-f0-9]+$/) { $EPFPNT = $message->{$mkey}{'fingerprint'}; }
 			}
 		elsif ($mkey eq "lumy") {
-			if ($message->{$mkey} =~ /^[A-Za-z]+$/) { $lumy = $message->{$mkey}; }
+			if ($message->{$mkey} =~ /^[A-Za-z]+$/) { $lumy = lc($message->{$mkey}); }
 			}
 		elsif ($mkey eq "action") {
 			if ($message->{$mkey} =~ /^[A-Za-z]+$/) { $action = $message->{$mkey}; }
@@ -548,6 +550,8 @@ sub parsedata {
 						elsif ($action eq "report") {
 							}
 						else { debugout(2,"Invalid action specified for \"core\" Lumy in message from $EPADDR\."); }
+						}
+					elsif (grep(/^$lumy$/,@lumys)) {
 						}
 					else { debugout(2,"Invalid Lumy specified in message from $EPADDR\."); }
 					}
