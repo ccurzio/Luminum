@@ -3,7 +3,7 @@ mysqli_select_db($db, "CONTENT") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to a
 
 $starttime = microtime(true);
 $sensorquery = mysqli_query($db, "select ID,NAME,DESCRIPTION,MAC,LIN,WIN,AUTHOR,CREATED,MODIFIED,EDITOR,REVISIONS from SENSORS order by ID");
-$csets = mysqli_query($db, "select ID,NAME from SETS order by NAME");
+$csets = mysqli_query($db, "select ID,NAME from SETS where NAME != 'Luminum Core' order by NAME");
 $endtime = microtime(true);
 
 $duration = number_format((float)$endtime - $starttime, 2, '.', '');
@@ -59,19 +59,27 @@ $sensorcount = mysqli_num_rows($sensorquery);
 	<?php elseif ($_GET["action"] == "new"): ?>
 	<h1>Create New Sensor</h1>
 
-	<div class="module-content">
-		<div style="display: block; width: 100%; text-align: right;">
-			<button class="formgo" style="margin-top: 5px; margin-right: 0;">Save</button>
-			<a href="/index.php?view=sensors"><button class="formgo" style="margin-top: 5px; margin-right: 0;">Cancel</button></a>
-		</div>
+	<div class="module-content" style="overflow: auto;">
+		<div style="width: 90%; float: left;">
 		<table style="margin-top: 10px; border: 0;">
 		<tr><td style="background-color: transparent; border: 0; color: #444;">Name: <span style="color: red;">*</span></td></tr>
 		<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgname" style="width: 400px;"></td></tr>
 		<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Description: <span style="color: red;">*</span></td></tr>
 		<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgdesc" style="width: 400px;"></td></tr>
 		<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Content Set: <span style="color: red;">*</span></td></tr>
-		<tr><td style="background-color: transparent; border: 0; color: #444;"><select id="contentset" name="contentset" style="font-size: 15px; height: 30px; width: 430px; margin-left: 2px; margin-right: 30px;"></select></td></tr>
+		<tr><td style="background-color: transparent; border: 0; color: #444;"><select id="contentset" name="contentset" style="font-size: 15px; height: 30px; width: 430px; margin-left: 2px; margin-right: 30px;">
+		<?php
+		while ($csrow = mysqli_fetch_assoc($csets)) {
+			print "<option value=\"" . $csrow["ID"] . "\">" . $csrow["NAME"] . "</option>\n";
+			}
+		?>
+		</select></td></tr>
 		</table>
+		</div>
+		<div style="float: right; width: 10%; text-align: right; position: relative; margin-top: 8px;">
+			<button class="formgo" style="margin-top: 5px; margin-right: 0;">Save</button>
+			<a href="/index.php?view=sensors"><button class="formgo" style="margin-top: 5px; margin-right: 0;">Cancel</button></a>
+		</div>
 	</div>
 
 	<?php endif; ?>
