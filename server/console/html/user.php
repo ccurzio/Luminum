@@ -2,8 +2,8 @@
 
 <?php if (!isset($_GET['view']) || $_GET['view'] == "profile"): ?>
 <?php
-	$dbuser = system("/usr/bin/grep dbuser /opt/Luminum/LuminumServer/config/console.conf | /usr/bin/sed -e 's/^dbuser.*\= //'");
-	$dbpass = system("/usr/bin/grep dbpass /opt/Luminum/LuminumServer/config/console.conf | /usr/bin/sed -e 's/^dbpass.*\= //'");
+	$dbuser = exec("/usr/bin/grep dbuser /opt/Luminum/LuminumServer/config/console.conf | /usr/bin/sed -e 's/^dbuser.*\= //'");
+	$dbpass = exec("/usr/bin/grep dbpass /opt/Luminum/LuminumServer/config/console.conf | /usr/bin/sed -e 's/^dbpass.*\= //'");
 	$db = new mysqli("localhost", $dbuser, $dbpass, '', 0, "/var/run/mysqld/mysqld.sock");
         mysqli_select_db($db, "AUTH") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
         $userquery = mysqli_query($db, "select ID,USERNAME,FULLNAME,EMAIL,TYPE,ROLE,REGDATE from USERS where USERNAME = (select USERNAME from USERS where ID = (select ID from SESSION where SID = '" . $_SESSION["SID"] . "'))");
