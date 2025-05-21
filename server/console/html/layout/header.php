@@ -78,6 +78,7 @@ $acctrole = $userinfo["ROLE"];
 				$lumyquery = mysqli_query($db, "select CVAL from CONFIG where CKEY = 'ENLUMYS'");
 				$lumyinfo = $lumyquery->fetch_assoc();
 				$lumys = explode(',', $lumyinfo["CVAL"]);
+				sort($lumys);
 
 				foreach ($lumys as $lumy) {
 					print "<a href=\"/modules.php?view=$lumy\">" . ucfirst($lumy) . "</a>\n";
