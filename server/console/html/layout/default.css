@@ -320,6 +320,14 @@ body h1 {
 	background-color: #555;
 	}
 
+select:disabled {
+	cursor: not-allowed;
+	}
+
+input[type="checkbox"] {
+	cursor: not-allowed;
+	}
+
 input[type="text"] {
 	padding: 8px 13px;
 	font-size: 13px;
@@ -335,6 +343,10 @@ input[type="text"]:focus {
 	}
 
 input[type="text"]::placeholder { color: #ddd; }
+
+input[type="text"]:disabled {
+	cursor: not-allowed;
+	}
 
 input[type="password"] {
 	padding: 8px 13px;
