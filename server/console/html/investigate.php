@@ -2,8 +2,8 @@
 <div class="content">
 	<h1>Investigate</h1>
 
-	<div class="module-content" style="width: 60%; margin-left: auto; margin-right: auto; min-width: 850px;">
-		<div style="width: 80%; margin-left: auto; margin-right: auto; margin-top: 10px;">
+	<div class="module-content" style="width: 75%; margin-left: auto; margin-right: auto; min-width: 850px; text-align: center;">
+		<div style="margin-top: 10px; margin-right: 40px;">
 			<span style="font-size: 30px; font-weight: bold;">Step 1</span>
 			<img src="/images/stepline.png" style="width: 75px; height: 5px; margin-bottom: 7px; margin-left: 10px; margin-right: 10px; <?php if ($_GET["step"] <= 1) { print "opacity: 0.25"; } ?>">
 			<span style="font-size: 30px; font-weight: bold; <?php if ($_GET["step"] <= 1) { print "opacity: 0.25"; } ?>">Step 2</span>
@@ -17,10 +17,9 @@
 
 <?php endif; ?>
 
-	</div>
-
-		<div style="margin-top: 10px; margin-left: auto; margin-right: auto; text-align: right; width: 945px;">
+		<div style="margin-top: 10px; text-align: right; width: 102%; margin-left: 0;">
 			<button class="formgo" style="width: 75px;">Next</button>
 		</div>
+	</div>
 
 <?php include ("layout/footer.php"); ?>
