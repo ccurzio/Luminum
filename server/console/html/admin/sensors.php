@@ -37,7 +37,12 @@ $sensorcount = mysqli_num_rows($sensorquery);
 				}
 			?>
 		</select> Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;"></div></td></tr>
-		<tr><td style="width: 15px;"><input type="checkbox"></td><td style="width: 200px;">Name</td><td>Description</td><td style="width: 120px;">Compatibility</td><td style="width: 100px;">Author</td><td style="width: 175px;">Create Date</td><td style="width: 175px;">Last Modification</td><td style="width: 100px;">Modified By</td></tr>
+		<tr><td style="width: 15px;">
+		<?php
+			if ($sensorcount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
+			else { print "<input type=\"checkbox\">"; }
+		?>
+		</td><td style="width: 200px;">Name</td><td>Description</td><td style="width: 120px;">Compatibility</td><td style="width: 100px;">Author</td><td style="width: 175px;">Create Date</td><td style="width: 175px;">Last Modification</td><td style="width: 100px;">Modified By</td></tr>
 		<?php
 		if ($sensorcount == 0) {
 			print "<tr><td colspan=\"8\" style=\"text-align: center; background-color: #494a69; font-weight: normal; font-style: italic;\">No Results</td></tr>\n";
