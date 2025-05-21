@@ -48,9 +48,9 @@ $wincount = 0;
 
 	<div class="module-content" style="width: 21%; float: right; font-size: 13px;">
 	<p>
-		<b><input type="checkbox"> Show systems that have checked in within:</b><br>
-		<input type="text" style="font-size: 15px; padding: 5px; margin-top: 3px; width: 40px;" value="1">
-		<select name="filterint" id="filterint" style="font-size: 15px; height: 30px; margin-left: 2px;">
+		<b><input type="checkbox" id="checkinfilter" onclick="checkinform()"> Show systems that have checked in within:</b><br>
+		<input id="intnum" type="text" style="font-size: 15px; padding: 5px; margin-top: 3px; width: 40px;" value="1" disabled="disabled">
+		<select name="filterint" id="filterint" style="font-size: 15px; height: 30px; margin-left: 2px;" disabled="disabled">
 			 <option value="reg">Registration Interval</option>
 			 <option value="minutes">Minute(s)</option>
 			 <option value="hours">Hour(s)</option>
@@ -58,7 +58,7 @@ $wincount = 0;
 			 <option value="weeks">Week(s)</option>
 			 <option value="months">Month(s)</option>
 		</select>
-		<button class="formgo" style="margin-top: 5px; margin-right: 0; margin-left: 1px; height: 30px; padding-top: 5px;">Apply</button>
+		<button id="fapply" class="formgo" style="margin-top: 5px; margin-right: 0; margin-left: 1px; height: 30px; padding-top: 5px;" disabled="disabled">Apply</button>
 	</p>
 
 	<p style="margin-top: 20px;">
@@ -66,12 +66,15 @@ $wincount = 0;
 	</p>
 	<table style="margin-bottom: 20px;">
 	<tr><td style="width: 15px;"></td><td>Platform</td><td style="text-align: center;">Percentage</td><td style="text-align: center;">Count</td></tr>
-	<tr><td style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filterlinux"></td><td style="background-color: #494a69;">Linux</td><td style="background-color: #494a69; text-align: center;"><?php $pct = ($lincount / $clientscount) * 100; print "$pct" ?>%</td><td style="background-color: #494a69; text-align: center;"><?php print "$lincount"; ?></td></tr>
-	<tr><td style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filtermac"></td><td style="background-color: #494a69;">macOS</td><td style="background-color: #494a69; text-align: center;"><?php $pct = ($maccount / $clientscount) * 100; print "$pct" ?>%</td><td style="background-color: #494a69; text-align: center;"><?php print "$maccount"; ?></td></tr>
-	<tr><td style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filterwin"></td><td style="background-color: #494a69;">Windows</td><td style="background-color: #494a69; text-align: center;"><?php $pct = ($wincount / $clientscount) * 100; print "$pct" ?>%</td><td style="background-color: #494a69; text-align: center;"><?php print "$wincount"; ?></td></tr>
+	<tr><td class="lfilter" style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filterlinux" onclick="filterHighlight('filterlinux')"></td><td class="lfilter" style="background-color: #494a69;">Linux</td><td class="lfilter" style="background-color: #494a69; text-align: center;"><?php if ($clientscount > 0) { $pct = ($lincount / $clientscount) * 100; print "$pct"; } else { print "0"; } ?>%</td><td class="lfilter" style="background-color: #494a69; text-align: center;"><?php print "$lincount"; ?></td></tr>
+	<tr><td class="mfilter" style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filtermac" onclick="filterHighlight('filtermac')"></td><td class="mfilter" style="background-color: #494a69;">macOS</td><td class="mfilter" style="background-color: #494a69; text-align: center;"><?php if ($clientscount > 0) { $pct = ($maccount / $clientscount) * 100; print "$pct"; } else { print "0"; } ?>%</td><td class="mfilter" style="background-color: #494a69; text-align: center;"><?php print "$maccount"; ?></td></tr>
+	<tr><td class="wfilter" style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filterwin" onclick="filterHighlight('filterwin')"></td><td class="wfilter" style="background-color: #494a69;">Windows</td><td class="wfilter" style="background-color: #494a69; text-align: center;"><?php if ($clientscount > 0) { $pct = ($wincount / $clientscount) * 100; print "$pct"; } else { print "0"; } ?>%</td><td class="wfilter" style="background-color: #494a69; text-align: center;"><?php print "$wincount"; ?></td></tr>
 	</table>
 
-	<span style="font-size: 15px; font-weight: bold;">Filter by Client Version:</span>
+	<?php if ($clientscount > 0) {
+		print "<span style=\"font-size: 15px; font-weight: bold;\">Filter by Client Version:</span>\n";
+		}
+	?>
 	<p>
 	</p>
 	</div>
@@ -79,6 +82,40 @@ $wincount = 0;
 </div>
 
 <script>
+function filterHighlight(fid) {
+	var checkBox = document.getElementById(fid);
+	if (checkBox.checked == true) { var bgcolor = "#686993"; }
+	else { var bgcolor = "#494a69"; }
+
+	if (fid == "filterlinux") { var ch = "lfilter"; }
+	else if (fid == "filtermac") { var ch = "mfilter"; }
+	else if (fid == "filterwin") { var ch = "wfilter"; }
+
+	const frows = document.getElementsByClassName(ch);
+	var len =  frows.length;
+	for (var i=0 ; i<len; i++) {
+		frows[i].style.backgroundColor = bgcolor;
+		}
+	}
+
+function checkinform() {
+	var checkBox = document.getElementById('checkinfilter');
+	var intnum = document.getElementById('intnum');
+	var filterint = document.getElementById('filterint');
+	var fapply = document.getElementById('fapply');
+
+	if (checkBox.checked == true) {
+		intnum.disabled = false;
+		filterint.disabled = false;
+		fapply.disabled = false;
+		}
+	else {
+		intnum.disabled = "disabled";
+		filterint.disabled = "disabled";
+		fapply.disabled = "disabled";
+		}
+	}
+
 function rowHighlight(idnum) {
 	var checkBox = document.getElementById("ID" + idnum);
 	//const checkboxes = document.querySelectorAll('input[type="checkbox"]');
