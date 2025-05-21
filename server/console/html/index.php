@@ -74,7 +74,7 @@ else {
 <?php elseif ($_GET['view'] == "actionhistory"): ?>
 <?php include ("admin/actionhistory.php"); ?>
 
-<?php elseif ($_GET['view'] == "groups"): ?>
+<?php elseif ($_GET['view'] == "cgroups"): ?>
 <div class="content">
 	<h1>Computer Groups</h1>
 
@@ -89,8 +89,7 @@ else {
 <?php include ("admin/sensors.php"); ?>
 
 <?php elseif ($_GET['view'] == "sysinfo"): ?>
-<div class="content">
-	<h1>System Information</h1>
+<?php include ("system/sysinfo.php"); ?>
 
 <?php elseif ($_GET['view'] == "users"): ?>
 <?php include ("admin/users.php"); ?>
