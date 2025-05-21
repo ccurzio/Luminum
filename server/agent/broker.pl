@@ -132,6 +132,7 @@ sub startserver {
 	chomp ($dbpid);
 	debugout(1,"Database initialized successfully. (PID $dbpid)");
 	readconfig();
+	lumyload();
 	}
 
 # Luminum Server Shutdown
@@ -386,6 +387,27 @@ sub setconfig {
 			}
 		}
 	return $scstat;
+	}
+
+# Load Server Modules
+#
+sub lumyload {
+	if (-e "$brokerpath\/config/lumys_enabled" && -d "$brokerpath\/config/lumys_enabled") {
+		opendir(my $dir, "$brokerpath\/config/lumys_enabled");
+		my @lumylist = readdir $dir;
+		close($dir);
+		@lumylist = grep ! /^\.$/, @lumylist;
+		@lumylist = grep ! /^\.\.$/, @lumylist;
+		if (scalar(@lumylist) > 0) {
+			debugout(0,"Initializing Lumys...");
+			for my $lname (@lumylist) {
+				my $dname = $lname;
+				$dname =~ s/\.lumy//;
+				require("$brokerpath\/config/lumys_enabled/$lname");
+				debugout(1,"- Loaded \"$dname\" Lumy.");
+				}
+			}
+		}
 	}
 
 # Endpoint Fingerprint Validation
