@@ -323,9 +323,9 @@ body h1 {
 select:disabled {
 	cursor: not-allowed;
 	border-radius: 8px;
-	font-size: 14px;
 	opacity: 0.9;
 	border: 2px solid #ddd;
+	color: transparent;
 	}
 
 input[type="checkbox"]:disabled {
