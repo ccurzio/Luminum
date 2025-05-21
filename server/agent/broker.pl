@@ -61,29 +61,7 @@ my $brokername = $brokerpath;
 $brokername =~ s/^(\/.*\/)//;
 $brokerpath =~ s/\/$brokername//;
 
-# Read Broker Configuration
-#
-if (-e "$brokerpath\/config") {
-	# Check for Broker Configuration
-	if (-e "$brokerpath\/config\/broker.conf") {
-		open (BCONF, "$brokerpath\/config\/broker.conf");
-		foreach (<BCONF>) {
-			next if ($_ =~ /^#.*$/);
-			if ($_ =~ /^LOGDIR[\s|\t]?+\=[\s|\t]?+(.*)$/) {
-				mkdir($1, 0700) unless(-d $1 );
-				$brokerlog = "$1\/broker.log";
-				}
-			elsif ($_ =~ /^DEBUG[\s|\t]?+\=[\s|\t]?+([0|1])$/) { $debug = $1; }
-			elsif ($_ =~ /^DBUSER[\s|\t]?+\=[\s|\t]?+(\S+)$/) { $dbuser = $1; }
-			elsif ($_ =~ /^DBPASS[\s|\t]?+\=[\s|\t]?+(.*)$/) { $dbpass = $1; }
-			}
-		close (BCONF);
-		}
-	else { die "FATAL: Broker Configuration Missing: $brokerpath\/config\/broker.conf"; }
-	}
-else { die "FATAL: Configuration Directory Missing: $brokerpath\/config\n"; }
-
-if (!$dbuser || $dbuser eq "") { die "FATAL: Database user not specified in config.\n"; }
+getbrokerconf();
 
 Broker::debugout(0,"Server Startup");
 startserver();
@@ -201,7 +179,7 @@ sub setuplistener {
 		};
 	if ($sock) { Broker::debugout(1,"Network Listener initialized successfully."); }
 	if ($hupped == 1) {
-		Broker::debugout(1,"Reload Complete.");
+		Broker::debugout(1,"Server Reload Complete.");
 		$hupped = 0;
 		}
 	}
@@ -238,6 +216,32 @@ sub stoplistener {
 		if (!$sock) { Broker::debugout(1,"Network Listener stopped successfully."); }
 		else { Broker::debugout(3,"Retry failed. Forcing shutdown."); }
 		}
+	}
+
+# Read Broker Configuration
+#
+sub getbrokerconf {
+	if (-e "$brokerpath\/config") {
+		# Check for Broker Configuration
+		if (-e "$brokerpath\/config\/broker.conf") {
+			open (BCONF, "$brokerpath\/config\/broker.conf");
+			foreach (<BCONF>) {
+				next if ($_ =~ /^#.*$/);
+				if ($_ =~ /^LOGDIR[\s|\t]?+\=[\s|\t]?+(.*)$/) {
+					mkdir($1, 0700) unless(-d $1 );
+					$brokerlog = "$1\/broker.log";
+					}
+				elsif ($_ =~ /^DEBUG[\s|\t]?+\=[\s|\t]?+([0|1])$/) { $debug = $1; }
+				elsif ($_ =~ /^DBUSER[\s|\t]?+\=[\s|\t]?+(\S+)$/) { $dbuser = $1; }
+				elsif ($_ =~ /^DBPASS[\s|\t]?+\=[\s|\t]?+(.*)$/) { $dbpass = $1; }
+				}
+			close (BCONF);
+			}
+		else { die "FATAL: Broker Configuration Missing: $brokerpath\/config\/broker.conf"; }
+		}
+	else { die "FATAL: Configuration Directory Missing: $brokerpath\/config\n"; }
+
+	if (!$dbuser || $dbuser eq "") { die "FATAL: Database user not specified in config.\n"; }
 	}
 
 # Read Server Configuration
@@ -405,11 +409,15 @@ sub lumyload {
 				my $dname = $lname;
 				$dname =~ s/\.lumy//;
 				my $elname = lc($dname);
+				my $elver;
 				require("$brokerpath\/config/lumys_enabled/$lname");
 				if (exists &{"$dname\::checkfunc"}) {
-					if (&{\&{"$dname\::checkfunc"}}() == 1) { push(@lumys,$elname); }
+					if (&{\&{"$dname\::checkfunc"}}() == 1) {
+						push(@lumys,$elname);
+						$elver = &{\&{"$dname\::getver"}}();
+						}
 					}
-				if (grep(/^$elname$/,@lumys)) { Broker::debugout(1,"- Loaded \"$dname\" Lumy."); }
+				if (grep(/^$elname$/,@lumys) && $elver) { Broker::debugout(1,"- Lumy Loaded: $dname v$elver"); }
 				else { Broker::debugout(3,"- Unable to load \"$dname\" Lumy."); }
 				}
 			}
@@ -475,6 +483,7 @@ sub parsedata {
 		my $dcmessage = $c->decrypt(decode_base64($decpkg->{'contents'}),$aeskey,$iv);
 		$message = decode_json(decode_base64($dcmessage));
 		}
+
 	$client_data = "";
 
 	for my $mkey (keys %$message) {
@@ -500,7 +509,7 @@ sub parsedata {
 
 	if ($EPFPNT && $EPFPNT ne "") {
 		if ($EPID == 0) {
-			if ($action eq "register" && !$lumy) {
+			if ($action eq "register") {
 				my $svrkey;
 				if ($message->{'info'}{'serverkey'} =~ /^[A-Za-z0-9]+$/) { $svrkey = $message->{'info'}{'serverkey'}; }
 				if ($message->{'info'}{'osplat'} =~ /^[A-Za-z]+$/) { $osplat = $message->{'info'}{'osplat'}; }
@@ -726,7 +735,7 @@ sub catchbreak {
 #
 sub catchhup {
 	if ($hupped == 0) {
-		Broker::debugout (2,"Caught SIGHUP!");
+		Broker::debugout (2,"Caught SIGHUP! Reloading Server...");
 		$hupped = 1;
 		undef($SID);
 		undef($SKEY);
@@ -736,9 +745,9 @@ sub catchhup {
 		undef($sslcert);
 		undef($sslprvkey);
 		undef($sslpubkey);
-		#@lumys = ();
-		readconfig();
 		stoplistener();
+		getbrokerconf();
+		readconfig();
 		sleep 1;
 		lumyload();
 		setuplistener();
