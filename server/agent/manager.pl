@@ -4,7 +4,6 @@
 # by Christopher R. Curzio (ccurzio@luminum.net)
 
 use strict;
-use Getopt::Long;
 use Cwd qw(abs_path);
 use FindBin qw($Bin);
 use POSIX qw(strftime);
@@ -24,7 +23,8 @@ use Data::Dumper;
 
 #$| = 1;
 
-my $debug;
+my $debug = 0;
+my $writelog = 1;
 my $suerror;
 my $logdir;
 my $brokerlog;
@@ -54,6 +54,13 @@ my $hupped = 0;
 $SIG{INT} = \&catchbreak;
 $SIG{HUP} = \&catchhup;
 
+if (scalar(@ARGV) > 0) {
+	foreach(@ARGV) {
+		if ($_ eq "--debug") { $debug = 1; }
+		elsif ($_ eq "--nolog") { $writelog = 0; }
+		}
+	}
+
 # Where Am I? (Establish Filesystem Location)
 #
 my $mgrpath = abs_path($0);
@@ -64,6 +71,8 @@ $mgrpath =~ s/\/$mgrname//;
 getbrokerconf();
 
 Broker::debugout(0,"Server Startup");
+if ($writelog == 0) { Broker::debugout(2,"Writing broker logs to disk has been disabled."); }
+
 startserver();
 startweb();
 setuplistener();
@@ -172,7 +181,7 @@ sub setuplistener {
 		SSL_key_file => $sslprvkey
 		)
 	or do {
-		Broker::debugout(3,"Network Listener could not be initialized: $SSL_ERROR");
+		Broker::debugout(3,"Network Listener could not be initialized.");
 		$suerror = 1;
 		stopserver();
 		exit 1;
@@ -231,7 +240,6 @@ sub getbrokerconf {
 					mkdir($1, 0700) unless(-d $1 );
 					$brokerlog = "$1\/broker.log";
 					}
-				elsif ($_ =~ /^DEBUG[\s|\t]?+\=[\s|\t]?+([0|1])$/) { $debug = $1; }
 				elsif ($_ =~ /^DBUSER[\s|\t]?+\=[\s|\t]?+(\S+)$/) { $dbuser = $1; }
 				elsif ($_ =~ /^DBPASS[\s|\t]?+\=[\s|\t]?+(.*)$/) { $dbpass = $1; }
 				}
@@ -794,15 +802,14 @@ sub debugout {
 		$DBCFLAG = colored("FAIL","red");
 		}
 
-	open (BLOG, "+>>", $brokerlog);
-	print BLOG "[$DBTIME] [$DBFLAG] $DBMSG\n";
+	if ($writelog == 1) {
+		open (BLOG, "+>>", $brokerlog);
+		print BLOG "[$DBTIME] [$DBFLAG] $DBMSG\n";
+		}
 
 	# Break signals are usually caused by a CTRL+C. This is here to
 	# print a newline to stdout after the break to keep the debug
 	# stream output tidy.
-	#
-	# This will probably need to eventually be changed from == 1
-	# to > 0 to handle debug levels.
 	if ($debug == 1) {
 		if ($DBMSG =~ /SIGINT/) { print "\n"; }
 		print "[$DBTIME] [$DBCFLAG] $DBMSG\n";
