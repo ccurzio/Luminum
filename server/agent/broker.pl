@@ -433,7 +433,7 @@ sub parsedata {
 	my $data;
 	my $osplat;
 	my $osrel;
-	my $EPKEY;
+	my $EPPKEY;
 	my $clientver;
 
 	eval { decode_json($input) };
@@ -476,11 +476,11 @@ sub parsedata {
 				if ($message->{'info'}{'osrel'} =~ /^[A-Za-z0-9\s\.]+$/) { $osrel = $message->{'info'}{'osrel'}; }
 				if ($message->{'info'}{'clientver'} =~ /^[0-9][0-9]?\.[0-9][0-9]?\.[0-9][0-9]?[ab]?$/) { $clientver = $message->{'info'}{'clientver'}; }
 				else { $clientver = "Unknown"; }
-				if ($message->{'info'}{'pubkey'} =~ /^[A-Za-z0-9\-\/\+\s\n]+$/) { $EPKEY = $message->{'info'}{'pubkey'}; }
+				if ($message->{'info'}{'pubkey'} =~ /^[A-Za-z0-9\-\/\+\s\n]+$/) { $EPPKEY = $message->{'info'}{'pubkey'}; }
 
 				if (serverkey($svrkey) == 1) {
-					if ($EPFPNT && $EPKEY && $EPADDR && $EPNAME && $osplat && $osrel && $clientver) {
-						newreg($EPNAME,$EPFPNT,$EPKEY,$EPADDR,$osplat,$osrel,$clientver);
+					if ($EPFPNT && $EPPKEY && $EPADDR && $EPNAME && $osplat && $osrel && $clientver) {
+						newreg($EPNAME,$EPFPNT,$EPPKEY,$EPADDR,$osplat,$osrel,$clientver);
 						}
 					else { debugout(2,"Attempted registration with missing data from $EPADDR\."); }
 					}
