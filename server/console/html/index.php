@@ -85,8 +85,7 @@ else {
 <?php include ("admin/packages.php"); ?>
 
 <?php elseif ($_GET['view'] == "csets"): ?>
-<div class="content">
-	<h1>Content Sets</h1>
+<?php include ("admin/csets.php"); ?>
 
 <?php elseif ($_GET['view'] == "sensors"): ?>
 <?php include ("admin/sensors.php"); ?>
