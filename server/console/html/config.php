@@ -6,8 +6,7 @@ if ($acctrole > 1) {
 	}
 else {
 	if (!isset($_GET['view']) || $_GET['view'] == "options"): ?>
-	<div class="content">
-	<h1>Server Configuration Options</h1>
+	<?php include ("system/serveropts.php"); ?>
 
 	<?php elseif ($_GET['view'] == "clients"): ?>
 	<div class="content">
