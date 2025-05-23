@@ -5,9 +5,9 @@
 	print "<h1>Lumy Management</h1>\n\n";
 	}
 else {
-	if ($_GET['view'] == "delivery") {
+	if ($_GET['view'] == "summary") {
 		print "<div class=\"content\">\n";
-		print "<h1>Luminum Delivery</h1>\n\n";
+		print "<h1>Luminum Summary</h1>\n\n";
 		}
 	else {
 		if (preg_match("/^[a-z]+$/",$_GET['view']) && file_exists($instdir . "/modules/" . $_GET['view'] . ".php")) {

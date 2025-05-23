@@ -36,7 +36,7 @@ else {
 			else {
 				while($row = mysqli_fetch_assoc($usersquery)) {
 					if ($row["ENABLED"] == "1") { $acctenabled = "<span style=\"font-weight: bold; font-size: 19px; color: #0ec940;\">✓</span>"; }
-					else { $acctenabled = "<span style=\"font-weight: bold; font-size: 20px; color: #cf1104;\">✖</span>"; }
+					else { $acctenabled = "<span style=\"font-weight: bold; font-size: 20px; color: #cf1104;\">&#10060;</span>"; }
 					if ($row["ROLE"] == "1") { $acctrole = "Admin"; }
 					elseif ($row["ROLE"] == "2") { $acctrole = "Power User"; }
 					elseif ($row["ROLE"] == "3") { $acctrole = "User"; }
