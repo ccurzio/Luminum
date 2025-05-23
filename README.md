@@ -14,7 +14,7 @@ Core features:
 - **Custom Sensors:** Many environments will have custom requirements for the types of information they need to get from their endpoints. Out-of-the-box sensors are great, but Luminum also allows you to create your own sensors as well.
 - **Web Interface:** Luminum Server provides an intuitive web interface for endpoint and server configuration and management. 
 
-The current planned modules include:
+The current planned Lumy modules include:
 - **Query:** The core module of the system which allows administrators and users to retrieve data from endpoints
 - **Summary:** Automatically report query result data in specified intervals to various logging, reporting, and communication systems
 - **Delivery:** Deploys applications to endpoints and provides application installation management
