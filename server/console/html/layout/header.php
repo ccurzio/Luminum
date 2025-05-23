@@ -104,6 +104,13 @@ $acctrole = $userinfo["ROLE"];
 			</button>
 			<div class="dropdown-content">
 				<div class="submenu">
+					<a href="#" class="submenu-link" style="cursor: default;">Endpoints <span class="arrow" style="margin-left: 58%;">▸</span></a>
+					<div class="submenu-content">
+						<a href="/index.php?view=clientstatus">Client Status</a>
+						<a href="/index.php?view=missing">Missing Clients</a>
+					</div>
+				</div>
+				<div class="submenu">
 					<a href="#" class="submenu-link" style="cursor: default;">Content <span class="arrow" style="margin-left: 65%;">▸</span></a>
 					<div class="submenu-content">
 						<a href="/index.php?view=packages">Packages</a>
@@ -111,7 +118,6 @@ $acctrole = $userinfo["ROLE"];
 						<a href="/index.php?view=csets">Content Sets</a>
 					</div>
 				</div>
-				<a href="/index.php?view=clientstatus">Client Status</a>
 				<a href="/index.php?view=actions">Scheduled Actions</a>
 				<a href="/index.php?view=actionhistory">Action History</a>
 				<a href="/index.php?view=cgroups">Computer Groups</a>
@@ -146,8 +152,8 @@ $acctrole = $userinfo["ROLE"];
 					print "<a href=\"/maintenance.php?view=diagnostics\">Diagnostics</a>\n";
 					print "<a href=\"/maintenance.php?view=updates\">System Update</a>\n";
 					print "<a href=\"/maintenance.php?view=downtime\">Outage Management</a>\n";
-					print "<a href=\"/maintenance.php?view=services\">Back-End Services</a>\n";
 					print "<a href=\"/maintenance.php?view=os\">Operating System</a>\n";
+					print "<a href=\"/maintenance.php?view=services\">Back-End Services</a>\n";
 					print "<a href=\"/maintenance.php?view=logs\">System Logs</a>\n";
 					print "</div>\n";
 					print "</div>\n";
