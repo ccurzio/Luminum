@@ -8,13 +8,13 @@ Welcome to the Luminum project. Luminum is intended to be an open-source autonom
 ## Capabilities
 Keep in mind that Luminum is still in the initial development stages, so it doesn't really do anything yet. But the goal is to provide a range of extensible endpoint security and management functionality through the base server/client software plus modular components called Lumys.
 
-Core features:
+#### Core features:
 - **Rapid Data Retrieval:** Luminum allows administrators and users to quickly pull information from endpoints simply by constructing queries through an easy-to-use sensor selection and drag-and-drop interface. You ask the environment for the information you want, and any endpoints with relevent information will answer your questions.
 - **Action Deployment:** Use the answers provided by endpoints to generate specific targeting for packages. Want to deploy a package to all machines running a specific operating system with a specific piece of software installed? Ask the environment for those conditions then target the result set with your package. Luminum handles the rest. Want to schedule those actions to run at regular intervals? You can do that too.
 - **Custom Sensors:** Many environments will have custom requirements for the types of information they need to get from their endpoints. Out-of-the-box sensors are great, but Luminum also allows you to create your own sensors as well.
 - **Web Interface:** Luminum Server provides an intuitive web interface for endpoint and server data retrieval, configuration, and management. 
 
-The current planned Lumy modules include:
+#### The current planned Lumy modules include:
 - **Query:** The core module of the system which allows administrators and users to retrieve data from endpoints
 - **Summary:** Automatically report query result data in specified intervals to various logging, reporting, and communication systems
 - **Delivery:** Deploys applications to endpoints and provides application installation management
