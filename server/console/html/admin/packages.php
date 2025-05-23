@@ -2,7 +2,7 @@
 mysqli_select_db($db, "CONTENT") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
 
 $starttime = microtime(true);
-$pkgquery = mysqli_query($db, "select ID,NAME,DESCRIPTION,MAC,LIN,WIN,AUTHOR,CREATED,MODIFIED,EDITOR,REVISIONS from PACKAGES order by ID");
+$pkgquery = mysqli_query($db, "select ID,NAME,DESCRIPTION,SIZE,MAC,LIN,WIN,AUTHOR,CREATED,MODIFIED,EDITOR,REVISIONS from PACKAGES order by ID");
 $csets = mysqli_query($db, "select ID,NAME from SETS order by NAME");
 $endtime = microtime(true);
 
@@ -38,7 +38,7 @@ $pkgcount = mysqli_num_rows($pkgquery);
 			if ($pkgcount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
 			else { print "<input type=\"checkbox\">"; }
 		?>
-		</td><td style="width: 200px;">Name</td><td>Description</td><td style="width: 120px;">Compatibility</td><td style="width: 75px;">Size</td><td style="width: 100px;">Author</td><td style="width: 175px;">Create Date</td><td style="width: 175px;">Last Modification</td><td style="width: 100px;">Modified By</tr>
+		</td><td style="width: 200px;">Name</td><td>Description</td><td style="width: 100px;">OS</td><td style="width: 75px;">Size</td><td style="width: 100px;">Author</td><td style="width: 175px;">Create Date</td><td style="width: 175px;">Last Modification</td><td style="width: 100px;">Modified By</tr>
 		<?php
 
 		if ($pkgcount == 0) {
