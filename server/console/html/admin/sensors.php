@@ -41,7 +41,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 			if ($sensorcount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
 			else { print "<input type=\"checkbox\">"; }
 		?>
-		</td><td style="width: 200px;">Name</td><td>Description</td><td style="width: 120px;">Compatibility</td><td style="width: 100px;">Author</td><td style="width: 175px;">Create Date</td><td style="width: 175px;">Last Modification</td><td style="width: 100px;">Modified By</td></tr>
+		</td><td style="width: 200px;">Name</td><td>Description</td><td style="width: 100px;">OS</td><td style="width: 100px;">Author</td><td style="width: 175px;">Create Date</td><td style="width: 175px;">Last Modification</td><td style="width: 100px;">Modified By</td></tr>
 		<?php
 		if ($sensorcount == 0) {
 			print "<tr><td colspan=\"8\" style=\"text-align: center; background-color: #494a69; font-weight: normal; font-style: italic;\">No Results</td></tr>\n";
@@ -77,15 +77,15 @@ $sensorcount = mysqli_num_rows($sensorquery);
 					}
 				?>
 				</select></td><td style="background-color: transparent; border: 0; color: #444;"><select id="category" style="font-size: 15px; height: 33px; width: 430px; margin-left: 2px; margin-right: 30px;"></select></td></tr>
-				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;" colspan="2"><input type="checkbox" id="case"> Results are Case Sensitive</td></tr>
-				<tr><td style="background-color: transparent; border: 0; color: #444;" colspan="2"><input type="checkbox" id="split" onclick="toggleSplit()"> Split Results into Columns <span class="delform" style="margin-left: 50px; opacity: 0;">Delimeter: </span><span class="delform" style="opacity: 0; color: red;">*</span><input class="delform" id="delimeter" type="text" style="opacity: 0; margin-left: 15px; width: 30px;"></td></tr>
+				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444; font-weight: normal;" colspan="2"><input type="checkbox" id="case"> Results are Case Sensitive</td></tr>
+				<tr><td style="background-color: transparent; border: 0; color: #444; font-weight: normal;" colspan="2"><input type="checkbox" id="split" onclick="toggleSplit()"> Split Results into Columns <span class="delform" style="margin-left: 50px; opacity: 0;">Delimeter: </span><span class="delform" style="opacity: 0; color: red;">*</span><input class="delform" id="delimeter" type="text" style="opacity: 0; margin-left: 15px; width: 30px;"></td></tr>
 				</table>
 
 			</div>
 
 			<div style="float: right; text-align: right; position: absolute; margin-top: 8px; width: 97%;">
-				<button class="formgo" style="margin-top: 5px; margin-right: 0;">Save</button>
-				<a href="/index.php?view=sensors"><button class="formgo" style="margin-top: 5px; margin-right: 0;">Cancel</button></a>
+				<button id="save" class="formgo" style="margin-top: 5px; margin-right: 0;">Save Sensor</button>
+				<a href="/index.php?view=sensors"><button type="button" class="formgo" style="margin-top: 5px; margin-right: 0;">Cancel</button></a>
 			</div>
 
 		<hr style="width: 99%; margin-bottom: 20px;">
@@ -93,19 +93,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 		<table style="border: 0; margin-bottom: 20px;">
 		<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="checkbox" id="useparams"> Parameter Inputs</td></tr>
 		</table>
-
-		<hr style="width: 99%; margin-bottom: 20px;">
-
-		<div style="border-radius: 6px; width: 90%; border: 1px solid #33a; margin-left: auto; margin-right: auto; background-color: #eee; margin-bottom: 30px; padding-right: 0;">
-			<div style="background-color: #fff; border-radius: 6px 0 0 0; width: 15%; border-bottom: 1px solid #000; float: left; padding-top: 10px; padding-bottom: 10px; text-align: left; overflow: auto;">
-			<span style="margin: 10px;"><b>Linux</b></span>
-			</div>
-			<textarea style="width: 80%; border: 0; margin-right: 0;" rows="30"></textarea>
-		</div>
-
-		<hr style="width: 99%; margin-bottom: 20px;">
-
-		</div>
+	</div>
 
 <script>
 function toggleSplit() {
