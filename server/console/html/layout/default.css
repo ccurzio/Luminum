@@ -273,6 +273,75 @@ body h1 {
 
 .dropdown:hover .dropdown-content { display: block; }
 
+.tabbar{
+	width: 100%;
+	overflow: hidden;
+	border-bottom: 1px solid #07f;
+	}
+
+.tabbarback {
+	color: #29517d !important;
+	background-color: #c0dcfc !important;
+	}
+
+.tabbaritem {
+	padding: 8px 8px;
+	float: left;
+	width: auto;
+	display: block;
+	outline: 0;
+	}
+
+.tabbutton {
+	border: none;
+	display: inline-block;
+	padding: 8px 20px;
+	vertical-align: middle;
+	overflow: hidden;
+	text-decoration: none;
+	color: inherit;
+	background-color: #9ec8f7;
+	text-align: left;
+	cursor: pointer;
+	white-space: nowrap;
+	font-size: 16px;
+	}
+
+.tabbutton:hover{
+	color: #fff !important;
+	background-color: #5084bf !important;
+	}
+
+.tabbarsel {
+	background-color: #84afe0 !important;
+	}
+
+.configtab {
+	transition: visibility 0s, opacity 0.5s linear;
+	}
+
+.tooltip {
+	position: relative;
+	display: inline-block;
+	}
+
+.tooltip .tooltiptext {
+	visibility: hidden;
+	width: 250px;
+	background-color: black;
+	color: #fff;
+	text-align: center;
+	padding: 8px;
+	border-radius: 10px;
+	position: absolute;
+	z-index: 1;
+	margin-left: 10px;
+	font-weight: normal;
+	font-size: 12px;
+	}
+
+.tooltip:hover .tooltiptext { visibility: visible; }
+
 .refresh {
 	animation: rotate-animation 2s infinite linear;
 	opacity: 0.5;
