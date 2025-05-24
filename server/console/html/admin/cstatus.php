@@ -25,7 +25,7 @@ $wincount = 0;
 			if ($clientscount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
 			else { print "<input id=\"selectall\" type=\"checkbox\" onclick=\"allToggle()\">"; }
 			?>
-			</td><td>Hostname</td><td style="width: 125px;">IP Address</td><td style="width: 50px;">OS</td><td style="width: 150px;">Release</td><td style="width: 120px;">Client Version</td><td style="width: 60px;">Status</td><td style="width: 175px;">Last Check-In</td></tr>
+			</td><td>Hostname</td><td style="width: 125px;">IP Address</td><td style="width: 50px;">Platform</td><td style="width: 150px;">Operating System</td><td style="width: 120px;">Client Version</td><td style="width: 60px;">Status</td><td style="width: 175px;">Last Check-In</td></tr>
 			<?php
 			if ($clientscount == 0) {
 				print "<tr><td colspan=\"9\" style=\"text-align: center; background-color: #494a69; font-weight: normal; font-style: italic;\">No Results</td></tr>\n";
