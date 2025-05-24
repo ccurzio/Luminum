@@ -13,6 +13,7 @@ else {
 		else if ($row["CKEY"] == "ENDPOINTCOMM") { $endpointcomm = $row["CVAL"]; }
 		else if ($row["CKEY"] == "CHECKININT") { $checkinint = $row["CVAL"]; }
 		else if ($row["CKEY"] == "MISSINGAFTER") { $missingafter = $row["CVAL"]; }
+		else if ($row["CKEY"] == "2FA") { $twofactor = $row["CVAL"]; }
 		else if ($row["CKEY"] == "MINPASS") { $minpass = $row["CVAL"]; }
 		else if ($row["CKEY"] == "COMPLEXPASS") { $complexpass = $row["CVAL"]; }
 		else if ($row["CKEY"] == "PCUPPERLOWER") { $pcul = $row["CVAL"]; }
@@ -106,6 +107,18 @@ else {
 
 		<div id="Logins" class="configtab" style="display: none;">
 			<table style="width: 50%; border: 0; margin-left: auto; margin-right: auto; margin-top: 15px; margin-bottom: 15px;">
+			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Two-Factor Authentication: </td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><select id="2fa" style="width: 175px; height: 28px;" onchange="formCheck()">
+			<?php if ($twofactor == "Required") {
+				print "<option value=\"Required\" selected=\"selected\">Required</option><option value=\"Optional\">Optional</option><option value=\"Disabled\">Disabled</option>"; 
+				}
+			else if ($twofactor == "Optional") {
+				print "<option value=\"Required\">Required</option><option value=\"Optional\" selected=\"selected\">Optional</option><option value=\"Disabled\">Disabled</option>"; 
+				}
+			else if ($twofactor == "Disabled") {
+				print "<option value=\"Required\">Required</option><option value=\"Optional\">Optional</option><option value=\"Disabled\" selected=\"selected\">Disabled</option>";
+				}
+			?>
+			</select> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Sets the 2FA policy for all user accounts<br><br>Default: Optional</span></td></tr>
 			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Minimum Password Length: </td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><input id="passlen" type="text" style="width: 25px; font-size: 15px; padding: 3px; margin-top: 0;" maxlength="2" value="<?php print $minpass; ?>" onchange="formCheck()"> Characters</td></tr>
 			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Password Complexity Enforcement: </td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><select id="complexpass" style="width: 175px; height: 28px;" onchange="formCheck()">
 			<?php if ($complexpass == "Enabled") {
