@@ -217,6 +217,7 @@ function formCheck() {
 		document.getElementById("ctlabel").style.color = "#777";
 		document.getElementById("eplabel").style.color = "#777";
 		}
+	document.getElementById("save").disabled = false;
 	}
 </script>
 
