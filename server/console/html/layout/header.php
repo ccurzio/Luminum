@@ -33,7 +33,17 @@ $acctrole = $userinfo["ROLE"];
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<link rel="stylesheet" href="layout/default.css">
 	<style type="text/css" media="screen">
-		#editor {
+		#leditor {
+			position: relative;
+			width: 600px;
+			height: 400px;
+			}
+		#meditor {
+			position: relative;
+			width: 600px;
+			height: 400px;
+			}
+		#weditor {
 			position: relative;
 			width: 600px;
 			height: 400px;
