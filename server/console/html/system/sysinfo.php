@@ -125,14 +125,19 @@ else {
 		</div>
 
 		<div id="Memory" class="configtab" style="display: none;">
-			<img src="/images/ram.png" style="width: 200px; height: 200px;">
+			<div class="row" style="margin-left: 20px; margin-top: 20px; margin-bottom: 20px; margin-right: 20px;">
+				<div class="column" style="width: 15%; min-width: 220px;"><img src="/images/ram.png" style="width: 200px; height: 200px;"></div>
+				<div class="column" style="width: 25%; text-align: left; padding-right: 5%;">
+				</div>
+			</div>
 		</div>
 
 		<div id="Network" class="configtab" style="display: none;">
-			<img src="/images/network.png" style="width: 200px; height: 200px;">
-			<table style="border: 0; margin-top: 20px; margin-left: 8px;">
-			<tr><td style="text-align: left; background-color: transparent; border: 0;">Physical Interfaces:</td><td style="font-weight: normal; background-color: transparent; border: 0;text-align: right;"><?php print $ifaces; ?></td></tr>
-			</table>
+			<div class="row" style="margin-left: 20px; margin-top: 20px; margin-bottom: 20px; margin-right: 20px;">
+				<div class="column" style="width: 15%; min-width: 220px;"><img src="/images/network.png" style="width: 200px; height: 200px;"></div>
+				<div class="column" style="width: 25%; text-align: left; padding-right: 5%;">
+				</div>
+			</div>
 		</div>
 	</div>
 
