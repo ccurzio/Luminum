@@ -2,7 +2,7 @@
 mysqli_select_db($db, "CONTENT") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
 
 $starttime = microtime(true);
-$sensorquery = mysqli_query($db, "select ID,NAME,DESCRIPTION,MAC,LIN,WIN,AUTHOR,CREATED,MODIFIED,EDITOR,REVISIONS from SENSORS order by ID");
+$sensorquery = mysqli_query($db, "select ID,NAME,DESCRIPTION,!ifnull(MSCRIPT,1) as MAC,!ifnull(LSCRIPT,1) as LIN,!ifnull(WSCRIPT,1) as WIN,AUTHOR,CREATED,MODIFIED,EDITOR,REVISIONS from SENSORS order by ID");
 $csets = mysqli_query($db, "select ID,NAME from SETS where NAME != 'Luminum Core' order by NAME");
 $endtime = microtime(true);
 
