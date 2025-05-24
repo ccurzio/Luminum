@@ -71,6 +71,9 @@ else {
 <?php elseif ($_GET['view'] == "clientstatus"): ?>
 <?php include ("admin/cstatus.php"); ?>
 
+<?php elseif ($_GET['view'] == "missing"): ?>
+<?php include ("admin/missing.php"); ?>
+
 <?php elseif ($_GET['view'] == "actions"): ?>
 <?php include ("admin/actions.php"); ?>
 
