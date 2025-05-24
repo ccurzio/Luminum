@@ -52,7 +52,7 @@ else {
 <script>
 function rowHighlight(idnum) {
 	var checkBox = document.getElementById("ID" + idnum);
-	const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+	const checkboxes = document.querySelectorAll('input[class="userrow"]');
 	var checkTrigger = 0;
 
 	checkboxes.forEach(checkbox => {
@@ -68,7 +68,6 @@ function rowHighlight(idnum) {
 		if (checkTrigger == 0) { var buttontoggle = "disabled"; }
 		}
 
-	document.getElementById("delete").disabled = buttontoggle;
 	if (checkTrigger > 1) {
 		document.getElementById("getinfo").disabled = "disabled";
 		document.getElementById("modify").disabled = "disabled";
@@ -77,6 +76,14 @@ function rowHighlight(idnum) {
 		document.getElementById("getinfo").disabled = buttontoggle;
 		document.getElementById("modify").disabled = buttontoggle;
 		}
+
+	if (checkTrigger == checkboxes.length) {
+		document.getElementById("delete").disabled = "disabled";
+		}
+	else {
+		document.getElementById("delete").disabled = buttontoggle;
+		}
+
 	document.getElementById(idnum + "A").style.backgroundColor = bgcolor;
 	document.getElementById(idnum + "B").style.backgroundColor = bgcolor;
 	document.getElementById(idnum + "C").style.backgroundColor = bgcolor;
