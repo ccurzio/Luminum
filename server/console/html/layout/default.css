@@ -342,6 +342,17 @@ body h1 {
 
 .tooltip:hover .tooltiptext { visibility: visible; }
 
+.column {
+	float: left;
+	width: 33.33%;
+	}
+
+.row:after {
+	content: "";
+	display: table;
+	clear: both;
+	}
+
 .refresh {
 	animation: rotate-animation 2s infinite linear;
 	opacity: 0.5;
