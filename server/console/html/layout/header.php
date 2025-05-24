@@ -32,6 +32,13 @@ $acctrole = $userinfo["ROLE"];
 	<title>Luminum (luminum.accipiter.org)</title>
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<link rel="stylesheet" href="layout/default.css">
+	<style type="text/css" media="screen">
+		#editor {
+			position: relative;
+			width: 600px;
+			height: 400px;
+			}
+	</style>
 </head>
 
 <body>
