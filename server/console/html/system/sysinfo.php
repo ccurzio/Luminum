@@ -12,16 +12,14 @@ else {
 		else if ($row["CKEY"] == "INSTALLDATE") { $installdate = $row["CVAL"]; }
 		}
 	$cpuhistquery = mysqli_query($db, "select TIMESTAMP,PCT from CPUHIST order by TIMESTAMP limit 12");
-	$cpumodel = shell_exec("/usr/bin/cat /proc/cpuinfo | /usr/bin/grep -m 1 'model name' | /usr/bin/sed -e \"s/^.*\\\\: //\"");
-	$cpuspeed = shell_exec("/usr/bin/cat /proc/cpuinfo | /usr/bin/grep -m 1 'MHz' | /usr/bin/sed -e \"s/^.*\\\\: //\"");
-	$cpucores = shell_exec("/usr/bin/cat /proc/cpuinfo | /usr/bin/grep 'processor' | /usr/bin/wc -l");
-	$cpuarch = shell_exec("/usr/bin/uname -m");
+	$cpumodel = str_replace("\n", "", shell_exec("/usr/bin/cat /proc/cpuinfo | /usr/bin/grep -m 1 'model name' | /usr/bin/sed -e \"s/^.*\\\\: //\""));
+	$cpuspeed = str_replace("\n", "",shell_exec("/usr/bin/cat /proc/cpuinfo | /usr/bin/grep -m 1 'MHz' | /usr/bin/sed -e \"s/^.*\\\\: //\""));
+	$cpucores = str_replace("\n", "",shell_exec("/usr/bin/cat /proc/cpuinfo | /usr/bin/grep 'processor' | /usr/bin/wc -l"));
+	$cpuarch = str_replace("\n", "",shell_exec("/usr/bin/uname -m"));
 	$osver = shell_exec("/usr/bin/cat /etc/debian_version");
-	$kernel = shell_exec("/usr/bin/uname -r");
-	$uptime = shell_exec("/usr/bin/uptime -p | /usr/bin/sed -e 's/up //'");
-	$disks = array_filter(preg_split("/\r\n|\n|\r/",shell_exec("/usr/bin/lsblk | /usr/bin/grep disk | /usr/bin/sed -E 's/^([A-Za-z0-9]+).*$/\/dev\/\1/'")));
-	$diskinfo = shell_exec("/usr/bin/df -h | /usr/bin/grep -vE '(udev|tmpfs|Filesy)' | /usr/bin/sed -e 's/\s......//' -e 's/  / /g' -e 's/  / /g' -e 's/\/$//' -e 's/G/GB/g'");
-	$diskarray = explode(" ",$diskinfo);
+	$kernel = str_replace("\n", "",shell_exec("/usr/bin/uname -r"));
+	$uptime = str_replace("\n", "",shell_exec("/usr/bin/uptime -p | /usr/bin/sed -e 's/up //'"));
+	$disks = array_filter(preg_split("/\r\n|\n|\r/",shell_exec("/usr/bin/lsblk | /usr/bin/grep disk | /usr/bin/sed -E 's/^([A-Za-z0-9]+).*$/\\1/'")));
 	$ifaces = shell_exec("/usr/sbin/ifconfig | /usr/bin/grep inet | /usr/bin/grep -v 127.0 | /usr/bin/wc -l");
 ?>
 
@@ -47,7 +45,7 @@ else {
 		</div>
 
 		<div id="CPU" class="configtab" style="display: none;">
-			<div class="row"style="margin-left: 20px; margin-top: 20px; margin-bottom: 20px; margin-right: 20px;">
+			<div class="row" style="margin-left: 20px; margin-top: 20px; margin-bottom: 20px; margin-right: 20px;">
 				<div class="column" style="width: 15%; min-width: 220px;"><img src="/images/cpu.png" style="width: 200px; height: 200px;"></div>
 				<div class="column" style="width: 40%; text-align: left; padding-right: 20px;">
 					<table style="border: 0;">
@@ -72,16 +70,58 @@ else {
 		</div>
 
 		<div id="Disks" class="configtab" style="display: none;">
-			<img src="/images/drives.png" style="width: 200px; height: 200px;">
-			<table style="width: 20%; border: 0; margin-left: auto; margin-right: auto; margin-top: 15px; margin-bottom: 15px;">
-			<tr><td style="text-align: left; background-color: transparent; border: 0;">Connected Drives:</td><td style="font-weight: normal; background-color: transparent; border: 0; text-align: right;"><?php print count($disks); ?></td></tr>
-			</table>
+			<div class="row" style="margin-left: 20px; margin-top: 20px; margin-bottom: 20px; margin-right: 20px;">
+				<div class="column" style="width: 15%; min-width: 220px;"><img src="/images/drives.png" style="width: 200px; height: 200px;"></div>
+				<div class="column" style="width: 40%; text-align: left; padding-right: 20px;">
+					<p style="margin-left: 3px;">
+					<span style="color: #444;"><b>Connected Drives:</b> &nbsp;&nbsp; <?php print count($disks); ?><span>
+					</p>
 
-			<table style="width: 20%; border: 0; margin-left: auto; margin-right: auto; margin-top: 15px; margin-bottom: 15px;">
-			<tr><td style="text-align: left; background-color: transparent; border: 0;">Capacity:</td><td style="font-weight: normal; background-color: transparent; border: 0; text-align: right;"><?php print $diskarray[1]; ?></td></tr>
-			<tr><td style="text-align: left; background-color: transparent; border: 0;">Used Space:</td><td style="font-weight: normal; background-color: transparent; border: 0; text-align: right;"><?php print $diskarray[2]; ?></td></tr>
-			<tr><td style="text-align: left; background-color: transparent; border: 0;">Free Space:</td><td style="font-weight: normal; background-color: transparent; border: 0; text-align: right;"><?php print $diskarray[3]; ?></td></tr>
-			</table>
+					<table style="border: 0; width: 250px; margin-top: 25px;">
+						<?php
+						$dcnt = 0;
+						foreach ($disks as $diskval) {
+							$dcnt++;
+							//$dparts = array_filter(preg_split("/\r\n|\n|\r/",shell_exec("lsblk | /usr/bin/grep $diskval | grep part")));
+							$dcap = substr(shell_exec("lsblk -a -o name,size /dev/$diskval | /usr/bin/grep -E '$diskval\s+' | /usr/bin/sed -E 's/$diskval\s+//'"), 0, -1);
+							$dparts = array_filter(preg_split("/\r\n|\n|\r/",shell_exec("lsblk -a -o name,size,type,mountpoints /dev/$diskval --list | /usr/bin/grep -vE '(NAME|disk)' | /usr/bin/sed -E 's/part \[SWAP\]/swap/; s/\\s+/ /; s/(K|M|G|T)/\\1B/'")));
+							print "\t\t\t\t\t\t<tr><td colspan=\"2\" style=\"text-align: left; color: #444; background-color: transparent; border: 0;\"><u>	Disk $dcnt (/dev/$diskval)</u>:</td></tr>\n";
+							print "\t\t\t\t\t\t<tr><td style=\"text-align: left; color: #444; background-color: transparent; border: 0;\">Capacity:</td><td style=\"font-weight: normal; color: #444; background-color: transparent; border: 0; text-align: left;\">" . $dcap . "B</td></tr>\n";
+							print "\t\t\t\t\t\t<tr><td style=\"text-align: left; color: #444; background-color: transparent; border: 0;\">Partitions:</td><td style=\"font-weight: normal; color: #444; background-color: transparent; border: 0; text-align: left;\">" . count($dparts) . "</td></tr>\n";
+							foreach ($dparts as $part) {
+								$dpstats = array_filter(preg_split('/\s/',$part));
+								print "\t\t\t\t\t\t<tr><td style=\"padding-left: 20px; text-align: left; color: #444; background-color: transparent; border: 0;\">/dev/" . $dpstats[0] . ":</td><td style=\"font-weight: normal; color: #444; background-color: transparent; border: 0; text-align: left;\">" . $dpstats[1] . "</td></tr>\n";
+								}
+							}
+						?>
+					</table>
+
+				</div>
+
+				<div class="column" style="width: 35%; padding-right: 20px;">
+					<div style="width: 100%; background-color: #fff; border: 1px solid #aaa; border-radius: 8px; padding: 15px;">
+						<div style="width: 100%; text-align: center; color: #777; font-size: 13px;"><b>Disk Usage</b></div>
+						<table style="border: 0; width: 400px; margin-top: 10px; margin-left: auto; margin-right: auto;">
+					<?php
+					foreach ($dparts as $part) {
+						$dpstats = array_filter(preg_split('/\s/',$part));
+						if (isset($dpstats[3]) && $dpstats[2] != "swap") {
+							$partused = substr(shell_exec("/usr/bin/df -h | /usr/bin/grep '\/dev\/" . $dpstats[0] . "' | /usr/bin/sed -E 's/^.*(1?[0-9][0-9])\%.*$/\\1/'"), 0, -1);
+							if ($partused < 50) { $pctbg = "#2d7d3c"; }
+							else if ($partused >= 50 && $dcap < 75) { $pctbg = "#d4bc08"; }
+							else if ($partused > 75) { $pctbg = "#91110a"; }
+							print "<tr><td style=\"width: 200px; height: 30px; text-align: left; color: #777; background-color: transparent; border: 0; padding-bottom: 20px;\"><b>/dev/" . $dpstats[0] . ":</b></td><td style=\"background-color: transparent; width: 70%; border: 0;\"><div style=\"border-radius: 5px; width: 100%; height: 25px; background-color: #ccc; text-align: left; margin-bottom: -20px;\"><div style=\"height: 100%; width: " . $partused . "%; background-color: " . $pctbg . "; border-radius: 5px; margin-bottom: 0;\"><div style=\"width: 100%; padding-top: 3px; text-align: center; color: #fff;\">" . $partused . "%</div></div></div><br><span style=\"color: #777; font-size: 12px;\">Used: " . preg_replace('/(K|M|G|T)B/',"",$dpstats[1]) * ($partused / 100) . preg_replace('/\d+\.?\d+?/',"",$dpstats[1]) . " of " . $dpstats[1] . "</span></td></tr>\n";
+							//print "<tr><td style=\"width: 200px; text-align: left; color: #777; background-color: transparent; border: 0;\"></td><td style=\"width: 200px; font-size: 12px; text-align: left; color: #777; background-color: transparent; border: 0;\">Used: " . preg_replace('/(K|M|G|T)B/',"",$dpstats[1]) * ($partused / 100) . preg_replace('/\d+\.?\d+?/',"",$dpstats[1]) . " of " . $dpstats[1] . "</td></tr>\n";
+							}
+						elseif ($dpstats[2] == "swap") {
+							print "<tr><td style=\"width: 200px; height: 30px; text-align: left; color: #777; background-color: transparent; border: 0;\"><b>/dev/" . $dpstats[0] . ":</b></td><td style=\"background-color: transparent; width: 70%; border: 0; color: #777;\">Swap (" . $dpstats[1] . ")</td></tr>\n";
+							}
+						}
+					?>
+						</table>
+					</div>
+				</div>
+			</div>
 		</div>
 
 		<div id="Memory" class="configtab" style="display: none;">
