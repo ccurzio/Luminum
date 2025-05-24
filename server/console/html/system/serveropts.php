@@ -61,13 +61,13 @@ else {
 			?>
 			</select>
 			<div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Specifies the minimum number of targeted clients requiring confirmation for action deployments<br><br>Default: Enabled; 250 Endpoints</span></div></td></tr>
-			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: normal; padding-left: 30px;"><span id="ctlabel">Confirmation Threshold:</span></td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><input id="actconfclients" type="text" style="width: 60px; font-size: 15px; padding: 3px; margin-top: 0;" maxlength="5" value="<?php print $targetconfthreshold; ?>"> <span id="eplabel">Endpoints</span></td></tr>
+			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: normal; padding-left: 30px;"><span id="ctlabel">Confirmation Threshold:</span></td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><input id="actconfclients" type="text" style="width: 60px; font-size: 15px; padding: 3px; margin-top: 0;" maxlength="5" value="<?php print $targetconfthreshold; ?>" onchange="formCheck()"> <span id="eplabel">Endpoints</span></td></tr>
 			</table>
 		</div>
 
 		<div id="Endpoints" class="configtab" style="display: none;">
 			<table style="width: 50%; border: 0; margin-left: auto; margin-right: auto; margin-top: 15px; margin-bottom: 15px;">
-			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Communication Method: </td><td style="background-color: transparent; border: 0;"><select id="commproto" style="width: 175px; height: 28px;">
+			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Communication Method: </td><td style="background-color: transparent; border: 0;"><select id="commproto" style="width: 175px; height: 28px;" onchange="formCheck()">
 			<?php if ($endpointcomm == "mqtt") {
 				print "<option value=\"mqtt\" selected=\"selected\">MQTT</option><option value=\"direct\">Hub &amp; Spoke</option><option value=\"hybrid\">Hybrid</option>\n";
 				}
@@ -80,17 +80,17 @@ else {
 			?>
 			</select>
 			<div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">The method of communication used between the server and endpoint clients.<br><br><u>MQTT</u>: Message Queuing Telemetry Transport provides a method by which clients subscribe to feeds on which messages are published<br><br><u>Hub &amp; Spoke</u>: Direct client/server connections (NOT RECOMMENDED FOR LARGE MULTI-NETWORK DEPLOYMENTS)<br><br><u>Hybrid</u>: Uses a combination of both MQTT and Hub &amp; Spoke with the server automatically choosing the best method based on endpoint network positioning<br><br>Default: MQTT</span></div></td></tr>
-			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Check-In Interval: </td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><input id="checkinint" type="text" style="width: 25px; font-size: 15px; padding: 3px; margin-top: 0;" maxlength="2" value="<?php print $checkinint; ?>"> Minutes <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">The interval at which clients ping the server with their status and request updates<br><br>Default: 5 Minutes</span></div></td></tr>
-			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Mark as Missing After: </td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><input id="checkinint" type="text" style="width: 25px; font-size: 15px; padding: 3px; margin-top: 0;" maxlength="2" value="<?php print $missingafter; ?>"> Days <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">The length of time after which offline endpoints are marked as missing<br><br>Default: 90 Days</span></div></td></tr>
+			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Check-In Interval: </td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><input id="checkinint" type="text" style="width: 25px; font-size: 15px; padding: 3px; margin-top: 0;" maxlength="2" value="<?php print $checkinint; ?>" onchange="formCheck()"> Minutes <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">The interval at which clients ping the server with their status and request updates<br><br>Default: 5 Minutes</span></div></td></tr>
+			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Mark as Missing After: </td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><input id="checkinint" type="text" style="width: 25px; font-size: 15px; padding: 3px; margin-top: 0;" maxlength="2" value="<?php print $missingafter; ?>" onchange="formCheck()"> Days <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">The length of time after which offline endpoints are marked as missing<br><br>Default: 90 Days</span></div></td></tr>
 			</table>
 		</div>
 
 		<div id="Content" class="configtab" style="display: none;">
 			<table style="width: 50%; border: 0; margin-left: auto; margin-right: auto; margin-top: 15px; margin-bottom: 15px;">
-			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Default Content Set for new Sensors: </td><td style="background-color: transparent; border: 0;"><select id="sensorset" style="width: 175px; height: 28px;">
+			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Default Content Set for new Sensors: </td><td style="background-color: transparent; border: 0;"><select id="sensorset" style="width: 175px; height: 28px;" onchange="formCheck()">
 			<?php foreach ($csopts as $value) { print $value; } ?>
 			</select> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">The content set to which newly-created sensors will be added by default</span></div></td></tr>
-			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Default Content Set for new Packages: </td><td style="background-color: transparent; border: 0;"><select id="sensorset" style="width: 175px; height: 28px;">
+			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Default Content Set for new Packages: </td><td style="background-color: transparent; border: 0;"><select id="packageset" style="width: 175px; height: 28px;" onchange="formCheck()">
 			<?php foreach ($csopts as $value) { print $value; } ?>
 			</select> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">The content set to which newly-created packages will be added by default</span></div></td></tr>
 			</table>
@@ -106,7 +106,7 @@ else {
 
 		<div id="Logins" class="configtab" style="display: none;">
 			<table style="width: 50%; border: 0; margin-left: auto; margin-right: auto; margin-top: 15px; margin-bottom: 15px;">
-			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Minimum Password Length: </td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><input id="passlen" type="text" style="width: 25px; font-size: 15px; padding: 3px; margin-top: 0;" maxlength="2" value="<?php print $minpass; ?>"> Characters</td></tr>
+			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Minimum Password Length: </td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><input id="passlen" type="text" style="width: 25px; font-size: 15px; padding: 3px; margin-top: 0;" maxlength="2" value="<?php print $minpass; ?>" onchange="formCheck()"> Characters</td></tr>
 			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Password Complexity Enforcement: </td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><select id="complexpass" style="width: 175px; height: 28px;" onchange="formCheck()">
 			<?php if ($complexpass == "Enabled") {
 				print "<option value=\"enabled\" selected=\"selected\">Enabled</option><option value=\"disabled\">Disabled</option>\n\n";
@@ -142,7 +142,7 @@ else {
 				$timeoutnum = preg_replace('/[^0-9]/', '', $logintimeout);
 				$timeouttype = preg_replace('/[^a-zA-Z]/', '', $logintimeout);
 			?>
-			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Inactivity Timeout: </td><td style="background-color: transparent; border: 0;"><input id="inactiveint" type="text" style="width: 25px; font-size: 15px; padding: 3px; margin-top: 0;" maxlength="2" <?php print "value=\"$timeoutnum\">"; ?> <select id="inttype" style="width: 175px; height: 28px;">
+			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Inactivity Timeout: </td><td style="background-color: transparent; border: 0;"><input id="inactiveint" type="text" style="width: 25px; font-size: 15px; padding: 3px; margin-top: 0;" maxlength="2" <?php print "value=\"$timeoutnum\""; ?> onchange="formCheck()"> <select id="inttype" style="width: 175px; height: 28px;" onchange="formCheck()">
 			<?php
 				if ($timeouttype == "M") {
 					print "<option value=\"min\" selected=\"selected\">Minute(s)</option><option value=\"hour\">Hour(s)</option><option value=\"day\">Day(s)</option>";
@@ -155,7 +155,7 @@ else {
 					}
 			?>
 			</select> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">The length of time before a user is automatically logged out due to inactivity<br><br>Default: 15 Minutes</span></div></td></tr>
-			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: normal; padding-left: 30px;">2 Minute Warning:</td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><select id="2minwarn" style="width: 175px; height: 28px;">
+			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: normal; padding-left: 30px;">2 Minute Warning:</td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><select id="2minwarn" style="width: 175px; height: 28px;" onchange="formCheck()">
 			<?php
 				if ($timeoutwarn == "Enabled") {
 					print "<option value=\"enabled\" selected=\"selected\">Enabled</option><option value=\"disabled\">Disabled</option>";
