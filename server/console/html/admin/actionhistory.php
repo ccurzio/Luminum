@@ -11,8 +11,8 @@ $actioncount = 0;
 
 	<div class="module-content">
 		<div style="display: block; width: 100%; text-align: right;">
-			<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Reissue</button>
-			<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Get Info</button>
+			<button id="reissue" class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Reissue Selected</button>
+			<button id="getinfo" class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Get Info</button>
 		</div>
 		<table id="ahtable" style="margin-top: 10px;">
 		<tr><td colspan="9"><div style="position: absolute; padding-top: 5px; padding-left: 5px;">0 of 0 items <img id="refresh" src="icons/refresh.png" style="cursor: pointer; margin-left: 2px; width: 20px; height: 20px; vertical-align: text-bottom;" onclick="reloadTable()"></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($actioncount == 0) { print "disabled=\"disabled\""; } ?>></div></td></tr>
