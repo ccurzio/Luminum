@@ -72,12 +72,12 @@ else {
 		<div id="Disks" class="configtab" style="display: none;">
 			<div class="row" style="margin-left: 20px; margin-top: 20px; margin-bottom: 20px; margin-right: 20px;">
 				<div class="column" style="width: 15%; min-width: 220px;"><img src="/images/drives.png" style="width: 200px; height: 200px;"></div>
-				<div class="column" style="width: 40%; text-align: left; padding-right: 20px;">
+				<div class="column" style="width: 25%; text-align: left; padding-right: 5%;">
 					<p style="margin-left: 3px;">
 					<span style="color: #444;"><b>Connected Drives:</b> &nbsp;&nbsp; <?php print count($disks); ?><span>
 					</p>
 
-					<table style="border: 0; width: 250px; margin-top: 25px;">
+					<table style="border: 0; margin-top: 25px;">
 						<?php
 						$dcnt = 0;
 						foreach ($disks as $diskval) {
@@ -98,8 +98,8 @@ else {
 
 				</div>
 
-				<div class="column" style="width: 35%; padding-right: 20px;">
-					<div style="width: 100%; background-color: #fff; border: 1px solid #aaa; border-radius: 8px; padding: 15px;">
+				<div class="column" style="width: 35%; padding-left: 10%; text-align: right; margin-right: 20px;">
+					<div style="width: 100%; min-width: 425px; background-color: #fff; border: 1px solid #aaa; border-radius: 8px; padding: 15px;">
 						<div style="width: 100%; text-align: center; color: #777; font-size: 13px;"><b>Disk Usage</b></div>
 						<table style="border: 0; width: 400px; margin-top: 10px; margin-left: auto; margin-right: auto;">
 					<?php
@@ -110,11 +110,11 @@ else {
 							if ($partused < 50) { $pctbg = "#2d7d3c"; }
 							else if ($partused >= 50 && $dcap < 75) { $pctbg = "#d4bc08"; }
 							else if ($partused > 75) { $pctbg = "#91110a"; }
-							print "<tr><td style=\"width: 200px; height: 30px; text-align: left; color: #777; background-color: transparent; border: 0; padding-bottom: 20px;\"><b>/dev/" . $dpstats[0] . ":</b></td><td style=\"background-color: transparent; width: 70%; border: 0;\"><div style=\"border-radius: 5px; width: 100%; height: 25px; background-color: #ccc; text-align: left; margin-bottom: -20px;\"><div style=\"height: 100%; width: " . $partused . "%; background-color: " . $pctbg . "; border-radius: 5px; margin-bottom: 0;\"><div style=\"width: 100%; padding-top: 3px; text-align: center; color: #fff;\">" . $partused . "%</div></div></div><br><span style=\"color: #777; font-size: 12px;\">Used: " . preg_replace('/(K|M|G|T)B/',"",$dpstats[1]) * ($partused / 100) . preg_replace('/\d+\.?\d+?/',"",$dpstats[1]) . " of " . $dpstats[1] . "</span></td></tr>\n";
+							print "<tr><td style=\"width: 200px; height: 30px; text-align: left; color: #777; background-color: transparent; border: 0; padding-bottom: 20px;\"><b>/dev/" . $dpstats[0] . ":</b></td><td style=\"text-align: left; background-color: transparent; width: 70%; border: 0;\"><div style=\"border: 1px solid #aaa; border-radius: 5px; width: 100%; height: 25px; background-color: #ccc; text-align: left; margin-bottom: -20px;\"><div style=\"height: 100%; width: " . $partused . "%; background-color: " . $pctbg . "; border-radius: 5px; margin-bottom: 0;\"><div style=\"width: 100%; padding-top: 3px; text-align: center; color: #fff;\">" . $partused . "%</div></div></div><br><span style=\"color: #777; font-size: 12px; font-weight: normal;\">" . preg_replace('/(K|M|G|T)B/',"",$dpstats[1]) * ($partused / 100) . preg_replace('/\d+\.?\d+?/',"",$dpstats[1]) . " used of " . $dpstats[1] . "</span></td></tr>\n";
 							//print "<tr><td style=\"width: 200px; text-align: left; color: #777; background-color: transparent; border: 0;\"></td><td style=\"width: 200px; font-size: 12px; text-align: left; color: #777; background-color: transparent; border: 0;\">Used: " . preg_replace('/(K|M|G|T)B/',"",$dpstats[1]) * ($partused / 100) . preg_replace('/\d+\.?\d+?/',"",$dpstats[1]) . " of " . $dpstats[1] . "</td></tr>\n";
 							}
 						elseif ($dpstats[2] == "swap") {
-							print "<tr><td style=\"width: 200px; height: 30px; text-align: left; color: #777; background-color: transparent; border: 0;\"><b>/dev/" . $dpstats[0] . ":</b></td><td style=\"background-color: transparent; width: 70%; border: 0; color: #777;\">Swap (" . $dpstats[1] . ")</td></tr>\n";
+							print "<tr><td style=\"width: 200px; height: 30px; text-align: left; color: #777; background-color: transparent; border: 0;\"><b>/dev/" . $dpstats[0] . ":</b></td><td style=\"background-color: transparent; width: 70%; border: 0; color: #777; font-weight: normal; text-align: left;\">Swap (" . $dpstats[1] . ")</td></tr>\n";
 							}
 						}
 					?>
