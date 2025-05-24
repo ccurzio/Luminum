@@ -66,7 +66,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 			<div style="float: left;">
 				<table style="margin-top: 10px; margin-bottom: 20px; border: 0;">
 				<tr><td style="background-color: transparent; border: 0; color: #444;">Name: <span style="color: red;">*</span></td><td style="background-color: transparent; border: 0; color: #444;">Timeout: <span style="color: red;">*</span></td></tr>
-				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgname" style="width: 400px;"></td><td style="background-color: transparent; border: 0; color: #444;"><input id="timeout" type="text" style="width: 30px;" value="30"><select id="tint" style="width: 100px; margin-left: 10px; height: 33px;"><option value="sec">Seconds</option><option value="min">Minutes</option></select></td></tr>
+				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgname" style="width: 400px;"></td><td style="background-color: transparent; border: 0; color: #444;"><input id="timeout" type="text" style="width: 30px;" value="30"><select id="tint" style="width: 100px; margin-left: 10px; height: 33px;"><option value="sec">Second(s)</option><option value="min">Minute(s)</option></select></td></tr>
 				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Description: <span style="color: red;">*</span></td><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Result Type:</td></tr>
 				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgdesc" style="width: 400px;"></td><td style="background-color: transparent; border: 0; color: #444;"><select id="rtype" style="font-size: 15px; height: 33px; width: 300px; margin-left: 2px; margin-right: 30px;"><option value="text">Text</option><option value="number">Number</option><option value="ipaddress">IP Address</option><option value="datetime">DateTime</option></td></tr>
 				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Content Set: <span style="color: red;">*</span></td><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Category:</td></tr>
@@ -84,16 +84,37 @@ $sensorcount = mysqli_num_rows($sensorquery);
 			</div>
 
 			<div style="float: right; text-align: right; position: absolute; margin-top: 8px; width: 97%;">
-				<button id="save" class="formgo" style="margin-top: 5px; margin-right: 0;">Save Sensor</button>
+				<button id="save" class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Save Sensor</button>
 				<a href="/index.php?view=sensors"><button type="button" class="formgo" style="margin-top: 5px; margin-right: 0;">Cancel</button></a>
 			</div>
 
 		<hr style="width: 99%; margin-bottom: 20px;">
 
 		<table style="border: 0; margin-bottom: 20px;">
-		<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="checkbox" id="useparams"> Parameter Inputs</td></tr>
+		<tr><td style="background-color: transparent; border: 0; color: #444; font-weight: normal;"><input type="checkbox" id="useparams"> Parameter Inputs</td></tr>
 		</table>
-	</div>
+
+		<hr style="width: 99%; margin-bottom: 20px;">
+
+		<div class="module-content" style="padding: 0 1px 1px 0; width: 600px; margin-left: auto; margin-right: auto;">
+			<div class="tabbar tabbarback">
+			<button type="button" class="tabbaritem tabbutton tablink tabbarsel" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Linux')">Linux</button>
+			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'macOS')">macOS</button>
+			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Windows')">Windows</button>
+		</div>
+
+		<div style="margin: 8px 0 0 0; width: 100%;">
+			<div style="text-align: left;">
+				<input type="checkbox" style="margin-left: 8px;" onclick="editor.textInput.getElement().disabled=true;"> Enabled &nbsp;&nbsp;&nbsp;&nbsp; Type: <select id="lstype"><option value="shell">Shell Script</option><option value="perl">Perl</option><option value="python">Python</option></select>
+			</div>
+		<div id="editor" style="margin-top: 7px;" disabled="disabled"></div>
+
+		</div>
+		<script src="/layout/src/ace.js" type="text/javascript" charset="utf-8"></script>
+		<script>
+			var editor = ace.edit("editor");
+			editor.getSession().setMode("ace/mode/javascript");
+		</script>
 
 <script>
 function toggleSplit() {
