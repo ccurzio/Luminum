@@ -98,23 +98,46 @@ $sensorcount = mysqli_num_rows($sensorquery);
 
 		<div class="module-content" style="padding: 0 1px 1px 0; width: 600px; margin-left: auto; margin-right: auto;">
 			<div class="tabbar tabbarback">
-			<button type="button" class="tabbaritem tabbutton tablink tabbarsel" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Linux')">Linux</button>
-			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'macOS')">macOS</button>
-			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Windows')">Windows</button>
-		</div>
-
-		<div style="margin: 8px 0 0 0; width: 100%;">
-			<div style="text-align: left;">
-				<input type="checkbox" style="margin-left: 8px;" onclick="editor.textInput.getElement().disabled=true;"> Enabled &nbsp;&nbsp;&nbsp;&nbsp; Type: <select id="lstype"><option value="shell">Shell Script</option><option value="perl">Perl</option><option value="python">Python</option></select>
+				<button type="button" class="tabbaritem tabbutton tablink tabbarsel" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Linux')">Linux</button>
+				<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'macOS')">macOS</button>
+				<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Windows')">Windows</button>
 			</div>
-		<div id="editor" style="margin-top: 7px;" disabled="disabled"></div>
 
+			<div style="margin: 8px 0 0 0; width: 100%;" id="Linux" class="configtab">
+				<div style="text-align: left;">
+					<input type="checkbox" style="margin-left: 8px;" onclick="leditor.textInput.getElement().disabled=true;"> Enabled &nbsp;&nbsp;&nbsp;&nbsp; Type: <select id="lstype"><option value="shell">Shell Script</option><option value="perl">Perl</option><option value="python">Python</option></select>
+				</div>
+				<div id="leditor" style="margin-top: 7px;"></div>
+				<script src="/layout/src/ace.js" type="text/javascript" charset="utf-8"></script>
+				<script>
+					var leditor = ace.edit("leditor");
+					leditor.getSession().setMode("ace/mode/sh");
+				</script>
+			</div>
+
+			<div style="margin: 8px 0 0 0; width: 100%; display: none;" id="macOS" class="configtab">
+				<div style="text-align: left;">
+					<input type="checkbox" style="margin-left: 8px;"> Enabled &nbsp;&nbsp;&nbsp;&nbsp; Type: <select id="lstype"><option value="shell">Shell Script</option><option value="perl">Perl</option><option value="python">Python</option></select>
+				</div>
+				<div id="meditor" style="margin-top: 7px;"></div>
+				<script>
+					var meditor = ace.edit("meditor");
+					meditor.getSession().setMode("ace/mode/sh");
+				</script>
+			</div>
+
+			<div style="margin: 8px 0 0 0; width: 100%; display: none;" id="Windows" class="configtab">
+				<div style="text-align: left;">
+					<input type="checkbox" style="margin-left: 8px;"> Enabled &nbsp;&nbsp;&nbsp;&nbsp; Type: <select id="lstype"><option value="powershell">Powershell</option><option value="vbscript">VBScript</option><option value="python">Python</option></select>
+				</div>
+				<div id="weditor" style="margin-top: 7px;"></div>
+				<script>
+					var weditor = ace.edit("weditor");
+					weditor.getSession().setMode("ace/mode/powershell");
+				</script>
+			</div>
 		</div>
-		<script src="/layout/src/ace.js" type="text/javascript" charset="utf-8"></script>
-		<script>
-			var editor = ace.edit("editor");
-			editor.getSession().setMode("ace/mode/javascript");
-		</script>
+	</div>
 
 <script>
 function toggleSplit() {
@@ -130,6 +153,22 @@ function toggleSplit() {
 		}
 	}
 
+function switchTab(evt, configSect) {
+	var i, x, tablinks;
+	x = document.getElementsByClassName("configtab");
+
+	for (i = 0; i < x.length; i++) {
+		x[i].style.display = "none";
+		}
+
+	tablinks = document.getElementsByClassName("tablink");
+	for (i = 0; i < x.length; i++) {
+		tablinks[i].className = tablinks[i].className.replace(" tabbarsel", "");
+		}
+
+	document.getElementById(configSect).style.display = "block";
+	evt.currentTarget.className += " tabbarsel";
+	}
 </script>
 
 		<?php else: ?>
