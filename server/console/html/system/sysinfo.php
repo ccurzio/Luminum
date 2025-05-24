@@ -11,7 +11,7 @@ else {
 		if ($row["CKEY"] == "SID") { $serverid = $row["CVAL"]; }
 		else if ($row["CKEY"] == "INSTALLDATE") { $installdate = $row["CVAL"]; }
 		}
-	$cpuhistquery = mysqli_query($db, "select TIMESTAMP,PCT from CPUHIST order by TIMESTAMP limit 12");
+	$cpuhistquery = mysqli_query($db, "select TIMESTAMP,PCT from CPUHIST order by TIMESTAMP limit 8");
 	$cpumodel = str_replace("\n", "", shell_exec("/usr/bin/cat /proc/cpuinfo | /usr/bin/grep -m 1 'model name' | /usr/bin/sed -e \"s/^.*\\\\: //\""));
 	$cpuspeed = str_replace("\n", "",shell_exec("/usr/bin/cat /proc/cpuinfo | /usr/bin/grep -m 1 'MHz' | /usr/bin/sed -e \"s/^.*\\\\: //\""));
 	$cpucores = str_replace("\n", "",shell_exec("/usr/bin/cat /proc/cpuinfo | /usr/bin/grep 'processor' | /usr/bin/wc -l"));
