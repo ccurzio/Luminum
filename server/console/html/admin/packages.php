@@ -38,7 +38,7 @@ $pkgcount = mysqli_num_rows($pkgquery);
 			if ($pkgcount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
 			else { print "<input type=\"checkbox\">"; }
 		?>
-		</td><td style="width: 200px;">Name</td><td>Description</td><td style="width: 100px;">OS</td><td style="width: 75px;">Size</td><td style="width: 100px;">Author</td><td style="width: 175px;">Create Date</td><td style="width: 175px;">Last Modification</td><td style="width: 100px;">Modified By</tr>
+		</td><td style="width: 200px;">Name</td><td>Description</td><td style="width: 100px;">Supports</td><td style="width: 75px;">Size</td><td style="width: 100px;">Author</td><td style="width: 175px;">Create Date</td><td style="width: 175px;">Last Modification</td><td style="width: 100px;">Modified By</tr>
 		<?php
 
 		if ($pkgcount == 0) {
