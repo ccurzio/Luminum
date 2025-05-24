@@ -23,7 +23,7 @@ $wincount = 0;
 			<tr><td style="width: 15px;">
 			<?php
 			if ($clientscount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
-			else { print "<input type=\"checkbox\">"; }
+			else { print "<input id=\"selectall\" type=\"checkbox\" onclick=\"allToggle()\">"; }
 			?>
 			</td><td>Hostname</td><td style="width: 125px;">IP Address</td><td style="width: 50px;">OS</td><td style="width: 150px;">Release</td><td style="width: 120px;">Client Version</td><td style="width: 60px;">Status</td><td style="width: 175px;">Last Check-In</td></tr>
 			<?php
@@ -171,5 +171,33 @@ function reloadTable() {
 		}
 	}
 
+function allToggle() {
+	const allCheckbox = document.getElementById("selectall");
+	const checkboxes = document.querySelectorAll('input[class="contentset"]');
+
+	checkboxes.forEach(checkbox => {
+		checkbox.checked = allCheckbox.checked;
+		var rowId = removeLetters(checkbox.id);
+		rowHighlight(rowId);
+		});
+	}
+
+function allCheck() {
+	const checkboxes = document.querySelectorAll('input[class="contentset"]');
+	var checkTrigger = 0;
+
+	checkboxes.forEach(checkbox => {
+		if (checkbox.checked == true) { checkTrigger++; }
+		});
+
+	if (checkTrigger == checkboxes.length) {
+		document.getElementById("selectall").checked = "checked";
+		}
+	else { document.getElementById("selectall").checked = false; }
+	}
+
+function removeLetters(str) {
+	return str.replace(/[a-zA-Z]/g, '');
+	}
 </script>
 
