@@ -126,7 +126,7 @@ function updateDragHandleIcons(container) {
 	}
 
 function insertLogicalOperators(container) {
-	container.querySelectorAll('.logical-operator, .logical-operator-br').forEach(el => el.remove());
+	container.querySelectorAll('.logical-operator, .logical-operator-br, .group-button').forEach(el => el.remove());
 	const rows = Array.from(container.querySelectorAll('.list-item'));
 
 	for (let i = 0; i < rows.length - 1; i++) {
@@ -146,8 +146,19 @@ function insertLogicalOperators(container) {
 		select.add(andOption);
 		select.add(orOption);
 
+		const groupImg = document.createElement('img');
+		groupImg.src = 'icons/addgroup.png';
+		groupImg.className = 'group-button';
+		groupImg.style.width = '24px';
+		groupImg.style.height = '24px';
+		groupImg.style.marginBottom = '3px';
+		groupImg.style.cursor = 'pointer';
+		groupImg.style.marginLeft = '8px';
+		groupImg.style.verticalAlign = 'middle';
+
 		row.appendChild(br);
 		row.appendChild(select);
+		row.appendChild(groupImg);
 
 		//rows[i].after(select);
 		}
