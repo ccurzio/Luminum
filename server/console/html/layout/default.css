@@ -128,19 +128,11 @@ body h1 {
 	color: #888;
 	}
 
-
 .drag-handle.disabled { cursor: default !important; }
 .drag-handle:not(.disabled) { cursor: grab; }
 .ghost-hidden * { opacity: 0; }
-.sortable-placeholder { visibility: hidden; }
 .sortable-dragging { opacity: 0.5; }
-
-.list-item {
-	display: flex;
-	align-items: center;
-	gap: 5px;
-	padding-top: 5px;
-	}
+.hidden-during-drag { visibility: hidden; }
 
 .logo-img {
 	height: 40px;
