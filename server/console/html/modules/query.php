@@ -34,138 +34,124 @@
 
 <script>
 function addRow(event) {
-  const addBtn = event.target;
-  const listItem = addBtn.closest('.list-item');
-  const container = listItem.parentElement;
+	const addBtn = event.target;
+	const listItem = addBtn.closest('.list-item');
+	const container = listItem.parentElement;
+	const newRow = listItem.cloneNode(true);
 
-  // Clone the list-item
-  const newRow = listItem.cloneNode(true);
+	newRow.querySelectorAll('input').forEach(input => input.value = '');
+	newRow.querySelectorAll('select').forEach(select => select.selectedIndex = 0);
 
-  // Clear input values inside the clone
-  newRow.querySelectorAll('input').forEach(input => input.value = '');
-  newRow.querySelectorAll('select').forEach(select => select.selectedIndex = 0);
+	container.appendChild(newRow);
 
-  // Append the new row
-  container.appendChild(newRow);
+	updateRemoveButtons(container);
+	updateDragHandleIcons(container);
+	attachHandlers();
 
-  updateRemoveButtons(container);
-  updateDragHandleIcons(container);
-  attachHandlers();
-
-  // Insert logical operators only in #from-list
-  if (container.id === 'from-list') {
-    insertLogicalOperators(container);
-  }
-}
+	if (container.id === 'from-list') { insertLogicalOperators(container); }
+	}
 
 function removeRow(event) {
-  const listItem = event.target.closest('.list-item');
-  const container = listItem.parentElement;
-  listItem.remove();
+	const listItem = event.target.closest('.list-item');
+	const container = listItem.parentElement;
+	listItem.remove();
 
-  updateRemoveButtons(container);
-  updateDragHandleIcons(container);
-  attachHandlers();
+	updateRemoveButtons(container);
+	updateDragHandleIcons(container);
+	attachHandlers();
 
-  // Insert logical operators only in #from-list
-  if (container.id === 'from-list') {
-    insertLogicalOperators(container);
-  }
-}
-  function updateRemoveButtons(container) {
-    const rows = container.querySelectorAll('.list-item');
-    rows.forEach((row, index) => {
-      // Remove any existing remove buttons
-      const existingRemove = row.querySelector('.remove');
-      if (existingRemove) existingRemove.remove();
+	if (container.id === 'from-list') { insertLogicalOperators(container); }
+	}
 
-      // Only add a remove button if it's not the first row
-      if (index > 0) {
-        const removeBtn = document.createElement('img');
-        removeBtn.src = 'icons/remove.png';
-        removeBtn.className = 'remove';
-        removeBtn.style.cursor = 'pointer';
-        removeBtn.style.marginRight = '8px';
-	removeBtn.style.verticalAlign = 'middle';
+function updateRemoveButtons(container) {
+	const rows = container.querySelectorAll('.list-item');
+	rows.forEach((row, index) => {
+		const existingRemove = row.querySelector('.remove');
 
-        // Insert before the add button
-        const addBtn = row.querySelector('.add');
-        row.insertBefore(removeBtn, addBtn);
-	removeBtn.addEventListener('click', removeRow);
-      }
-    });
-  }
+		if (existingRemove) existingRemove.remove();
 
-  function attachHandlers() {
-    document.querySelectorAll('.add').forEach(addBtn => {
-      addBtn.removeEventListener('click', addRow);
-      addBtn.addEventListener('click', addRow);
-    });
+		if (index > 0) {
+			const removeBtn = document.createElement('img');
+			removeBtn.src = 'icons/remove.png';
+			removeBtn.className = 'remove';
+			removeBtn.style.cursor = 'pointer';
+			removeBtn.style.marginRight = '8px';
+			removeBtn.style.verticalAlign = 'middle';
 
-    document.querySelectorAll('.remove').forEach(removeBtn => {
-      removeBtn.removeEventListener('click', removeRow);
-      removeBtn.addEventListener('click', removeRow);
-    });
-  }
+			const addBtn = row.querySelector('.add');
+			row.insertBefore(removeBtn, addBtn);
+			removeBtn.addEventListener('click', removeRow);
+			}
+		});
+  	}
 
-  // Initialize on page load
-  window.addEventListener('DOMContentLoaded', () => {
-    // Apply remove buttons to both lists
-    updateRemoveButtons(document.getElementById('get-list'));
-    updateRemoveButtons(document.getElementById('from-list'));
+function attachHandlers() {
+	document.querySelectorAll('.add').forEach(addBtn => {
+		addBtn.removeEventListener('click', addRow);
+		addBtn.addEventListener('click', addRow);
+		});
+
+	document.querySelectorAll('.remove').forEach(removeBtn => {
+		removeBtn.removeEventListener('click', removeRow);
+		removeBtn.addEventListener('click', removeRow);
+		});
+	}
+
+window.addEventListener('DOMContentLoaded', () => {
+	updateRemoveButtons(document.getElementById('get-list'));
+	updateRemoveButtons(document.getElementById('from-list'));
 	updateDragHandleIcons(document.getElementById('get-list'));
 	updateDragHandleIcons(document.getElementById('from-list'));
-    attachHandlers();
+	attachHandlers();
 	initSortable();
-  });
+	});
 
 function updateDragHandleIcons(container) {
-  const rows = container.querySelectorAll('.list-item');
-  const dragIcon = rows.length > 1 ? 'reorder.png' : 'reorder-dis.png';
+	const rows = container.querySelectorAll('.list-item');
+	const dragIcon = rows.length > 1 ? 'reorder.png' : 'reorder-dis.png';
 
-  rows.forEach(row => {
-    const dragHandle = row.querySelector('.drag-handle');
-    if (dragHandle) {
-	if (rows.length > 1) {
-		dragHandle.style.opacity = 1;
-	      dragHandle.src = `icons/${dragIcon}`;
-		}
-	else {
-		dragHandle.style.opacity = 0
-		dragHandle.src = 'icons/reorder-dis.png';
-		}
-    }
-  });
-}
+	rows.forEach(row => {
+		const dragHandle = row.querySelector('.drag-handle');
+		if (dragHandle) {
+			if (rows.length > 1) {
+				dragHandle.style.opacity = 1;
+				dragHandle.src = `icons/${dragIcon}`;
+				}
+			else {
+				dragHandle.style.opacity = 0
+				dragHandle.src = 'icons/reorder-dis.png';
+				}
+			}
+		});
+	}
 
 function insertLogicalOperators(container) {
 	container.querySelectorAll('.logical-operator, .logical-operator-br').forEach(el => el.remove());
-  const rows = Array.from(container.querySelectorAll('.list-item'));
+	const rows = Array.from(container.querySelectorAll('.list-item'));
 
-  // Insert dropdown between each pair of rows (not after the last one)
 	for (let i = 0; i < rows.length - 1; i++) {
-	const row = rows[i];
-    const select = document.createElement('select');
-	const br = document.createElement('br');
-	br.className = 'logical-operator-br';
+		const row = rows[i];
+		const select = document.createElement('select');
+		const br = document.createElement('br');
+		br.className = 'logical-operator-br';
 
-    select.className = 'logical-operator';
-    select.style.width = '75px';
-    select.style.margin = '5px 0 5px 30px';
-    select.style.fontSize = '15px';
-    select.style.height = '30px';
+		select.className = 'logical-operator';
+		select.style.width = '75px';
+		select.style.margin = '5px 0 5px 30px';
+		select.style.fontSize = '15px';
+		select.style.height = '30px';
 
-    const andOption = new Option('AND', 'AND');
-    const orOption = new Option('OR', 'OR');
-    select.add(andOption);
-    select.add(orOption);
+		const andOption = new Option('AND', 'AND');
+		const orOption = new Option('OR', 'OR');
+		select.add(andOption);
+		select.add(orOption);
 
-	row.appendChild(br);
-	row.appendChild(select);
+		row.appendChild(br);
+		row.appendChild(select);
 
-	//rows[i].after(select);
-  }
-}
+		//rows[i].after(select);
+		}
+	}
 
 function selectSuffix() {
 	var val = document.getElementById("targets").value;
@@ -180,28 +166,21 @@ function selectSuffix() {
 	}
 
 function initSortable() {
-  ['get-list', 'from-list'].forEach(id => {
-    const container = document.getElementById(id);
+	['get-list', 'from-list'].forEach(id => {
+		const container = document.getElementById(id);
+		new Sortable(container, {
+			handle: '.drag-handle',
+			animation: 150,
 
-    new Sortable(container, {
-      handle: '.drag-handle',
-      animation: 150,
-
-      onStart: function (evt) {
-        evt.item.classList.add('hidden-during-drag');
-      },
-
-      onEnd: function (evt) {
-        evt.item.classList.remove('hidden-during-drag');
-
-        // Update remove buttons and drag handle icons after reorder
-        updateRemoveButtons(container);
-        updateDragHandleIcons(container);
-        attachHandlers(); // reattach event listeners for remove buttons
-	if (container.id === 'from-list') { insertLogicalOperators(container); }
-      }
-    });
-  });
-}
-
+			onStart: function (evt) { evt.item.classList.add('hidden-during-drag'); },
+			onEnd: function (evt) {
+				evt.item.classList.remove('hidden-during-drag');
+				updateRemoveButtons(container);
+				updateDragHandleIcons(container);
+				attachHandlers();
+				if (container.id === 'from-list') { insertLogicalOperators(container); }
+				}
+			});
+		});
+	}
 </script>
