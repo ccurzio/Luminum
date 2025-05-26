@@ -8,14 +8,14 @@
 			<span style="font-size: 20px; font-weight: bold;">I want to retrieve:</span>
 			</p>
 			<div id="get-list">
-				<div class="list-item" style="margin-bottom: 5px;"><img src="images/reorder-dis.png" class="drag-handle" style="vertical-align: middle"> <input type="text" placeholder="Sensor"> <img src="images/add.png" class="add" style="vertical-align: middle"></div>
+				<div class="list-item" style="margin-bottom: 5px;"><img src="icons/reorder-dis.png" class="drag-handle" style="vertical-align: middle"> <input type="text" placeholder="Sensor"> <img src="icons/add.png" class="add" style="vertical-align: middle"></div>
 			</div>
 
 			<p style="margin-top: 20px;">
 			<span style="font-size: 20px; font-weight: bold;">From</span> <select style="font-size: 15px; height: 30px; margin-left: 2px;" name="targets" id="targets" class="target-dropdown" onchange="selectSuffix();"><option name="matching" value="matching" default="default">endpoints matching</option><option name="all" value="all">all endpoints</option></select> <span id="tsuffix" style="font-size: 20px; font-weight: bold;">:</span>
 			</p>
 			<div id="from-list">
-				<div class="list-item"><img src="images/reorder-dis.png" class="drag-handle" style="vertical-align: middle;"> <input type="text" placeholder="Sensor"> <select class="row-dropdown" style="font-size: 15px; height: 30px;" name="fromop"><option name="equals" value="equals">equals</option><option name="notequals" value="notequals">not equals</option><option name="contains" value="contains">contains</option><option name="greaterthan" value="greaterthan">greater than</option><option name="lessthan" value="lessthan">less than</option></select> <input type="text" placeholder="Value"> <img src="images/add.png" class="add" style="vertical-align: middle;"></div>
+				<div class="list-item"><img src="icons/reorder-dis.png" class="drag-handle" style="vertical-align: middle;"> <input type="text" placeholder="Sensor"> <select class="row-dropdown" style="font-size: 15px; height: 30px;" name="fromop"><option name="equals" value="equals">equals</option><option name="notequals" value="notequals">not equals</option><option name="contains" value="contains">contains</option><option name="greaterthan" value="greaterthan">greater than</option><option name="lessthan" value="lessthan">less than</option></select> <input type="text" placeholder="Value"> <img src="icons/add.png" class="add" style="vertical-align: middle;"></div>
 			</div>
 		</div>
 		<div class="right-box">
@@ -82,7 +82,7 @@ function removeRow(event) {
       // Only add a remove button if it's not the first row
       if (index > 0) {
         const removeBtn = document.createElement('img');
-        removeBtn.src = 'images/remove.png';
+        removeBtn.src = 'icons/remove.png';
         removeBtn.className = 'remove';
         removeBtn.style.cursor = 'pointer';
         removeBtn.style.marginRight = '8px';
@@ -128,11 +128,11 @@ function updateDragHandleIcons(container) {
     if (dragHandle) {
 	if (rows.length > 1) {
 		dragHandle.style.opacity = 1;
-	      dragHandle.src = `images/${dragIcon}`;
+	      dragHandle.src = `icons/${dragIcon}`;
 		}
 	else {
 		dragHandle.style.opacity = 0
-		dragHandle.src = 'images/reorder-dis.png';
+		dragHandle.src = 'icons/reorder-dis.png';
 		}
     }
   });
