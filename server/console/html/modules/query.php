@@ -25,7 +25,7 @@
 		</div>
 	</div>
 	<div style="width: 100%; text-align: right; padding-top: 10px;">
-		<button class="formgo" style="margin-right: 0;">Submit Query</button> <button class="formgo" style="margin-left: 0;">Reset Form</button>
+		<button id="querygo" class="formgo" style="margin-right: 0;" disabled="disabled">Submit Query</button> <button class="formgo" style="margin-left: 0;">Reset Form</button>
 	</div>
 
 </div>
