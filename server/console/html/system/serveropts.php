@@ -134,20 +134,20 @@ else {
 				print "<input id=\"pwdcase\" type=\"checkbox\" ";
 				if ($pcul == "Enabled") { print "checked=\"checked\" "; }
 				print "disabled=\"disabled\"> ";
-				print "<span id=\"ullabel\" style=\"color: #777;\">Upper and Lowercase</span><br>\n";
+				print "<span id=\"ullabel\" style=\"color: #777; cursor: normal; user-select: none;\" onclick=\"ulToggle()\">Upper and Lowercase</span><br>\n";
 				print "<input id=\"pwdnums\" type=\"checkbox\" ";
 				if ($pcln == "Enabled") { print "checked=\"checked\" "; }
 				print "disabled=\"disabled\"> ";
-				print "<span id=\"lnlabel\" style=\"color: #777;\">Letters and Numbers</span><br>\n";
+				print "<span id=\"lnlabel\" style=\"color: #777; cursor: normal; user-select: none;\" onclick=\"lnToggle()\">Letters and Numbers</span><br>\n";
 				print "<input id=\"pwdspec\" type=\"checkbox\" ";
 				if ($pcsc == "Enabled") { print "checked=\"checked\" "; }
 				print "disabled=\"disabled\"> ";
-				print "<span id=\"sclabel\" style=\"color: #777;\">Special Characters</span>\n";
+				print "<span id=\"sclabel\" style=\"color: #777; cursor: normal; user-select: none;\" onclick=\"scToggle()\">Special Characters</span>\n";
 				}
 			else {
-				print "<input id=\"pwdcase\" type=\"checkbox\"> Upper and Lowercase<br>\n";
-				print "<input id=\"pwdnums\" type=\"checkbox\"> Letters and Numbers<br>\n";
-				print "<input id=\"pwdspec\" type=\"checkbox\"> Special Characters\n";
+				print "<input id=\"pwdcase\" type=\"checkbox\"> <span id=\"ullabel\" style=\"color: #777; cursor: normal; user-select: none;\" onclick=\"ulToggle()\">Upper and Lowercase</span><br>\n";
+				print "<input id=\"pwdnums\" type=\"checkbox\"> <span id=\"lnlabel\" style=\"color: #777; cursor: normal; user-select: none;\" onclick=\"lnToggle()\">Letters and Numbers</span><br>\n";
+				print "<input id=\"pwdspec\" type=\"checkbox\"> <span id=\"sclabel\" style=\"color: #777; cursor: normal; user-select: none;\" onclick=\"scToggle()\">Special Characters</span>\n";
 				}
 			?>
 			</td></tr>
@@ -200,6 +200,30 @@ function switchTab(evt, configSect) {
 
 	document.getElementById(configSect).style.display = "block";
 	evt.currentTarget.className += " tabbarsel";
+	}
+
+function ulToggle() {
+	if (document.getElementById('complexpass').value == "enabled") {
+		const checkBox = document.getElementById('pwdcase');
+		if (checkBox.checked == false) { checkBox.checked = true; }
+		else { checkBox.checked = false; }
+		}
+	}
+
+function lnToggle() {
+	if (document.getElementById('complexpass').value == "enabled") {
+		const checkBox = document.getElementById('pwdnums');
+		if (checkBox.checked == false) { checkBox.checked = true; }
+		else { checkBox.checked = false; }
+		}
+	}
+
+function scToggle() {
+	if (document.getElementById('complexpass').value == "enabled") {
+		const checkBox = document.getElementById('pwdspec');
+		if (checkBox.checked == false) { checkBox.checked = true; }
+		else { checkBox.checked = false; }
+		}
 	}
 
 function formCheck() {
