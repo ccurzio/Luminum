@@ -98,6 +98,15 @@ $sensorcount = mysqli_num_rows($sensorquery);
 
 		<hr style="width: 99%; margin-bottom: 20px;">
 
+			<div style="float: left; margin-left: 10px;">
+			<table style="width: 225px; margin-left: auto; margin-right: auto;">
+			<tr><td>OS</td><td>Enabled</td><td style="text-align: center; width: 75px;">Size</td></tr>
+			<tr><td style="background-color: #494a69; font-weight: normal;">Linux</td><td id="len" style="text-align: center; background-color: #494a69; font-weight: normal;"><span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span></td><td id="lsize" style="background-color: #494a69; font-weight: normal;"></td></tr>
+			<tr><td style="background-color: #494a69; font-weight: normal;">Mac</td><td id="men" style="text-align: center; background-color: #494a69; font-weight: normal;"><span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span></td><td id="msize" style="background-color: #494a69; font-weight: normal;"></tr>
+			<tr><td style="background-color: #494a69; font-weight: normal;">Windows</td><td id="wen" style="text-align: center; background-color: #494a69; font-weight: normal;"><span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span></td><td id="wsize" style="background-color: #494a69; font-weight: normal;"></tr>
+			</table>
+			</div>
+
 		<div class="module-content" style="padding: 0 1px 1px 0; width: 600px; margin-left: auto; margin-right: auto;">
 			<div class="tabbar tabbarback">
 				<button type="button" class="tabbaritem tabbutton tablink tabbarsel" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Linux')">Linux</button>
@@ -107,13 +116,16 @@ $sensorcount = mysqli_num_rows($sensorquery);
 
 			<div style="margin: 8px 0 0 0; width: 100%;" id="Linux" class="configtab">
 				<div style="text-align: left; color: #444;">
-					<input id="leselect" type="checkbox" style="margin-left: 8px;" onclick="editorToggle('Linux');"> <span style="cursor: normal; user-select: none;" onclick="labelToggle('Linux')">Enabled</span> &nbsp;&nbsp;&nbsp;&nbsp; <span id="lstlabel" style="color: #777;">Type:</span> <select id="lstype" onchange="lsformat(document.getElementById('lstype').value)" disabled="disabled"><option value="shell">Shell Script</option><option value="perl">Perl</option><option value="python">Python</option></select>
+					<input id="leselect" type="checkbox" style="margin-left: 8px;" onclick="editorToggle('Linux');"> <span style="cursor: normal; user-select: none;" onclick="labelToggle('Linux')">Enabled</span> &nbsp;&nbsp;&nbsp;&nbsp; <span id="lstlabel" style="color: #777;">Type:</span> <select id="lstype" onchange="lsformat(document.getElementById('lstype').value);" disabled="disabled"><option value="shell">Shell Script</option><option value="perl">Perl</option><option value="python">Python</option></select>
 				</div>
 				<div id="leditor" style="margin-top: 7px;"></div>
 				<script src="/layout/src/ace.js" type="text/javascript" charset="utf-8"></script>
 				<script>
 					var leditor = ace.edit("leditor");
 					leditor.getSession().setMode("ace/mode/sh");
+					leditor.getSession().on('change', function() {
+						document.getElementById('lsize').innerHTML = formatBytes(leditor.session.getValue().length,1);
+						});
 				</script>
 			</div>
 
@@ -125,6 +137,9 @@ $sensorcount = mysqli_num_rows($sensorquery);
 				<script>
 					var meditor = ace.edit("meditor");
 					meditor.getSession().setMode("ace/mode/sh");
+					meditor.getSession().on('change', function() {
+						document.getElementById('msize').innerHTML = formatBytes(meditor.session.getValue().length,1);
+						});
 				</script>
 			</div>
 
@@ -136,6 +151,9 @@ $sensorcount = mysqli_num_rows($sensorquery);
 				<script>
 					var weditor = ace.edit("weditor");
 					weditor.getSession().setMode("ace/mode/powershell");
+					weditor.getSession().on('change', function() {
+						document.getElementById('wsize').innerHTML = formatBytes(weditor.session.getValue().length,1);
+						});
 				</script>
 			</div>
 		</div>
@@ -218,6 +236,7 @@ function lsformat(value) {
 		leditor.getSession().setMode("ace/mode/python");
 		leditor.setValue("#!/usr/bin/python\n\n", 20);
 		}
+	document.getElementById('lsize').innerHTML = formatBytes(leditor.session.getValue().length,1);
 	}
 
 function msformat(value) {
@@ -233,6 +252,7 @@ function msformat(value) {
 		meditor.getSession().setMode("ace/mode/python");
 		meditor.setValue("#!/usr/bin/python3\n\n", 21);
 		}
+	document.getElementById('msize').innerHTML = formatBytes(meditor.session.getValue().length,1);
 	}
 
 function wsformat(value) {
@@ -240,6 +260,7 @@ function wsformat(value) {
 	else if (value == "vbscript") { weditor.getSession().setMode("ace/mode/vbscript"); }
 	else if (value == "batch") { weditor.getSession().setMode("ace/mode/batchfile"); }
 	else if (value == "python") { weditor.getSession().setMode("ace/mode/python"); }
+	document.getElementById('wsize').innerHTML = formatBytes(weditor.session.getValue().length,1);
 	}
 
 function editorToggle(edsel) {
@@ -269,6 +290,8 @@ function disableEditor(edsel) {
 		document.getElementById('lstype').disabled = true;
 		document.getElementById('lstype').value = 'shell';
 		leditor.setValue("",0);
+		document.getElementById('len').innerHTML = '<span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span>';
+		document.getElementById('lsize').innerHTML = '';
 		}
 	else if (edsel == "Mac") {
 		meditor.container.style.opacity = 0.5;
@@ -278,6 +301,8 @@ function disableEditor(edsel) {
 		document.getElementById('mstype').disabled = true;
 		document.getElementById('mstype').value = 'shell';
 		meditor.setValue("",0);
+		document.getElementById('men').innerHTML = '<span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span>';
+		document.getElementById('msize').innerHTML = '';
 		}
 	else if (edsel == "Windows") {
 		weditor.container.style.opacity = 0.5;
@@ -287,6 +312,8 @@ function disableEditor(edsel) {
 		document.getElementById('wstype').disabled = true;
 		document.getElementById('wstype').value = 'powershell';
 		weditor.setValue("",0);
+		document.getElementById('wen').innerHTML = '<span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span>';
+		document.getElementById('wsize').innerHTML = '';
 		}
 	}
 
@@ -298,6 +325,8 @@ function enableEditor(edsel) {
 		document.getElementById('lstlabel').style.color = "#444";
 		document.getElementById('lstype').disabled = false;
 		lsformat('shell');
+		document.getElementById('len').innerHTML = '<span style=\"font-weight: bold; font-size: 16px; color: #0ec940;\">✓</span>';
+		document.getElementById('lsize').innerHTML = formatBytes(leditor.session.getValue().length,1);
 		}
 	else if (edsel == "Mac") {
 		meditor.container.style.opacity = 1;
@@ -306,6 +335,8 @@ function enableEditor(edsel) {
 		document.getElementById('mstlabel').style.color = "#444";
 		document.getElementById('mstype').disabled = false;
 		msformat('shell');
+		document.getElementById('men').innerHTML = '<span style=\"font-weight: bold; font-size: 16px; color: #0ec940;\">✓</span>';
+		document.getElementById('msize').innerHTML = formatBytes(meditor.session.getValue().length,1);
 		}
 	else if (edsel == "Windows") {
 		weditor.container.style.opacity = 1;
@@ -314,7 +345,19 @@ function enableEditor(edsel) {
 		document.getElementById('wstlabel').style.color = "#444";
 		document.getElementById('wstype').disabled = false;
 		wsformat('powershell');
+		document.getElementById('wen').innerHTML = '<span style=\"font-weight: bold; font-size: 16px; color: #0ec940;\">✓</span>';
+		document.getElementById('wsize').innerHTML = formatBytes(weditor.session.getValue().length,1);
 		}
+	}
+
+function formatBytes(bytes, decimals = 2) {
+	if (!+bytes) return '0'
+	const k = 1024
+	const dm = decimals < 0 ? 0 : decimals
+	const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+	const i = Math.floor(Math.log(bytes) / Math.log(k))
+
+	return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`
 	}
 
 disableEditor('Linux');
