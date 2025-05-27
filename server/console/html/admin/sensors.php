@@ -92,22 +92,24 @@ $sensorcount = mysqli_num_rows($sensorquery);
 
 		<hr style="width: 99%; margin-bottom: 20px;">
 
+		<!-- Query Parameters are on the back burner for now.
 		<table style="border: 0; margin-bottom: 20px;">
 		<tr><td style="background-color: transparent; border: 0; color: #444; font-weight: normal;"><input type="checkbox" id="useparams"><span style="cursor: normal; user-select: none;" onclick="paramToggle()"> Accepts Query Parameters</span></td></tr>
 		</table>
 
-		<hr style="width: 99%; margin-bottom: 20px;">
+		<hr style="width: 99%;">
+		-->
 
-			<div style="float: left; margin-left: 10px;">
-			<table style="width: 250px; margin-left: auto; margin-right: auto;">
+		<div style="float: left; margin-left: 10px;">
+			<table style="width: 250px; margin-left: auto; margin-right: auto; margin-top: 20px;">
 			<tr><td style="width: 80px;">OS</td><td>Enabled</td><td style="text-align: center; width: 80px;">Size</td></tr>
 			<tr><td style="background-color: #494a69; font-weight: normal;">Linux</td><td id="len" style="text-align: center; background-color: #494a69; font-weight: normal;"><span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span></td><td id="lsize" style="background-color: #494a69; font-weight: normal;"></td></tr>
 			<tr><td style="background-color: #494a69; font-weight: normal;">Mac</td><td id="men" style="text-align: center; background-color: #494a69; font-weight: normal;"><span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span></td><td id="msize" style="background-color: #494a69; font-weight: normal;"></tr>
 			<tr><td style="background-color: #494a69; font-weight: normal;">Windows</td><td id="wen" style="text-align: center; background-color: #494a69; font-weight: normal;"><span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span></td><td id="wsize" style="background-color: #494a69; font-weight: normal;"></tr>
 			</table>
-			</div>
+		</div>
 
-		<div class="module-content" style="padding: 0 1px 1px 0; width: 600px; margin-left: auto; margin-right: auto;">
+		<div class="module-content" style="padding: 0 1px 1px 0; width: 600px; margin-left: auto; margin-right: auto; margin-top: 40px;">
 			<div class="tabbar tabbarback">
 				<button type="button" class="tabbaritem tabbutton tablink tabbarsel" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Linux')">Linux</button>
 				<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'macOS')">macOS</button>
