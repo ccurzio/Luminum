@@ -99,8 +99,8 @@ $sensorcount = mysqli_num_rows($sensorquery);
 		<hr style="width: 99%; margin-bottom: 20px;">
 
 			<div style="float: left; margin-left: 10px;">
-			<table style="width: 225px; margin-left: auto; margin-right: auto;">
-			<tr><td>OS</td><td>Enabled</td><td style="text-align: center; width: 75px;">Size</td></tr>
+			<table style="width: 250px; margin-left: auto; margin-right: auto;">
+			<tr><td style="width: 80px;">OS</td><td>Enabled</td><td style="text-align: center; width: 80px;">Size</td></tr>
 			<tr><td style="background-color: #494a69; font-weight: normal;">Linux</td><td id="len" style="text-align: center; background-color: #494a69; font-weight: normal;"><span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span></td><td id="lsize" style="background-color: #494a69; font-weight: normal;"></td></tr>
 			<tr><td style="background-color: #494a69; font-weight: normal;">Mac</td><td id="men" style="text-align: center; background-color: #494a69; font-weight: normal;"><span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span></td><td id="msize" style="background-color: #494a69; font-weight: normal;"></tr>
 			<tr><td style="background-color: #494a69; font-weight: normal;">Windows</td><td id="wen" style="text-align: center; background-color: #494a69; font-weight: normal;"><span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span></td><td id="wsize" style="background-color: #494a69; font-weight: normal;"></tr>
