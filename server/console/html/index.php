@@ -97,7 +97,10 @@ else {
 <?php include ("system/sysinfo.php"); ?>
 
 <?php elseif ($_GET['view'] == "users"): ?>
-<?php include ("admin/users.php"); ?>
+<?php include ("system/users.php"); ?>
+
+<?php elseif ($_GET['view'] == "ugroups"): ?>
+<?php include ("system/usergroups.php"); ?>
 
 <?php endif; ?>
 
