@@ -68,7 +68,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 				<tr><td style="background-color: transparent; border: 0; color: #444;">Name: <span style="color: red;">*</span></td><td style="background-color: transparent; border: 0; color: #444;">Timeout: <span style="color: red;">*</span></td></tr>
 				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgname" style="width: 400px;"></td><td style="background-color: transparent; border: 0; color: #444;"><input id="timeout" type="text" style="width: 30px;" value="30"><select id="tint" style="width: 100px; margin-left: 10px; height: 33px;"><option value="sec">Second(s)</option><option value="min">Minute(s)</option></select></td></tr>
 				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Description: <span style="color: red;">*</span></td><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Result Type:</td></tr>
-				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgdesc" style="width: 400px;"></td><td style="background-color: transparent; border: 0; color: #444;"><select id="rtype" style="font-size: 15px; height: 33px; width: 300px; margin-left: 2px; margin-right: 30px;"><option value="text">Text</option><option value="number">Number</option><option value="ipaddress">IP Address</option><option value="datetime">DateTime</option></td></tr>
+				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgdesc" style="width: 400px;"></td><td style="background-color: transparent; border: 0; color: #444;"><select id="rtype" style="font-size: 15px; height: 33px; width: 300px; margin-left: 2px; margin-right: 30px;"><option value="text">Text</option><option value="number">Number</option><option value="ipaddress">IP Address</option><option value="datetime">Date/Time Stamp</option></td></tr>
 				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Content Set: <span style="color: red;">*</span></td><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Category:</td></tr>
 				<tr><td style="background-color: transparent; border: 0; color: #444;"><select id="contentset" name="contentset" style="font-size: 15px; height: 33px; width: 430px; margin-left: 2px; margin-right: 30px;">
 				<?php
@@ -78,7 +78,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 				?>
 				</select></td><td style="background-color: transparent; border: 0; color: #444;"><select id="category" style="font-size: 15px; height: 33px; width: 430px; margin-left: 2px; margin-right: 30px;"></select></td></tr>
 				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444; font-weight: normal;" colspan="2"><input type="checkbox" id="case"><span style="cursor: normal; user-select: none;" onclick="caseToggle()"> Results are Case Sensitive</span></td></tr>
-				<tr><td style="background-color: transparent; border: 0; color: #444; font-weight: normal;" colspan="2"><input type="checkbox" id="split" onclick="toggleSplit()"><span style="cursor: normal; user-select: none;" onclick="csToggle()"> Split Results into Columns</span> <span class="delform" style="margin-left: 50px; opacity: 0;">Delimeter: </span><span class="delform" style="opacity: 0; color: red;">*</span><input class="delform" id="delimeter" type="text" style="opacity: 0; margin-left: 15px; width: 30px;"></td></tr>
+				<tr><td style="background-color: transparent; border: 0; color: #444; font-weight: normal;" colspan="2"><input type="checkbox" id="split" onclick="toggleSplit()"><span style="cursor: normal; user-select: none;" onclick="csToggle()"> Split Results into Columns</span> <span class="delform" style="margin-left: 50px; opacity: 0;">Delimeter: </span><span class="delform" style="opacity: 0; color: red;">*</span><input class="delform" id="delimeter" type="text" style="opacity: 0; margin-left: 15px; width: 30px;" maxlength="1" value="|"></td></tr>
 				</table>
 
 			</div>
@@ -91,7 +91,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 		<hr style="width: 99%; margin-bottom: 20px;">
 
 		<table style="border: 0; margin-bottom: 20px;">
-		<tr><td style="background-color: transparent; border: 0; color: #444; font-weight: normal;"><input type="checkbox" id="useparams"><span style="cursor: normal; user-select: none;" onclick="paramToggle()"> Parameter Inputs</span></td></tr>
+		<tr><td style="background-color: transparent; border: 0; color: #444; font-weight: normal;"><input type="checkbox" id="useparams"><span style="cursor: normal; user-select: none;" onclick="paramToggle()"> Accepts Query Parameters</span></td></tr>
 		</table>
 
 		<hr style="width: 99%; margin-bottom: 20px;">
@@ -104,7 +104,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 			</div>
 
 			<div style="margin: 8px 0 0 0; width: 100%;" id="Linux" class="configtab">
-				<div style="text-align: left;">
+				<div style="text-align: left; color: #444;">
 					<input id="leselect" type="checkbox" style="margin-left: 8px;" onclick="editorToggle('Linux');"> Enabled &nbsp;&nbsp;&nbsp;&nbsp; <span id="lstlabel" style="color: #777;">Type:</span> <select id="lstype" onchange="lsformat(document.getElementById('lstype').value)" disabled="disabled"><option value="shell">Shell Script</option><option value="perl">Perl</option><option value="python">Python</option></select>
 				</div>
 				<div id="leditor" style="margin-top: 7px;"></div>
@@ -116,7 +116,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 			</div>
 
 			<div style="margin: 8px 0 0 0; width: 100%; display: none;" id="macOS" class="configtab">
-				<div style="text-align: left;">
+				<div style="text-align: left; color: #444;"">
 					<input id="meselect" type="checkbox" style="margin-left: 8px;" onclick="editorToggle('Mac');"> Enabled &nbsp;&nbsp;&nbsp;&nbsp; <span id="mstlabel" style="color: #777;">Type: <select id="mstype" onchange="lsformat(document.getElementById('mstype').value)" disabled="disabled"><option value="shell">Shell Script</option><option value="perl">Perl</option><option value="python">Python</option></select>
 				</div>
 				<div id="meditor" style="margin-top: 7px;"></div>
@@ -127,8 +127,8 @@ $sensorcount = mysqli_num_rows($sensorquery);
 			</div>
 
 			<div style="margin: 8px 0 0 0; width: 100%; display: none;" id="Windows" class="configtab">
-				<div style="text-align: left;">
-					<input id="weselect" type="checkbox" style="margin-left: 8px;" onclick="editorToggle('Windows');"> Enabled &nbsp;&nbsp;&nbsp;&nbsp; <span id="wstlabel" style="color: #777;">Type:</span> <select id="wstype" onchange="lsformat(document.getElementById('wstype').value)" disabled="disabled"><option value="powershell">Powershell</option><option value="vbscript">VBScript</option><option value="python">Python</option></select>
+				<div style="text-align: left; color: #444;"">
+					<input id="weselect" type="checkbox" style="margin-left: 8px;" onclick="editorToggle('Windows');"> Enabled &nbsp;&nbsp;&nbsp;&nbsp; <span id="wstlabel" style="color: #777;">Type:</span> <select id="wstype" onchange="lsformat(document.getElementById('wstype').value)" disabled="disabled"><option value="powershell">PowerShell</option><option value="vbscript">VBScript</option><option value="batch">Batch File</option><option value="python">Python</option></select>
 				</div>
 				<div id="weditor" style="margin-top: 7px;"></div>
 				<script>
@@ -207,6 +207,7 @@ function msformat(value) {
 function wsformat(value) {
 	if (value == "powershell") { weditor.getSession().setMode("ace/mode/powershell"); }
 	else if (value == "vbscript") { weditor.getSession().setMode("ace/mode/vbscript"); }
+	else if (value == "batch") { weditor.getSession().setMode("ace/mode/batchfile"); }
 	else if (value == "python") { weditor.getSession().setMode("ace/mode/python"); }
 	}
 
@@ -257,21 +258,21 @@ function enableEditor(edsel) {
 		leditor.container.style.opacity = 1;
 		leditor.container.style.pointerEvents="";
 		leditor.renderer.setStyle("disabled", false);
-		document.getElementById('lstlabel').style.color = "#000";
+		document.getElementById('lstlabel').style.color = "#444";
 		document.getElementById('lstype').disabled = false;
 		}
 	else if (edsel == "Mac") {
 		meditor.container.style.opacity = 1;
 		meditor.container.style.pointerEvents="";
 		meditor.renderer.setStyle("disabled", false);
-		document.getElementById('mstlabel').style.color = "#000";
+		document.getElementById('mstlabel').style.color = "#444";
 		document.getElementById('mstype').disabled = false;
 		}
 	else if (edsel == "Windows") {
 		weditor.container.style.opacity = 1;
 		weditor.container.style.pointerEvents="";
 		weditor.renderer.setStyle("disabled", false);
-		document.getElementById('wstlabel').style.color = "#000";
+		document.getElementById('wstlabel').style.color = "#444";
 		document.getElementById('wstype').disabled = false;
 		}
 	}
