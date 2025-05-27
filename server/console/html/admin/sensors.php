@@ -119,7 +119,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 
 			<div style="margin: 8px 0 0 0; width: 100%; display: none;" id="macOS" class="configtab">
 				<div style="text-align: left; color: #444;"">
-					<input id="meselect" type="checkbox" style="margin-left: 8px;" onclick="editorToggle('Mac');"> <span style="cursor: normal; user-select: none;" onclick="labelToggle('Mac');">Enabled</span> &nbsp;&nbsp;&nbsp;&nbsp; <span id="mstlabel" style="color: #777;">Type: <select id="mstype" onchange="lsformat(document.getElementById('mstype').value)" disabled="disabled"><option value="shell">Shell Script</option><option value="perl">Perl</option><option value="python">Python</option></select>
+					<input id="meselect" type="checkbox" style="margin-left: 8px;" onclick="editorToggle('Mac');"> <span style="cursor: normal; user-select: none;" onclick="labelToggle('Mac');">Enabled</span> &nbsp;&nbsp;&nbsp;&nbsp; <span id="mstlabel" style="color: #777;">Type: <select id="mstype" onchange="msformat(document.getElementById('mstype').value)" disabled="disabled"><option value="shell">Shell Script</option><option value="perl">Perl</option><option value="python">Python</option></select>
 				</div>
 				<div id="meditor" style="margin-top: 7px;"></div>
 				<script>
@@ -130,7 +130,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 
 			<div style="margin: 8px 0 0 0; width: 100%; display: none;" id="Windows" class="configtab">
 				<div style="text-align: left; color: #444;"">
-					<input id="weselect" type="checkbox" style="margin-left: 8px;" onclick="editorToggle('Windows');"> <span style="cursor: normal; user-select: none;" onclick="labelToggle('Windows');">Enabled</span> &nbsp;&nbsp;&nbsp;&nbsp; <span id="wstlabel" style="color: #777;">Type:</span> <select id="wstype" onchange="lsformat(document.getElementById('wstype').value)" disabled="disabled"><option value="powershell">PowerShell</option><option value="vbscript">VBScript</option><option value="batch">Batch File</option><option value="python">Python</option></select>
+					<input id="weselect" type="checkbox" style="margin-left: 8px;" onclick="editorToggle('Windows');"> <span style="cursor: normal; user-select: none;" onclick="labelToggle('Windows');">Enabled</span> &nbsp;&nbsp;&nbsp;&nbsp; <span id="wstlabel" style="color: #777;">Type:</span> <select id="wstype" onchange="wsformat(document.getElementById('wstype').value)" disabled="disabled"><option value="powershell">PowerShell</option><option value="vbscript">VBScript</option><option value="batch">Batch File</option><option value="python">Python</option></select>
 				</div>
 				<div id="weditor" style="margin-top: 7px;"></div>
 				<script>
@@ -206,15 +206,33 @@ function switchTab(evt, configSect) {
 	}
 
 function lsformat(value) {
-	if (value == "shell") { leditor.getSession().setMode("ace/mode/sh"); }
-	else if (value == "perl") { leditor.getSession().setMode("ace/mode/perl"); }
-	else if (value == "python") { leditor.getSession().setMode("ace/mode/python"); }
+	if (value == "shell") {
+		leditor.getSession().setMode("ace/mode/sh");
+		leditor.setValue("#!/bin/sh\n\n", 10);
+		}
+	else if (value == "perl") {
+		leditor.getSession().setMode("ace/mode/perl");
+		leditor.setValue("#!/usr/bin/perl -w\n\nuse strict;\n\n", 35);
+		}
+	else if (value == "python") {
+		leditor.getSession().setMode("ace/mode/python");
+		leditor.setValue("#!/usr/bin/python\n\n", 20);
+		}
 	}
 
 function msformat(value) {
-	if (value == "shell") { meditor.getSession().setMode("ace/mode/sh"); }
-	else if (value == "perl") { meditor.getSession().setMode("ace/mode/perl"); }
-	else if (value == "python") { meditor.getSession().setMode("ace/mode/python"); }
+	if (value == "shell") {
+		meditor.getSession().setMode("ace/mode/sh");
+		meditor.setValue("#!/bin/sh\n\n", 10);
+		}
+	else if (value == "perl") {
+		meditor.getSession().setMode("ace/mode/perl");
+		meditor.setValue("#!/usr/bin/perl -w\n\nuse strict;\n\n", 35);
+		}
+	else if (value == "python") {
+		meditor.getSession().setMode("ace/mode/python");
+		meditor.setValue("#!/usr/bin/python3\n\n", 21);
+		}
 	}
 
 function wsformat(value) {
@@ -249,6 +267,8 @@ function disableEditor(edsel) {
 		leditor.renderer.setStyle("disabled", true);
 		document.getElementById('lstlabel').style.color = "#777";
 		document.getElementById('lstype').disabled = true;
+		document.getElementById('lstype').value = 'shell';
+		leditor.setValue("",0);
 		}
 	else if (edsel == "Mac") {
 		meditor.container.style.opacity = 0.5;
@@ -256,6 +276,8 @@ function disableEditor(edsel) {
 		meditor.renderer.setStyle("disabled", true);
 		document.getElementById('mstlabel').style.color = "#777";
 		document.getElementById('mstype').disabled = true;
+		document.getElementById('mstype').value = 'shell';
+		meditor.setValue("",0);
 		}
 	else if (edsel == "Windows") {
 		weditor.container.style.opacity = 0.5;
@@ -263,6 +285,8 @@ function disableEditor(edsel) {
 		weditor.renderer.setStyle("disabled", true);
 		document.getElementById('wstlabel').style.color = "#777";
 		document.getElementById('wstype').disabled = true;
+		document.getElementById('wstype').value = 'powershell';
+		weditor.setValue("",0);
 		}
 	}
 
@@ -273,6 +297,7 @@ function enableEditor(edsel) {
 		leditor.renderer.setStyle("disabled", false);
 		document.getElementById('lstlabel').style.color = "#444";
 		document.getElementById('lstype').disabled = false;
+		lsformat('shell');
 		}
 	else if (edsel == "Mac") {
 		meditor.container.style.opacity = 1;
@@ -280,6 +305,7 @@ function enableEditor(edsel) {
 		meditor.renderer.setStyle("disabled", false);
 		document.getElementById('mstlabel').style.color = "#444";
 		document.getElementById('mstype').disabled = false;
+		msformat('shell');
 		}
 	else if (edsel == "Windows") {
 		weditor.container.style.opacity = 1;
@@ -287,6 +313,7 @@ function enableEditor(edsel) {
 		weditor.renderer.setStyle("disabled", false);
 		document.getElementById('wstlabel').style.color = "#444";
 		document.getElementById('wstype').disabled = false;
+		wsformat('powershell');
 		}
 	}
 
