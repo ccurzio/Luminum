@@ -90,10 +90,10 @@ else {
 			<table style="width: 50%; border: 0; margin-left: auto; margin-right: auto; margin-top: 15px; margin-bottom: 15px;">
 			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Default Content Set for new Sensors: </td><td style="background-color: transparent; border: 0;"><select id="sensorset" style="width: 175px; height: 28px;" onchange="formCheck()">
 			<?php foreach ($csopts as $value) { print $value; } ?>
-			</select> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">The content set to which newly-created sensors will be added by default</span></div></td></tr>
+			</select> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">The content set to which newly-created sensors will be added by default<br><br>NOTE: Orphaned sensors will also be moved to this content set</span></div></td></tr>
 			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Default Content Set for new Packages: </td><td style="background-color: transparent; border: 0;"><select id="packageset" style="width: 175px; height: 28px;" onchange="formCheck()">
 			<?php foreach ($csopts as $value) { print $value; } ?>
-			</select> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">The content set to which newly-created packages will be added by default</span></div></td></tr>
+			</select> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">The content set to which newly-created packages will be added by default<br><br>NOTE: Orphaned packages will also be moved to this content set</span></div></td></tr>
 			</table>
 		</div>
 
