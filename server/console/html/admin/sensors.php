@@ -105,7 +105,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 
 			<div style="margin: 8px 0 0 0; width: 100%;" id="Linux" class="configtab">
 				<div style="text-align: left;">
-					<input type="checkbox" style="margin-left: 8px;" onclick="leditor.textInput.getElement().disabled=true;"> Enabled &nbsp;&nbsp;&nbsp;&nbsp; Type: <select id="lstype"><option value="shell">Shell Script</option><option value="perl">Perl</option><option value="python">Python</option></select>
+					<input id="leselect" type="checkbox" style="margin-left: 8px;" onclick="editorToggle('Linux');"> Enabled &nbsp;&nbsp;&nbsp;&nbsp; <span id="lstlabel" style="color: #777;">Type:</span> <select id="lstype" onchange="lsformat(document.getElementById('lstype').value)" disabled="disabled"><option value="shell">Shell Script</option><option value="perl">Perl</option><option value="python">Python</option></select>
 				</div>
 				<div id="leditor" style="margin-top: 7px;"></div>
 				<script src="/layout/src/ace.js" type="text/javascript" charset="utf-8"></script>
@@ -117,7 +117,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 
 			<div style="margin: 8px 0 0 0; width: 100%; display: none;" id="macOS" class="configtab">
 				<div style="text-align: left;">
-					<input type="checkbox" style="margin-left: 8px;"> Enabled &nbsp;&nbsp;&nbsp;&nbsp; Type: <select id="lstype"><option value="shell">Shell Script</option><option value="perl">Perl</option><option value="python">Python</option></select>
+					<input id="meselect" type="checkbox" style="margin-left: 8px;" onclick="editorToggle('Mac');"> Enabled &nbsp;&nbsp;&nbsp;&nbsp; <span id="mstlabel" style="color: #777;">Type: <select id="mstype" onchange="lsformat(document.getElementById('mstype').value)" disabled="disabled"><option value="shell">Shell Script</option><option value="perl">Perl</option><option value="python">Python</option></select>
 				</div>
 				<div id="meditor" style="margin-top: 7px;"></div>
 				<script>
@@ -128,7 +128,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 
 			<div style="margin: 8px 0 0 0; width: 100%; display: none;" id="Windows" class="configtab">
 				<div style="text-align: left;">
-					<input type="checkbox" style="margin-left: 8px;"> Enabled &nbsp;&nbsp;&nbsp;&nbsp; Type: <select id="lstype"><option value="powershell">Powershell</option><option value="vbscript">VBScript</option><option value="python">Python</option></select>
+					<input id="weselect" type="checkbox" style="margin-left: 8px;" onclick="editorToggle('Windows');"> Enabled &nbsp;&nbsp;&nbsp;&nbsp; <span id="wstlabel" style="color: #777;">Type:</span> <select id="wstype" onchange="lsformat(document.getElementById('wstype').value)" disabled="disabled"><option value="powershell">Powershell</option><option value="vbscript">VBScript</option><option value="python">Python</option></select>
 				</div>
 				<div id="weditor" style="margin-top: 7px;"></div>
 				<script>
@@ -191,6 +191,94 @@ function switchTab(evt, configSect) {
 	document.getElementById(configSect).style.display = "block";
 	evt.currentTarget.className += " tabbarsel";
 	}
+
+function lsformat(value) {
+	if (value == "shell") { leditor.getSession().setMode("ace/mode/sh"); }
+	else if (value == "perl") { leditor.getSession().setMode("ace/mode/perl"); }
+	else if (value == "python") { leditor.getSession().setMode("ace/mode/python"); }
+	}
+
+function msformat(value) {
+	if (value == "shell") { meditor.getSession().setMode("ace/mode/sh"); }
+	else if (value == "perl") { meditor.getSession().setMode("ace/mode/perl"); }
+	else if (value == "python") { meditor.getSession().setMode("ace/mode/python"); }
+	}
+
+function wsformat(value) {
+	if (value == "powershell") { weditor.getSession().setMode("ace/mode/powershell"); }
+	else if (value == "vbscript") { weditor.getSession().setMode("ace/mode/vbscript"); }
+	else if (value == "python") { weditor.getSession().setMode("ace/mode/python"); }
+	}
+
+function editorToggle(edsel) {
+	if (edsel == "Linux") {
+		const checkBox = document.getElementById('leselect');
+		if (checkBox.checked == true) { enableEditor('Linux'); }
+		else { disableEditor('Linux'); }
+		}
+	else if (edsel == "Mac") {
+		const checkBox = document.getElementById('meselect');
+		if (checkBox.checked == true) { enableEditor('Mac'); }
+		else { disableEditor('Mac'); }
+		}
+	else if (edsel == "Windows") {
+		const checkBox = document.getElementById('weselect');
+		if (checkBox.checked == true) { enableEditor('Windows'); }
+		else { disableEditor('Windows'); }
+		}
+	}
+
+function disableEditor(edsel) {
+	if (edsel == "Linux") {
+		leditor.container.style.opacity = 0.5;
+		leditor.container.style.pointerEvents="none";
+		leditor.renderer.setStyle("disabled", true);
+		document.getElementById('lstlabel').style.color = "#777";
+		document.getElementById('lstype').disabled = true;
+		}
+	else if (edsel == "Mac") {
+		meditor.container.style.opacity = 0.5;
+		meditor.container.style.pointerEvents="none";
+		meditor.renderer.setStyle("disabled", true);
+		document.getElementById('mstlabel').style.color = "#777";
+		document.getElementById('mstype').disabled = true;
+		}
+	else if (edsel == "Windows") {
+		weditor.container.style.opacity = 0.5;
+		weditor.container.style.pointerEvents="none";
+		weditor.renderer.setStyle("disabled", true);
+		document.getElementById('wstlabel').style.color = "#777";
+		document.getElementById('wstype').disabled = true;
+		}
+	}
+
+function enableEditor(edsel) {
+	if (edsel == "Linux") {
+		leditor.container.style.opacity = 1;
+		leditor.container.style.pointerEvents="";
+		leditor.renderer.setStyle("disabled", false);
+		document.getElementById('lstlabel').style.color = "#000";
+		document.getElementById('lstype').disabled = false;
+		}
+	else if (edsel == "Mac") {
+		meditor.container.style.opacity = 1;
+		meditor.container.style.pointerEvents="";
+		meditor.renderer.setStyle("disabled", false);
+		document.getElementById('mstlabel').style.color = "#000";
+		document.getElementById('mstype').disabled = false;
+		}
+	else if (edsel == "Windows") {
+		weditor.container.style.opacity = 1;
+		weditor.container.style.pointerEvents="";
+		weditor.renderer.setStyle("disabled", false);
+		document.getElementById('wstlabel').style.color = "#000";
+		document.getElementById('wstype').disabled = false;
+		}
+	}
+
+disableEditor('Linux');
+disableEditor('Mac');
+disableEditor('Windows');
 </script>
 
 		<?php else: ?>
