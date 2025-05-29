@@ -6,8 +6,8 @@ In order to be accountable to the community - but more importantly to myself - I
 ### First-Run Setup
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#9654; |*In Progress*  |Setup Utility (Text)        |Create plaintext interface for a step-by-step setup wizard to run when first installed  |
-|&#9633; |Not Started    |Setup Utility (ncurses)     |Create ncurses interface for a step-by-step setup wizard to run when first installed    |
+|&#9654; |*In Progress*  |Setup Utility (Text)        |Create plain text step-by-step setup wizard to run when first installed                 |
+|&#9633; |Not Started    |Setup Utility (ncurses)     |Create ncurses step-by-step setup wizard to run when first installed                    |
 |&#9633; |Not Started    |OS User Accounts            |Automatically create necessary OS service accounts for Luminum Server                   |
 |&#9654; |*In Progress*  |Configuration Save/Import   |Routines to save the server configuration and import an existing config on first setup  |
 |&#9654; |*In Progress*  |Certificate Setup           |Routines to create or import server certificates                                        |
