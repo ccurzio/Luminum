@@ -141,9 +141,9 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Key            |Default Value    |Description                                                                             |
 |--------|---------------|---------------|-----------------|----------------------------------------------------------------------------------------|
 |&#10003;|**Completed**  |SID            |                 |The unique Luminum Server ID                                                            |
-|  --    |*DEPRECATED*   |~~SKEY~~       |                 |~~The unique Luminum Server Key used by clients to verify their association~~           |
+|  --    |*DEPRECATED*   |~~SKEY~~       |                 |~~The server key used by clients to verify association~~                                |
 |  --    |*DEPRECATED*   |~~IPADDR~~     |                 |~~The address of the interface to be used by the network listener~~                     |
-|  --    |*DEPRECATED*   |~~PORT~~       |                 |~~The port number to be usedby the network listener on the specified network interface~~|
+|  --    |*DEPRECATED*   |~~PORT~~       |                 |~~Port number for the network listener~~                                                |
 |&#10003;|**Completed**  |DBPASS         |                 |The password for the "Luminum" database account                                         |
 |  --    |*DEPRECATED*   |~~PKPASS~~     |                 |~~The passphrase for the server's private key~~                                         |
 
@@ -535,7 +535,8 @@ In order to be accountable to the community - but more importantly to myself - I
 ### Linux Support
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#9633; |Not Started    |Setup Utility               |Create client install step-by-step setup utility                                        |
+|&#9633; |Not Started    |Setup Utility (Text)        |Create plaintext interface for a step-by-step setup wizard                              |
+|&#9633; |Not Started    |Setup Utility (ncurses)     |Create ncurses interface for a step-by-step setup wizard                                |
 |&#9633; |Not Started    |Unattended Install          |Create automated process for unattended installation                                    |
 |&#9633; |Not Started    |Key Management              |Routines to create a new public/private key pair                                        |
 |&#9633; |Not Started    |x86 Client Binaries         |Create x86-compiled client binaries                                                     |
@@ -546,7 +547,8 @@ In order to be accountable to the community - but more importantly to myself - I
 ### macOS Support
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#9633; |Not Started    |Setup Utility               |Create client install step-by-step setup utility                                        |
+|&#9633; |Not Started    |Setup Utility (Text)        |Create plaintext interface for a step-by-step setup wizard                              |
+|&#9633; |Not Started    |Setup Utility (GUI)         |Create grapical step-by-step setup wizard                                               |
 |&#9633; |Not Started    |Unattended Install          |Create automated process for unattended installation                                    |
 |&#9633; |Not Started    |Key Management              |Routines to create a new public/private key pair                                        |
 |&#9633; |Not Started    |Apple Silicon Binaries      |Create client binaries for Apple Silicon                                                |
@@ -557,7 +559,8 @@ In order to be accountable to the community - but more importantly to myself - I
 ### Windows Support
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#9633; |Not Started    |Setup Utility               |Create client install step-by-step setup utility                                        |
+|&#9633; |Not Started    |Setup Utility (Text)        |Create plaintext interface for a step-by-step setup wizard                              |
+|&#9633; |Not Started    |Setup Utility (GUI)         |Create grapical step-by-step setup wizard                                               |
 |&#9633; |Not Started    |Unattended Install          |Create automated process for unattended installation                                    |
 |&#9633; |Not Started    |Key Management              |Routines to create a new public/private key pair                                        |
 |&#9633; |Not Started    |x86 Client Binaries         |Create x86-compiled client binaries                                                     |
