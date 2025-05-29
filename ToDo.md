@@ -11,6 +11,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9633; |Not Started    |OS User Accounts            |Automatically create necessary OS service accounts for Luminum Server                   |
 |&#9654; |*In Progress*  |Configuration Save/Import   |Routines to save the server configuration and import an existing config on first setup  |
 |&#9654; |*In Progress*  |Certificate Setup           |Routines to create or import server certificates                                        |
+|&#9654; |*In Progress*  |Key Setup                   |Routines to create or import public/private keys                                        |
 |&#9633; |Not Started    |Database Setup              |Automatically configure the database software and set root password                     |
 |&#9633; |Not Started    |Database Structure          |Create Luminum Server databases and tables                                              |
 |&#9633; |Not Started    |Database User Accounts      |Create necessary Luminum Server database user accounts and grant permissions            |
