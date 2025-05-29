@@ -232,11 +232,11 @@ function lsformat(value) {
 		}
 	else if (value == "perl") {
 		leditor.getSession().setMode("ace/mode/perl");
-		leditor.setValue("#!/usr/bin/perl -w\n\nuse strict;\n\n", 35);
+		leditor.setValue("#!/usr/bin/perl\n\nuse strict;\n\n", 35);
 		}
 	else if (value == "python") {
 		leditor.getSession().setMode("ace/mode/python");
-		leditor.setValue("#!/usr/bin/python\n\n", 20);
+		leditor.setValue("#!/usr/bin/python3\n\n", 20);
 		}
 	document.getElementById('lsize').innerHTML = formatBytes(leditor.session.getValue().length,1);
 	}
@@ -248,11 +248,11 @@ function msformat(value) {
 		}
 	else if (value == "perl") {
 		meditor.getSession().setMode("ace/mode/perl");
-		meditor.setValue("#!/usr/bin/perl -w\n\nuse strict;\n\n", 35);
+		meditor.setValue("#!/usr/bin/perl\n\nuse strict;\n\n", 35);
 		}
 	else if (value == "python") {
 		meditor.getSession().setMode("ace/mode/python");
-		meditor.setValue("#!/usr/bin/python3\n\n", 21);
+		meditor.setValue("#!/usr/local/bin/python3\n\n", 21);
 		}
 	document.getElementById('msize').innerHTML = formatBytes(meditor.session.getValue().length,1);
 	}
