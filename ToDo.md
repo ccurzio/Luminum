@@ -6,10 +6,11 @@ In order to be accountable to the community - but more importantly to myself - I
 ### First-Run Setup
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#9654; |*In Progress*  |Setup Utility               |Create interface for a step-by-step setup wizard to run when first installed            |
+|&#9654; |*In Progress*  |Setup Utility (Text)        |Create plaintext interface for a step-by-step setup wizard to run when first installed  |
+|&#9633; |Not Started    |Setup Utility (ncurses)     |Create ncurses interface for a step-by-step setup wizard to run when first installed    |
 |&#9633; |Not Started    |OS User Accounts            |Automatically create necessary OS service accounts for Luminum Server                   |
 |&#9654; |*In Progress*  |Configuration Save/Import   |Routines to save the server configuration and import an existing config on first setup  |
-|&#9633; |Not Started    |Certificate Setup           |Routines to create or import server certificates                                        |
+|&#9654; |*In Progress*  |Certificate Setup           |Routines to create or import server certificates                                        |
 |&#9633; |Not Started    |Database Setup              |Automatically configure the database software and set root password                     |
 |&#9633; |Not Started    |Database Structure          |Create Luminum Server databases and tables                                              |
 |&#9633; |Not Started    |Database User Accounts      |Create necessary Luminum Server database user accounts and grant permissions            |
@@ -105,28 +106,28 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Key            |Default Value    |Description                                                                             |
 |--------|---------------|---------------|-----------------|----------------------------------------------------------------------------------------|
 |&#10003;|**Completed**  |SID            |                 |The unique Luminum Server ID                                                            |
-|&#9654; |*In Progress*  |SKEY           |                 |The unique Luminum Server Key used by clients to verify their association               |
+|&#9654; |*In Progress*  |SKEY           |                 |The server key used by clients to verify association                                    |
 |&#9654; |*In Progress*  |LADDR          |                 |The address of the interface to be used by the network listener                         |
-|&#9654; |*In Progress*  |LPORT          |10465            |The port number to be usedby the network listener on the specified network interface    |
-|&#9654; |*In Progress*  |SSLCERT        |                 |The full path to the main SSL Certificate to be used by Luminum Server                  |
-|&#9654; |*In Progress*  |SSLPRVKEY      |                 |The full path to the private key associated with the cert defined as SSLCERT            |
-|&#9654; |*In Progress*  |SSLPUBKEY      |                 |The full path to the public key associated with the cert defined as SSLCERT             |
-|&#9654; |*In Progress*  |PKPASS         |                 |The passphrase for the private key associated with the cert defined as SSLCERT          |
+|&#9654; |*In Progress*  |LPORT          |10465            |Port number for the network listener                                                    |
+|&#9654; |*In Progress*  |SSLCERT        |                 |Path to the SSL Certificate to be used by Luminum Server                                |
+|&#9654; |*In Progress*  |SSLPRVKEY      |                 |Path to the private key associated with SSLCERT                                         |
+|&#9654; |*In Progress*  |SSLPUBKEY      |                 |Path to the public key associated with SSLCERT                                          |
+|&#9654; |*In Progress*  |PKPASS         |                 |Private key passphrase                                                                  |
 |&#9654; |*In Progress*  |SHOST          |                 |The server's fully-qualified domain name                                                |
 |&#9654; |*In Progress*  |INSTALLDATE    |                 |Date and time Luminum Server was installed                                              |
 |&#10003;|**Completed**  |ENLUMYS        |                 |A comma-separated list of currently enabled Lumys                                       |
 |&#9654; |*In Progress*  |TARGETCONF     |Enabled          |Action confirmation based on the number of targeted endpoints                           |
-|&#9654; |*In Progress*  |TCONFTHRESHOLD |250              |The minimum number of targeted endpoints to trigger requiring action confirmation       |
-|&#9654; |*In Progress*  |ENDPOINTCOMM   |mqtt             |The method used by the server and clients to communicate                                |
-|&#9654; |*In Progress*  |CHECKININT     |5                |The interval (in minutes) at which clients will check in with the server                |
-|&#9654; |*In Progress*  |MISSINGAFTER   |90               |The time (in days) at which point the system determines offline clients are missing     |
-|&#9654; |*In Progress*  |TIMEOUT        |15M              |The length of time a user is inactive before their session is terminated                |
-|&#9654; |*In Progress*  |TIMEOUTWARN    |Enabled          |Display a warning to users 2 minutes before their session is terminated for inactivity  |
+|&#9654; |*In Progress*  |TCONFTHRESHOLD |250              |Number of targeted endpoints to trigger action confirmation                             |
+|&#9654; |*In Progress*  |ENDPOINTCOMM   |mqtt             |Method used by the server and clients to communicate                                    |
+|&#9654; |*In Progress*  |CHECKININT     |5                |The interval (in minutes) at which clients will check in                                |
+|&#9654; |*In Progress*  |MISSINGAFTER   |90               |Days when the system determines offline clients are missing                             |
+|&#9654; |*In Progress*  |TIMEOUT        |15M              |Time a user is inactive before their session is terminated                              |
+|&#9654; |*In Progress*  |TIMEOUTWARN    |Enabled          |Warn users 2 minutes before session is terminated for inactivity                        |
 |&#9654; |*In Progress*  |MINPASS        |8                |Minimum password character length                                                       |
 |&#9654; |*In Progress*  |COMPLEXPASS    |Disabled         |Enforce password complexity requirements                                                |
-|&#9654; |*In Progress*  |PCUPPERLOWER   |Disabled         |Both upper and lowercase letters are required in passwords for complexity enforcement   |
-|&#9654; |*In Progress*  |PCLETNUM       |Disabled         |Both letters and numbers are required in passwords for complexity enforcement           |
-|&#9654; |*In Progress*  |PCSPECIAL      |Disabled         |Special characters are required in passwords for complexity enforcement                 |
+|&#9654; |*In Progress*  |PCUPPERLOWER   |Disabled         |Upper/Lowercase letters required in passwords                                           |
+|&#9654; |*In Progress*  |PCLETNUM       |Disabled         |Letters/Numbers required in passwords                                                   |
+|&#9654; |*In Progress*  |PCSPECIAL      |Disabled         |Special characters required in passwords                                                |
 |&#9654; |*In Progress*  |2FA            |Optional         |Two-Factor Authentication policy for user accounts                                      |
 |&#9633; |Not Started    |USERLOGLVL     |Disabled         |Account-specific log levels                                                             |
 |&#9633; |Not Started    |SENREVS        |5                |Maximum revision history for sensors                                                    |
@@ -318,10 +319,12 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9654; |*In Progress*  |Base UI Framework           |Create the consistent foundational elements for the web user interface                  |
-|&#9633; |Not Started    |Include Architecture        |Revise the methods by which the web interface includes content for sections of the UI   |
-|&#9633; |Not Started    |Stylesheet Consolidation    |Reduce stylesheet definitions to specific needed defs and eliminate redundancies        |
-|&#9633; |Not Started    |Element Generation Functions|Develop dynamic functions to automatically generate UI elements on-demand               |
-|&#9654; |*In Progress*  |Overlay Message             |Create a dynamic message window which displays as a full-screen overlay above the UI    |
+|&#9654; |*In Progress*  |Include Architecture        |Rebuild include system for UI content                                                   |
+|&#9633; |Not Started    |Stylesheet Consolidation    |Consolidate style definitions and eliminate redundancies                                |
+|&#9633; |Not Started    |Table Generation Functions  |Functions to automatically generate HTML tables on-demand                               |
+|&#9633; |Not Started    |Form Generation Functions   |Functions to automatically generate HTML forms on-demand                                |
+|&#9633; |Not Started    |Element Generation Functions|Functions to automatically generate HTML elements on-demand                             |
+|&#9654; |*In Progress*  |Overlay Message             |Display a forced-focus message window above a full-screen overlay                       |
 |&#10003;|**Completed**  |Lumy Menus                  |Dynamically inject UI navigation options for enabled Lumy modules                       |
 
 
@@ -330,8 +333,9 @@ In order to be accountable to the community - but more importantly to myself - I
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#10003;|**Completed**  |Console Login Processing    |Present a login screen and start a session or reject based on credentials               |
 |&#10003;|**Completed**  |Session Timeout             |Automatically terminate a user session if left inactive                                 |
-|&#9633; |Not Started    |Two-Factor Authentication   |Capture user sessions and shunt to 2FA validation on successful login                   |
-|&#9633; |Not Started    |Mandatory Password Change   |Capture user sessions and shunt to a change password interface on successful login      |
+|&#9633; |Not Started    |Timeout Warning             |Display a timeout warning 2 minutes before automatic inactivity logout                  |
+|&#9633; |Not Started    |Two-Factor Authentication   |Capture user sessions and shunt to 2FA validation on login                              |
+|&#9633; |Not Started    |Mandatory Password Change   |Capture user sessions and shunt to a change password interface on login                 |
 |&#9654; |*In Progress*  |Permissions Adjustments     |Show or hide UI elements/options based on the user's access level                       |
 
 
@@ -348,11 +352,11 @@ In order to be accountable to the community - but more importantly to myself - I
 ### Administration
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#10003;|**Completed**  |Client Status               |Present a user interface to view/filter and take action against checked-in clients      |
-|&#9633; |Not Started    |Missing Clients             |Present a user interface allowing administrators to manage missing clients              |
+|&#10003;|**Completed**  |Client Status               |User interface to view/filter and take action against checked-in clients                |
+|&#9633; |Not Started    |Missing Clients             |User interface allowing administrators to manage missing clients                        |
 |&#10003;|**Completed**  |Scheduled Actions           |Presents a table displaying information about current scheduled actions                 |
 |&#10003;|**Completed**  |Action History              |Presents a table displaying information about past actions                              |
-|&#9633; |Not Started    |Computer Groups             |Presents a table displaying information about configured computer groups                |
+|&#9633; |Not Started    |Computer Groups             |Presents a table displaying information about all computer groups                       |
 
 ### Content 
 
@@ -363,8 +367,8 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9633; |Not Started    |Content Sets                |Presents a table displaying information about system content sets                       |
-|&#9633; |Not Started    |Add/Edit Content Set        |Present a user interface to create or modify content sets                               |
-|&#9633; |Not Started    |Content Categories          |Present a user interface to manage categories for content sets                          |
+|&#9633; |Not Started    |Add/Edit Content Set        |User interface to create or modify content sets                                         |
+|&#9633; |Not Started    |Content Categories          |User interface to manage categories for content sets                                    |
 </li>
 
 <li>
@@ -373,11 +377,11 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#10003;|**Completed**  |Sensor List                 |Presents a table displaying information about all avaialble sensors                     |
-|&#9654; |*In Progress*  |Add/Edit Sensor             |Present a user interface to create or modify sensors                                    |
-|&#9633; |Not Started    |New Sensor Column Config    |User interface within the new sensor UI for splitting sensor output into table columns  |
-|&#10003;|**Completed**  |Sensor Code Editor (Linux)  |Browser-based code editor with syntax highlighting for languages supported under Linux  |
-|&#10003;|**Completed**  |Sensor Code Editor (macOS)  |Browser-based code editor with syntax highlighting for languages supported under macOS  |
-|&#10003;|**Completed**  |Sensor Code Editor (Windows)|Browser-based code editor with syntax highlighting for languages supported under Windows|
+|&#9654; |*In Progress*  |Add/Edit Sensor             |User interface to create or modify sensors                                              |
+|&#9633; |Not Started    |New Sensor Column Config    |Form elements for splitting sensor output into table columns                            |
+|&#10003;|**Completed**  |Linux Sensor Code Editor    |Browser-based editor with syntax highlighting for languages under Linux                 |
+|&#10003;|**Completed**  |macOS Sensor Code Editor    |Browser-based editor with syntax highlighting for languages under macOS                 |
+|&#10003;|**Completed**  |Windows Sensor Code Editor  |Browser-based editor with syntax highlighting for languages under Windows               |
 </li>
 
 <li>
@@ -386,7 +390,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#10003;|**Completed**  |Package List                |Presents a table displaying information about all avaialble packages                    |
-|&#9654; |*In Progress*  |Add/Edit Package            |Present a user interface to create or modify packages                                   |
+|&#9654; |*In Progress*  |Add/Edit Package            |User interface to create or modify packages                                             |
 </li>
 </ul>
 
@@ -431,12 +435,12 @@ In order to be accountable to the community - but more importantly to myself - I
 #### Maintenance
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#9633; |Not Started    |Diagnostics Interface       |Present a user interface for administrators to perform various system diagnostics       |
-|&#9633; |Not Started    |Updates Interface           |Present a user interface for administrators to manage Luminum updates                   |
-|&#9633; |Not Started    |Outage Interface            |Present a user interface for administrators to manage scheduled/immediate downtime      |
-|&#9633; |Not Started    |OS Management               |Present a user interface for administrators to manage the underlying Operating System   |
-|&#9633; |Not Started    |Services Interface          |Present a user interface for administrators to manage services on the underlying OS     |
-|&#9633; |Not Started    |Log Viewer                  |Present a user interface for administrators to view and manage various system logs      |
+|&#9633; |Not Started    |Diagnostics Interface       |User interface for administrators to perform various system diagnostics                 |
+|&#9633; |Not Started    |Updates Interface           |User interface for administrators to manage Luminum updates                             |
+|&#9633; |Not Started    |Outage Interface            |User interface for administrators to manage scheduled/immediate downtime                |
+|&#9633; |Not Started    |OS Management               |User interface for administrators to manage the underlying Operating System             |
+|&#9633; |Not Started    |Services Interface          |User interface for administrators to manage services on the underlying OS               |
+|&#9633; |Not Started    |Log Viewer                  |User interface for administrators to view and manage various system logs                |
 </li>
 </ul>
 
@@ -466,7 +470,7 @@ In order to be accountable to the community - but more importantly to myself - I
 #### Summary
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#9633; |Not Started    |Configuration               |Present a user interface to configure Summary sources and destinations                  |
+|&#9633; |Not Started    |Configuration               |User interface to configure Summary sources and destinations                            |
 </li>
 
 <li>
@@ -625,7 +629,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9654; |*In Progress*  |Main Client Process         |The primary client application process                                                  |
 |&#9633; |Not Started    |Parameter Functions         |Create functions to set client configuration parameters                                 |
-|&#9633; |Not Started    |Configuration Save/Import   |Routines to save the client configuration and import an existing config on first setup  |
+|&#9633; |Not Started    |Config Save/Import          |Routines to save configuration and import an existing config on first setup             |
 |&#9633; |Not Started    |Service Management          |Routines to register the client as a service with the host operating system             |
 |&#9633; |Not Started    |Tamper Protection           |Configure the operating system to secure the client against user access                 |
 |&#9633; |Not Started    |Sanctioned Uninstall        |Routines to validate permission to uninstall the client against the server              |
@@ -646,7 +650,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9654; |*In Progress*  |Main Client Process         |The primary client application process                                                  |
 |&#9633; |Not Started    |Parameter Functions         |Create functions to set client configuration parameters                                 |
-|&#9633; |Not Started    |Configuration Save/Import   |Routines to save the client configuration and import an existing config on first setup  |
+|&#9633; |Not Started    |Config Save/Import          |Routines to save configuration and import an existing config on first setup             |
 |&#9633; |Not Started    |Service Management          |Routines to register the client as a service with the host operating system             |
 |&#9633; |Not Started    |Tamper Protection           |Configure the operating system to secure the client against user access                 |
 |&#9633; |Not Started    |Sanctioned Uninstall        |Routines to validate permission to uninstall the client against the server              |
@@ -667,7 +671,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9654; |*In Progress*  |Main Client Process         |The primary client application process                                                  |
 |&#9633; |Not Started    |Parameter Functions         |Create functions to set client configuration parameters                                 |
-|&#9633; |Not Started    |Configuration Save/Import   |Routines to save the client configuration and import an existing config on first setup  |
+|&#9633; |Not Started    |Config Save/Import          |Routines to save configuration and import an existing config on first setup             |
 |&#9633; |Not Started    |Service Management          |Routines to register the client as a service with the host operating system             |
 |&#9633; |Not Started    |Tamper Protection           |Configure the operating system to secure the client against user access                 |
 |&#9633; |Not Started    |Sanctioned Uninstall        |Routines to validate permission to uninstall the client against the server              |
