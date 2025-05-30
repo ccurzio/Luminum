@@ -268,6 +268,7 @@ function srevCheck() {
 		document.getElementById('shrlabel').style.color = "#777";
 		document.getElementById('srlabel').style.color = "#777";
 		document.getElementById('srevcnt').disabled = true;
+		document.getElementById('srevcnt').classList.remove('textError');
 		}
 	document.getElementById("save").disabled = false;
 	}
@@ -283,6 +284,7 @@ function prevCheck() {
 		document.getElementById('phrlabel').style.color = "#777";
 		document.getElementById('prlabel').style.color = "#777";
 		document.getElementById('prevcnt').disabled = true;
+		document.getElementById('prevcnt').classList.remove('textError');
 		}
 	document.getElementById("save").disabled = false;
 	}
