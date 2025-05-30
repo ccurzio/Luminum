@@ -125,7 +125,7 @@ $pkgcount = mysqli_num_rows($pkgquery);
 
 						<div>
 						<br>
-						File Size: xx KB<br>
+						Selected File Size: xx KB<br>
 						<br>
 						MD5 Hash:<br>
 						xxxxxxxxxxxxxxxxxxxxxxxxx<br>
@@ -156,7 +156,7 @@ $pkgcount = mysqli_num_rows($pkgquery);
 
 						<div>
 						<br>
-						File Size: xx KB<br>
+						Selected File Size: xx KB<br>
 						<br>
 						MD5 Hash:<br>
 						xxxxxxxxxxxxxxxxxxxxxxxxx<br>
@@ -187,7 +187,7 @@ $pkgcount = mysqli_num_rows($pkgquery);
 
 						<div>
 						<br>
-						File Size: xx KB<br>
+						Selected File Size: xx KB<br>
 						<br>
 						MD5 Hash:<br>
 						xxxxxxxxxxxxxxxxxxxxxxxxx<br>
