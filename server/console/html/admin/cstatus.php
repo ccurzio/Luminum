@@ -17,7 +17,7 @@ $wincount = 0;
 
 	<div class="module-content" style="display: flex; justify-content: space-between; align-items: flex-start; width: 70%; float: left; margin-right: 0px;">
 		<div style="display: block; width: 100%; text-align: right;">
-			<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled" id="deploy">Deploy Action</button> <button class="formgo" id="connect" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Connect</button> <button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled" id="getinfo">Get Info</button>
+			<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled" id="deploy">Deploy Action</button> <button class="formgo" id="investigate" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Investigate</button> <button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled" id="getinfo">Get Info</button>
 			<table id="cstable" style="margin-top: 10px; text-align: left;">
 			<tr><td colspan="8"><div style="position: absolute; padding-top: 5px; padding-left: 5px;">??? of <?php print "$clientscount"; ?> items <img id="refresh" src="icons/refresh.png" style="cursor: pointer; margin-left: 2px; width: 20px; height: 20px; vertical-align: text-bottom;" onclick="reloadTable()"></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($clientscount == 0) { print "disabled=\"disabled\""; } ?>></div></td></tr>
 			<tr><td style="width: 15px;">
@@ -135,12 +135,12 @@ function rowHighlight(idnum) {
 		buttontoggle = true;
 		}
 
-        document.getElementById("connect").disabled = buttontoggle;
+        document.getElementById("investigate").disabled = buttontoggle;
 	document.getElementById("getinfo").disabled = buttontoggle;
 	document.getElementById("deploy").disabled = buttontoggle;
 
 	if (checkTrigger > 1) {
-		document.getElementById("connect").disabled = "disabled";
+		document.getElementById("investigate").disabled = "disabled";
 		document.getElementById("getinfo").disabled = "disabled";
 		document.getElementById("deploy").disabled = false;
 		}
