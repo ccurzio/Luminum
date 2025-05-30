@@ -618,9 +618,9 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9633; |Not Started    |Post-Install                |Create package script to run on package installation after copying files into place     |
-|&#9633; |Not Started    |Create x86 Package          |Create & Sign x86 .tgz installation package                                             |
-|&#9633; |Not Started    |Create x64 Package          |Create & Sign x64 .tgz installation package                                             |
-|&#9633; |Not Started    |Create ARM Package          |Create & Sign ARM .tgz installation package                                             |
+|&#9633; |Not Started    |Create x86 Package          |Create & Sign x86 .txz installation package                                             |
+|&#9633; |Not Started    |Create x64 Package          |Create & Sign x64 .txz installation package                                             |
+|&#9633; |Not Started    |Create ARM Package          |Create & Sign ARM .txz installation package                                             |
 
 <br>
 <br>
