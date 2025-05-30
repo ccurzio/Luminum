@@ -429,7 +429,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9654; |*In Progress*  |User Login Settings         |User interface for administrators to view/modify user login settings                    |
 |&#9633; |Not Started    |Networking Settings         |User interface for administrators to view/modify server network settings                |
 |&#9633; |Not Started    |Certificate Settings        |User interface for administrators to view/modify server certificate settings            |
-|&#9633; |Not Started    |Authentication Interface    |User interface for administrators to view/modify account authentication settings        |
+|&#9633; |Not Started    |Authentication Settings     |User interface for administrators to view/modify account authentication settings        |
 |&#9633; |Not Started    |Client Management           |Present a user interface for administrators to manage Luminum client software           |
 |&#9633; |Not Started    |Lumy Management             |Present a user interface for administrators to manage Lumy modules                      |
 </li>
