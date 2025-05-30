@@ -518,6 +518,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9633; |Not Started    |Overview Interface          |Present overview information of the current status of Inventory in the environment      |
+|&#9633; |Not Started    |Configuration               |Present a user interface for administrators to configure Inventory                      |
 </li>
 
 <li>
