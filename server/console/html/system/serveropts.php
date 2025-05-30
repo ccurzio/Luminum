@@ -48,7 +48,7 @@ else {
 			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Logging')">Logging</button>
 			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'SMTP')">SMTP</button>
 			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Encryption')">Encryption</button>
-			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Logins')">User Logins</button>
+			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Accounts')">Accounts</button>
 		</div>
 
 		<div id="General" class="configtab">
@@ -114,7 +114,7 @@ else {
 			<p>Encryption Settings</p>
 		</div>
 
-		<div id="Logins" class="configtab" style="display: none;">
+		<div id="Accounts" class="configtab" style="display: none;">
 			<table style="width: 50%; border: 0; margin-left: auto; margin-right: auto; margin-top: 15px; margin-bottom: 15px;">
 			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Two-Factor Authentication: </td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><select id="2fa" style="width: 175px; height: 28px;" onchange="formCheck()">
 			<?php if ($twofactor == "Required") {
