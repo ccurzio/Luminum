@@ -121,10 +121,17 @@ $acctrole = $userinfo["ROLE"];
 			</button>
 			<div class="dropdown-content">
 				<div class="submenu">
-					<a href="#" class="submenu-link" style="cursor: default;">Endpoints <span class="arrow" style="margin-left: 58%;">▸</span></a>
+					<a href="#" class="submenu-link" style="cursor: default;">Endpoints <span class="arrow" style="margin-left: 57%;">▸</span></a>
 					<div class="submenu-content">
 						<a href="/index.php?view=clientstatus">Client Status</a>
 						<a href="/index.php?view=missing">Missing Clients</a>
+					</div>
+				</div>
+				<div class="submenu">
+					<a href="#" class="submenu-link" style="cursor: default;">Actions <span class="arrow" style="margin-left: 66%;">▸</span></a>
+					<div class="submenu-content">
+						<a href="/index.php?view=actions">Scheduled Actions</a>
+						<a href="/index.php?view=actionhistory">Action History</a>
 					</div>
 				</div>
 				<div class="submenu">
@@ -135,9 +142,9 @@ $acctrole = $userinfo["ROLE"];
 						<a href="/index.php?view=csets">Content Sets</a>
 					</div>
 				</div>
-				<a href="/index.php?view=actions">Scheduled Actions</a>
-				<a href="/index.php?view=actionhistory">Action History</a>
+				<a href="/index.php?view=savedqueries">Saved Queries</a>
 				<a href="/index.php?view=cgroups">Computer Groups</a>
+				<a href="/index.php?view=ugroups">User Groups</a>
 			</div>
 		</div>
 
@@ -176,7 +183,6 @@ $acctrole = $userinfo["ROLE"];
 					print "</div>\n";
 					print "<a href=\"/config.php?view=clients\">Client Management</a>\n";
 					print "<a href=\"/index.php?view=users\">User Accounts</a>\n";
-					print "<a href=\"/index.php?view=ugroups\">User Groups</a>\n";
 					}
 				?>
 			</div>
