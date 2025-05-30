@@ -96,9 +96,9 @@ $pkgcount = mysqli_num_rows($pkgquery);
 		<div style="float: left; margin-left: 10px;">
 			<table style="width: 250px; margin-left: auto; margin-right: auto; margin-top: 20px;">
 			<tr><td style="width: 80px;">OS</td><td>Enabled</td><td style="text-align: center; width: 80px;">Size</td></tr>
-			<tr><td style="background-color: #494a69; font-weight: normal;">Linux</td><td id="len" style="text-align: center; background-color: #494a69; font-size: 13px;"><span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span></td><td id="lsize" style="background-color: #494a69; font-weight: normal;"></td></tr>
-			<tr><td style="background-color: #494a69; font-weight: normal;">Mac</td><td id="men" style="text-align: center; background-color: #494a69; font-size: 13px;"><span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span></td><td id="msize" style="background-color: #494a69; font-weight: normal;"></tr>
-			<tr><td style="background-color: #494a69; font-weight: normal;">Windows</td><td id="wen" style="text-align: center; background-color: #494a69; font-size: 13px;"><span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span></td><td id="wsize" style="background-color: #494a69; font-weight: normal;"></tr>
+			<tr><td style="background-color: #494a69; font-weight: normal;">Linux</td><td id="len" style="text-align: center; background-color: #494a69; font-size: 13px;"><span style="font-weight: bold; font-size: 13px; color: #cf1104;">&#10060;</span></td><td id="lsize" style="background-color: #494a69; font-weight: normal;"></td></tr>
+			<tr><td style="background-color: #494a69; font-weight: normal;">Mac</td><td id="men" style="text-align: center; background-color: #494a69; font-size: 13px;"><span style="font-weight: bold; font-size: 13px; color: #cf1104;">&#10060;</span></td><td id="msize" style="background-color: #494a69; font-weight: normal;"></tr>
+			<tr><td style="background-color: #494a69; font-weight: normal;">Windows</td><td id="wen" style="text-align: center; background-color: #494a69; font-size: 13px;"><span style="font-weight: bold; font-size: 13px; color: #cf1104;">&#10060;</span></td><td id="wsize" style="background-color: #494a69; font-weight: normal;"></tr>
 			</table>
 		</div>
 
@@ -258,6 +258,7 @@ function enableOS(osel) {
 		document.getElementById('lpkgcmd').disabled = false;
 		document.getElementById('lfadd').disabled = false;
 		document.getElementById('len').innerHTML = '<span style=\"font-weight: bold; font-size: 16px; color: #0ec940;\">✓</span>';
+		document.getElementById('lsize').innerHTML = formatBytes(0,1);
 		}
 	else if (osel == "Mac") {
 		mfeditor.style.opacity = 1;
@@ -265,6 +266,7 @@ function enableOS(osel) {
 		document.getElementById('mpkgcmd').disabled = false;
 		document.getElementById('mfadd').disabled = false;
 		document.getElementById('men').innerHTML = '<span style=\"font-weight: bold; font-size: 16px; color: #0ec940;\">✓</span>';
+		document.getElementById('msize').innerHTML = formatBytes(0,1);
 		}
 	else if (osel == "Windows") {
 		wfeditor.style.opacity = 1;
@@ -272,6 +274,7 @@ function enableOS(osel) {
 		document.getElementById('wpkgcmd').disabled = false;
 		document.getElementById('wfadd').disabled = false;
 		document.getElementById('wen').innerHTML = '<span style=\"font-weight: bold; font-size: 16px; color: #0ec940;\">✓</span>';
+		document.getElementById('wsize').innerHTML = formatBytes(0,1);
 		}
 	}
 
@@ -282,6 +285,7 @@ function disableOS(osel) {
 		document.getElementById('lpkgcmd').disabled = true;
 		document.getElementById('lfadd').disabled = true;
 		document.getElementById('len').innerHTML = '<span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span>';
+		document.getElementById('lsize').innerHTML = '';
 		}
 	else if (osel == "Mac") {
 		mfeditor.style.opacity = 0.5;
@@ -289,6 +293,7 @@ function disableOS(osel) {
 		document.getElementById('mpkgcmd').disabled = true;
 		document.getElementById('mfadd').disabled = true;
 		document.getElementById('men').innerHTML = '<span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span>';
+		document.getElementById('msize').innerHTML = '';
 		}
 	else if (osel == "Windows") {
 		wfeditor.style.opacity = 0.5;
@@ -296,7 +301,18 @@ function disableOS(osel) {
 		document.getElementById('wpkgcmd').disabled = true;
 		document.getElementById('wfadd').disabled = true;
 		document.getElementById('wen').innerHTML = '<span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span>';
+		document.getElementById('wsize').innerHTML = '';
 		}
+	}
+
+function formatBytes(bytes, decimals = 2) {
+	if (!+bytes) return '0 B'
+	const k = 1024
+	const dm = decimals < 0 ? 0 : decimals
+	const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+	const i = Math.floor(Math.log(bytes) / Math.log(k))
+
+	return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`
 	}
 </script>
 
