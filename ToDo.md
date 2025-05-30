@@ -130,8 +130,8 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9654; |*In Progress*  |PCSPECIAL      |Disabled         |Special characters required in passwords                                                |
 |&#9654; |*In Progress*  |2FA            |Optional         |Two-Factor Authentication policy for user accounts                                      |
 |&#9633; |Not Started    |USERLOGLVL     |Disabled         |Account-specific log levels                                                             |
-|&#9633; |Not Started    |SENREVS        |5                |Maximum revision history for sensors                                                    |
-|&#9633; |Not Started    |PKGREVS        |5                |Maximum revision history for packages                                                   |
+|&#9654; |*In Progress*  |SENREVS        |5                |Maximum revision history for sensors                                                    |
+|&#9654; |*In Progress*  |PKGREVS        |5                |Maximum revision history for packages                                                   |
 |&#9633; |Not Started    |INVESTIGATE    |Enabled          |Enable or Disable Luminum Investigate                                                   |
 </li>
 
