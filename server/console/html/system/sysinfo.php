@@ -38,12 +38,17 @@ else {
 		</div>
 
 		<div id="Luminum" class="configtab">
-			<table style="width: 50%; border: 0; margin-left: auto; margin-right: auto; margin-top: 15px; margin-bottom: 15px;">
-			<tr><td style="width: 50%; color: #444; background-color: transparent; border: 0;">Luminum Server Version:</td><td style="width: 50%; color: #444; background-color: transparent; border: 0; font-weight: normal;">0.0.1</td></tr>
-			<?php print "<tr><td style=\"width: 50%; color: #444; background-color: transparent; border: 0; font-weight: bold;\">Server ID:</td><td style=\"width: 50%; color: #444; background-color: transparent; border: 0; font-weight: normal;\">$serverid</td></tr>\n"; ?>
-			<tr><td style="width: 50%; color: #444; background-color: transparent; border: 0;">License:</td><td style="width: 50%; color: #444; background-color: transparent; border: 0; font-weight: normal;">Community</td></tr>
-			<tr><td style="width: 50%; color: #444; background-color: transparent; border: 0;">Original Install Date:</td><td style="width: 50%; color: #444; background-color: transparent; border: 0; font-weight: normal;"><?php print $installdate; ?></td></tr>
-			</table>
+			<div class="row" style="margin-left: 20px; margin-top: 20px; margin-bottom: 20px; margin-right: 20px;">
+				<div class="column" style="width: 15%; min-width: 220px; pointer-events: none; user-select: none;"><img src="/images/Luminum.png" style="width: 200px; height: 200px;"></div>
+				<div class="column" style="width: 40%; text-align: left; padding-right: 20px;">
+					<table style="border: 0; width: 650px;">
+						<tr><td style="color: #444; background-color: transparent; border: 0;">Luminum Server Version:</td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;">0.0.1</td></tr>
+						<?php print "<tr><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\">Server ID:</td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal;\">$serverid</td></tr>\n"; ?>
+						<tr><td style="color: #444; background-color: transparent; border: 0;">License:</td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;">Community</td></tr>
+						<tr><td style="color: #444; background-color: transparent; border: 0;">Original Install Date:</td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><?php print $installdate; ?></td></tr>
+					</table>
+				</div>
+			</div>
 		</div>
 
 		<div id="CPU" class="configtab" style="display: none;">
@@ -136,7 +141,7 @@ else {
 
 		<div id="Devices" class="configtab" style="display: none;">
 			<div class="row" style="margin-left: 20px; margin-top: 20px; margin-bottom: 20px; margin-right: 20px;">
-				<div class="column" style="width: 15%; min-width: 220px; pointer-events: none; user-select: none;"><img src="" style="width: 200px; height: 200px;"></div>
+				<div class="column" style="width: 15%; min-width: 220px; pointer-events: none; user-select: none;"><img src="/images/devices.png" style="width: 200px; height: 200px;"></div>
 				<div class="column" style="width: 25%; text-align: left; padding-right: 5%;">
 				</div>
 			</div>
