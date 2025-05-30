@@ -426,6 +426,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9654; |*In Progress*  |General Settings            |User interface for administrators to view/modify general Luminum settings               |
 |&#9654; |*In Progress*  |Endpoint Settings           |User interface for administrators to view/modify endpoint settings                      |
 |&#9654; |*In Progress*  |Content Settings            |User interface for administrators to view/modify content settings                       |
+|&#9633; |Not Started    |Log Settings                |User interface for administrators to configure system logging                           |
 |&#9633; |Not Started    |SMTP Settings               |User interface for administrators to configure SMTP servers and settings                |
 |&#9633; |Not Started    |Encryption Settings         |User interface for administrators to configure encryption settings                      |
 |&#9654; |*In Progress*  |User Login Settings         |User interface for administrators to view/modify user login settings                    |
