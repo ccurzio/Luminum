@@ -9,14 +9,19 @@ $endtime = microtime(true);
 $duration = number_format((float)$endtime - $starttime, 2, '.', '');
 $pkgcount = mysqli_num_rows($pkgquery);
 ?>
+
 <div class="content">
+
+<?php if ($_GET["view"] == "packages"): ?>
+        <?php if (!isset($_GET["action"])): ?>
+
 	<h1>Packages</h1>
 
 	<div class="module-content">
                 <?php
                 print "<div style=\"display: block; width: 100%; text-align: right;\">\n";
                 if (isset($acctrole) && $acctrole <= 2) {
-                        print "<button class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\">Create New</button>\n";
+                        print "<a href=\"/index.php?view=packages&action=new\"><button class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\">Create New</button></a>\n";
                         print "<button class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\" disabled=\"disabled\">Modify Selected</button>\n";
                         print "<button class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\" disabled=\"disabled\">Delete Selected</button>\n";
                         }
@@ -53,3 +58,179 @@ $pkgcount = mysqli_num_rows($pkgquery);
 		<tr style="height: 35px;"><td colspan="10"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;"><i>Query Completed in <?php print $duration; ?> Seconds</i></div></td></tr>
 		</table>
 	</div>
+
+	<?php elseif ($_GET["action"] == "new"): ?>
+
+		<?php
+		if (isset($acctrole) && $acctrole <= 2): ?>
+		<h1>Create New Package</h1>
+
+		<div class="module-content" style="overflow: auto; min-width: 1000px;">
+			<div style="float: left; margin-bottom: 10px;">
+				<table style="margin-top: 10px; margin-bottom: 20px; border: 0;">
+				<tr><td style="background-color: transparent; border: 0; color: #444;">Name: <span style="color: red;">*</span></td><td style="background-color: transparent; border: 0; color: #444;">Download Timeout: <span style="color: red;">*</span></td></tr>
+				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgname" style="width: 400px;"></td><td style="background-color: transparent; border: 0; color: #444;"><input id="timeout" type="text" style="width: 30px;" value="2"><select id="tint" style="width: 100px; margin-left: 10px; height: 33px;"><option value="sec">Second(s)</option><option value="min" selected="selected">Minute(s)</option></select></td></tr>
+				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Description: <span style="color: red;">*</span></td><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Completion Timeout: <span style="color: red;">*</span></td></tr>
+				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgdesc" style="width: 400px;"></td><td style="background-color: transparent; border: 0; color: #444;"><input id="dtimeout" type="text" style="width: 30px;" value="5"><select id="tint" style="width: 100px; margin-left: 10px; height: 33px;"><option value="sec">Second(s)</option><option value="min" selected="selected">Minute(s)</option></select></td></tr></td></tr>
+				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Content Set: <span style="color: red;">*</span></td><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Category:</td></tr>
+				<tr><td style="background-color: transparent; border: 0; color: #444;"><select id="contentset" name="contentset" style="font-size: 15px; height: 33px; width: 430px; margin-left: 2px; margin-right: 30px;">
+				<?php
+				while ($csrow = mysqli_fetch_assoc($csets)) {
+					print "<option value=\"" . $csrow["ID"] . "\">" . $csrow["NAME"] . "</option>\n";
+					}
+				?>
+				</select></td><td style="background-color: transparent; border: 0; color: #444;"><select id="category" style="font-size: 15px; height: 33px; width: 430px; margin-left: 2px; margin-right: 30px;">
+				<option value="none">(None)</option>
+				</select></td></tr>
+				</table>
+
+			</div>
+
+			<div style="float: right; text-align: right; position: absolute; margin-top: 8px; width: 97%;">
+				<button id="save" class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Save Package</button>
+				<a href="/index.php?view=packages"><button type="button" class="formgo" style="margin-top: 5px; margin-right: 0;">Cancel</button></a>
+			</div>
+
+		<hr style="width: 99%; margin-bottom: 20px;">
+
+		<div style="float: left; margin-left: 10px;">
+			<table style="width: 250px; margin-left: auto; margin-right: auto; margin-top: 20px;">
+			<tr><td style="width: 80px;">OS</td><td>Enabled</td><td style="text-align: center; width: 80px;">Size</td></tr>
+			<tr><td style="background-color: #494a69; font-weight: normal;">Linux</td><td id="len" style="text-align: center; background-color: #494a69; font-weight: normal;"><span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span></td><td id="lsize" style="background-color: #494a69; font-weight: normal;"></td></tr>
+			<tr><td style="background-color: #494a69; font-weight: normal;">Mac</td><td id="men" style="text-align: center; background-color: #494a69; font-weight: normal;"><span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span></td><td id="msize" style="background-color: #494a69; font-weight: normal;"></tr>
+			<tr><td style="background-color: #494a69; font-weight: normal;">Windows</td><td id="wen" style="text-align: center; background-color: #494a69; font-weight: normal;"><span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span></td><td id="wsize" style="background-color: #494a69; font-weight: normal;"></tr>
+			</table>
+		</div>
+
+		<div class="module-content" style="padding: 0 1px 1px 0; width: 800px; margin-left: auto; margin-right: auto; margin-top: 40px;">
+			<div class="tabbar tabbarback">
+				<button type="button" class="tabbaritem tabbutton tablink tabbarsel" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Linux')">Linux</button>
+				<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'macOS')">macOS</button>
+				<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Windows')">Windows</button>
+			</div>
+
+			<div style="margin: 8px 0 0 0; width: 100%;" id="Linux" class="configtab">
+				<div style="text-align: left; color: #444;">
+					<input id="lpselect" type="checkbox" style="margin-left: 8px;" onclick="pkosToggle('Linux');"> <span style="cursor: normal; user-select: none;" onclick="labelToggle('Linux')">Enabled</span>
+                                </div>
+                                <div id="leditor" style="background-color: #eee; margin-top: 7px; color: #444; width: 100%;">
+					<div style="width: 90%; margin-left: 125px; padding-top: 20px;">
+					Command: <input type="text" id="lpkgcmd" style="width: 400px;" value="/bin/sh ./">
+					</div>
+					<div style="width: 90%; margin-left: 150px; padding-top: 20px; margin-bottom: 20px;">
+						<div style="float: left; margin-right: 50px;">
+						Files:<br>
+						<select id="lfiles" size="8" style="width: 225px; border-radius: 6px;"></select>
+						</div>
+
+						<div>
+						<br>
+						File Size: xx KB<br>
+						<br>
+						MD5 Hash:<br>
+						xxxxxxxxxxxxxxxxxxxxxxxxx<br>
+						<br>
+						<button class="formgo" disabled="disabled">Remove</button>
+						<br>
+						</div>
+					</div>
+					<div style="width: 90%; padding-top: 10px; margin-left: 170px;">
+						<button class="formgo" style="margin-right: 5px;">Add File</button> <button class="formgo" disabled="disabled">Remove All</button>
+					</div>
+				</div>
+			</div>
+
+			<div style="margin: 8px 0 0 0; width: 100%; display: none;" id="macOS" class="configtab">
+				<div style="text-align: left; color: #444;">
+					<input id="mpselect" type="checkbox" style="margin-left: 8px;" onclick="pkosToggle('Mac');"> <span style="cursor: normal; user-select: none;" onclick="labelToggle('Mac');">Enabled</span>
+				</div>
+                                <div id="meditor" style="background-color: #eee; margin-top: 7px; color: #444; width: 100%;">
+					<div style="width: 90%; margin-left: 125px; padding-top: 20px;">
+					Command: <input type="text" id="mpkgcmd" style="width: 400px;" value="/bin/sh ./">
+					</div>
+					<div style="width: 90%; margin-left: 150px; padding-top: 20px; margin-bottom: 20px;">
+						<div style="float: left; margin-right: 50px;">
+						Files:<br>
+						<select id="lfiles" size="8" style="width: 225px; border-radius: 6px;"></select>
+						</div>
+
+						<div>
+						<br>
+						File Size: xx KB<br>
+						<br>
+						MD5 Hash:<br>
+						xxxxxxxxxxxxxxxxxxxxxxxxx<br>
+						<br>
+						<button class="formgo" disabled="disabled">Remove</button>
+						<br>
+						</div>
+					</div>
+					<div style="width: 90%; padding-top: 10px; margin-left: 170px;">
+						<button class="formgo" style="margin-right: 5px;">Add File</button> <button class="formgo" disabled="disabled">Remove All</button>
+					</div>
+				</div>
+			</div>
+
+			<div style="margin: 8px 0 0 0; width: 100%; display: none;" id="Windows" class="configtab">
+				<div style="text-align: left; color: #444;">
+					<input id="wpselect" type="checkbox" style="margin-left: 8px;" onclick="pkosToggle('Windows');"> <span style="cursor: normal; user-select: none;" onclick="labelToggle('Windows');">Enabled</span>
+				</div>
+                                <div id="weditor" style="background-color: #eee; margin-top: 7px; color: #444; width: 100%;">
+					<div style="width: 90%; margin-left: 125px; padding-top: 20px;">
+					Command: <input type="text" id="wpkgcmd" style="width: 400px;" value="cmd.exe .\">
+					</div>
+					<div style="width: 90%; margin-left: 150px; padding-top: 20px; margin-bottom: 20px;">
+						<div style="float: left; margin-right: 50px;">
+						Files:<br>
+						<select id="lfiles" size="8" style="width: 225px; border-radius: 6px;"></select>
+						</div>
+
+						<div>
+						<br>
+						File Size: xx KB<br>
+						<br>
+						MD5 Hash:<br>
+						xxxxxxxxxxxxxxxxxxxxxxxxx<br>
+						<br>
+						<button class="formgo" disabled="disabled">Remove</button>
+						<br>
+						</div>
+					</div>
+					<div style="width: 90%; padding-top: 10px; margin-left: 170px;">
+						<button class="formgo" style="margin-right: 5px;">Add File</button> <button class="formgo" disabled="disabled">Remove All</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+<script>
+function switchTab(evt, configSect) {
+	var i, x, tablinks;
+	x = document.getElementsByClassName("configtab");
+
+	for (i = 0; i < x.length; i++) {
+		x[i].style.display = "none";
+		}
+
+	tablinks = document.getElementsByClassName("tablink");
+	for (i = 0; i < x.length; i++) {
+		tablinks[i].className = tablinks[i].className.replace(" tabbarsel", "");
+		}
+
+	document.getElementById(configSect).style.display = "block";
+	evt.currentTarget.className += " tabbarsel";
+	}
+
+function pkosToggke() {
+	}
+</script>
+
+	<?php else: ?>
+
+		<h1 style="color: red">Access Denied</h1>
+
+	<?php endif; ?>
+
+<?php endif; ?>
+<?php endif; ?>
