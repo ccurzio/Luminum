@@ -65,12 +65,18 @@ $pkgcount = mysqli_num_rows($pkgquery);
 		if (isset($acctrole) && $acctrole <= 2): ?>
 		<h1>Create New Package</h1>
 
+		<form id="npform" action="/admin/packages.php" method="POST">
+		<div style="width: 100%; text-align: right; margin: -50px auto 10px auto;">
+			<button id="save" class="formgo" style="margin-right: 0px;" disabled="disabled">Save Package</button>
+			<a href="/index.php?view=packages"><button type="button" class="formgo" style="margin-top: 5px; margin-right: 25px;">Cancel</button></a>
+		</div>
+
 		<div class="module-content" style="overflow: auto; min-width: 1000px;">
 			<div style="float: left; margin-bottom: 10px;">
 				<table style="margin-top: 10px; margin-bottom: 20px; border: 0;">
-				<tr><td style="background-color: transparent; border: 0; color: #444;">Name: <span style="color: red;">*</span></td><td style="background-color: transparent; border: 0; color: #444;">Download Timeout: <span style="color: red;">*</span></td></tr>
+				<tr><td style="background-color: transparent; border: 0; color: #444;">Name: <span style="color: red;">*</span></td><td style="background-color: transparent; border: 0; color: #444;">Download Timeout: <span style="color: red;">*</span> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Specifies how long the client should wait to fully download the package files before aborting the operation<br><br>Default: 2 Minutes</span></div></td></tr>
 				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgname" style="width: 400px;"></td><td style="background-color: transparent; border: 0; color: #444;"><input id="timeout" type="text" style="width: 30px;" value="2"><select id="tint" style="width: 100px; margin-left: 10px; height: 33px;"><option value="sec">Second(s)</option><option value="min" selected="selected">Minute(s)</option></select></td></tr>
-				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Description: <span style="color: red;">*</span></td><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Completion Timeout: <span style="color: red;">*</span></td></tr>
+				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Description: <span style="color: red;">*</span></td><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Completion Timeout: <span style="color: red;">*</span> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Specifies how long the client should wait for the specified command to finish<br><br>Default: 5 Minutes</span></div></td></tr>
 				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgdesc" style="width: 400px;"></td><td style="background-color: transparent; border: 0; color: #444;"><input id="dtimeout" type="text" style="width: 30px;" value="5"><select id="tint" style="width: 100px; margin-left: 10px; height: 33px;"><option value="sec">Second(s)</option><option value="min" selected="selected">Minute(s)</option></select></td></tr></td></tr>
 				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Content Set: <span style="color: red;">*</span></td><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Category:</td></tr>
 				<tr><td style="background-color: transparent; border: 0; color: #444;"><select id="contentset" name="contentset" style="font-size: 15px; height: 33px; width: 430px; margin-left: 2px; margin-right: 30px;">
@@ -84,11 +90,6 @@ $pkgcount = mysqli_num_rows($pkgquery);
 				</select></td></tr>
 				</table>
 
-			</div>
-
-			<div style="float: right; text-align: right; position: absolute; margin-top: 8px; width: 97%;">
-				<button id="save" class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Save Package</button>
-				<a href="/index.php?view=packages"><button type="button" class="formgo" style="margin-top: 5px; margin-right: 0;">Cancel</button></a>
 			</div>
 
 		<hr style="width: 99%; margin-bottom: 20px;">
