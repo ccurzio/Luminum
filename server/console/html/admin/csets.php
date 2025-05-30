@@ -28,7 +28,7 @@ $cscount = mysqli_num_rows($csquery);
                 ?>
 		<table style="margin-top: 10px;">
 		<tr><td colspan="10"><div style="position: absolute; padding-top: 7px; padding-left: 5px;">0 of <?php print $cscount; ?> items</div>
-		<div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($cscount == 0) { print "disabled=\"disabled\""; } ?>></div></td></tr>
+		<div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($cscount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
 		<tr><td style="width: 15px;">
 		<?php
 			if ($cscount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
@@ -153,9 +153,9 @@ function removeLetters(str) {
 			<div style="float: left; margin-bottom: 10px;">
 				<table style="margin-top: 10px; margin-bottom: 20px; border: 0;">
 				<tr><td style="background-color: transparent; border: 0; color: #444;">Name: <span style="color: red;">*</span></td></tr>
-				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgname" style="width: 400px;"></td><td style="background-color: transparent; border: 0; color: #444;"></td></tr>
+				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="csname" style="width: 400px;" maxlength="128"></td><td style="background-color: transparent; border: 0; color: #444;"></td></tr>
 				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Description: <span style="color: red;">*</span></td></tr>
-				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgdesc" style="width: 400px;"></td></tr>
+				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="csdesc" style="width: 400px;" maxlength="128"></td></tr>
 				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;"><input id="roleres" type="checkbox" onclick="rrestrictToggle();"><span onclick="rrltoggle();" style="cursor: normal; user-select: none;"> Restrict Access by Account Role</span> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Prevents the content set and its assigned content from being accessed by users with an access level lower than the specified value</span></div></td></tr>
 				<tr><td style="background-color: transparent; border: 0; color: #444; font-weight: normal; padding-left: 30px;"><span id="rolereslabel" style="color: #777;">Restricted to: </span><select id="minlevel" style="margin-left: 2px; margin-right: 5px; margin-top: 2px; width: 170px; height: 28px;" onchange="restrictLabel();" disabled="disabled"><option value="1">Administrators</option><option value="2">Power Users</option><option value="3">Standard Users</option></select> <span id="reslevellabel" style="color: #444; font-weight: normal; visibility: hidden;">and above</span></td></tr>
 				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;"><input id="groupres" type="checkbox" onclick="grestrictToggle();"><span id="rglabel" onclick="rgltoggle();" style="cursor: normal; user-select: none;"> Restrict Access by User Group</span> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"><span class="tooltiptext">Prevents the content set and its assigned content from being accessed by users assigned to a user group other than the specified group</span></td></tr>
@@ -174,7 +174,7 @@ function removeLetters(str) {
 				<div style="text-align: left; margin-top: 10px; margin-left: 60px; font-weight: normal; color: #444;">
 					<button id="rmselcat" class="formgo" style="margin-right: 5px; margin-bottom: 10px;" disabled="disabled">Remove Selected</button> <button id="rmallcat" class="formgo" style="margin-bottom: 10px;" disabled="disabled">Remove All</button>
 					<br>
-					New Category: <input id="newcat" type="text" style="width: 350px;"> <button id="addcat" class="formgo" style="height: 33px; vertical-align: middle; padding-left: 10px; padding-right: 10px; padding-bottom: 0; padding-top: 0; margin-bottom: 3px; margin-left: 5px;">Add</button>
+					New Category: <input id="newcat" type="text" style="width: 350px;" maxlength="128"> <button id="addcat" class="formgo" style="height: 33px; vertical-align: middle; padding-left: 10px; padding-right: 10px; padding-bottom: 0; padding-top: 0; margin-bottom: 3px; margin-left: 5px;">Add</button>
 				</div>
 
 			</div>

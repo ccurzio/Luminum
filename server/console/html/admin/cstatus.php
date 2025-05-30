@@ -19,7 +19,7 @@ $wincount = 0;
 		<div style="display: block; width: 100%; text-align: right;">
 			<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled" id="deploy">Deploy Action</button> <button class="formgo" id="investigate" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Investigate</button> <button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled" id="getinfo">Get Info</button>
 			<table id="cstable" style="margin-top: 10px; text-align: left;">
-			<tr><td colspan="8"><div style="position: absolute; padding-top: 5px; padding-left: 5px;">??? of <?php print "$clientscount"; ?> items <img id="refresh" src="icons/refresh.png" style="cursor: pointer; margin-left: 2px; width: 20px; height: 20px; vertical-align: text-bottom;" onclick="reloadTable()"></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($clientscount == 0) { print "disabled=\"disabled\""; } ?>></div></td></tr>
+			<tr><td colspan="8"><div style="position: absolute; padding-top: 5px; padding-left: 5px;">??? of <?php print "$clientscount"; ?> items <img id="refresh" src="icons/refresh.png" style="cursor: pointer; margin-left: 2px; width: 20px; height: 20px; vertical-align: text-bottom;" onclick="reloadTable()"></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($clientscount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
 			<tr><td style="width: 15px;">
 			<?php
 			if ($clientscount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
@@ -49,7 +49,7 @@ $wincount = 0;
 	<div class="module-content" style="width: 21%; float: right; font-size: 13px;">
 	<p>
 		<b><input type="checkbox" id="checkinfilter" onclick="checkinform()" <?php if ($clientscount == 0) { print "disabled=\"disabled\""; } ?>> Show systems that have checked in within:</b><br>
-		<input id="intnum" type="text" style="font-size: 15px; padding: 5px; margin-top: 3px; width: 20px;" value="1" disabled="disabled">
+		<input id="intnum" type="text" style="font-size: 15px; padding: 5px; margin-top: 3px; width: 20px;" value="1" maxlength="2" disabled="disabled">
 		<select name="filterint" id="filterint" style="font-size: 15px; height: 30px; margin-left: 2px;" disabled="disabled">
 			 <option value="reg">Registration Interval</option>
 			 <option value="minutes">Minute(s)</option>
@@ -82,6 +82,15 @@ $wincount = 0;
 </div>
 
 <script>
+const itElement = document.getElementById('intnum');
+
+itElement.addEventListener('input', function(event) {
+	document.getElementById('intnum').value = numbersOnly(document.getElementById('intnum').value);
+	//formCheck();
+	});
+
+function numbersOnly(str) { return str.replace(/[^0-9]/g, ''); }
+
 function filterHighlight(fid) {
 	var checkBox = document.getElementById(fid);
 	if (checkBox.checked == true) { var bgcolor = "#686993"; }
