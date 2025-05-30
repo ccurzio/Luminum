@@ -26,7 +26,7 @@ else {
 			<button class="formgo" id="getinfo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Get Info</button>
 		</div>
 		<table style="margin-top: 10px;">
-		<tr><td colspan="9"><div style="position: absolute; padding-top: 5px; padding-left: 5px;"> <?php print "$usercount of $usercount items"; ?></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;"></div></td></tr>
+		<tr><td colspan="9"><div style="position: absolute; padding-top: 5px; padding-left: 5px;"> <?php print "$usercount of $usercount items"; ?></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;" maxlength="64"></div></td></tr>
 		<tr><td style="width: 15px;"><input type="checkbox" id="selectall" onclick="allToggle()"></td><td style="width: 50px; text-align: center;">UID</td><td style="width: 75px; text-align: center;">Enabled</td><td style="width: 120px;">Username</td><td>Full Name</td><td style="width: 90px;">Role</td><td style="width: 90px;">Type</td><td>Created</td><td>Last Login</td></tr>
 
 		<?php
