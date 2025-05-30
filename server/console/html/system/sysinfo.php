@@ -33,6 +33,7 @@ else {
 			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'CPU')">CPU</button>
 			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Disks')">Disks</button>
 			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Memory')">Memory</button>
+			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Devices')">Devices</button>
 			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Network')">Network</button>
 		</div>
 
@@ -128,6 +129,14 @@ else {
 		<div id="Memory" class="configtab" style="display: none;">
 			<div class="row" style="margin-left: 20px; margin-top: 20px; margin-bottom: 20px; margin-right: 20px;">
 				<div class="column" style="width: 15%; min-width: 220px;"><img src="/images/ram.png" style="width: 200px; height: 200px;"></div>
+				<div class="column" style="width: 25%; text-align: left; padding-right: 5%;">
+				</div>
+			</div>
+		</div>
+
+		<div id="Devices" class="configtab" style="display: none;">
+			<div class="row" style="margin-left: 20px; margin-top: 20px; margin-bottom: 20px; margin-right: 20px;">
+				<div class="column" style="width: 15%; min-width: 220px;"><img src="" style="width: 200px; height: 200px;"></div>
 				<div class="column" style="width: 25%; text-align: left; padding-right: 5%;">
 				</div>
 			</div>
