@@ -69,7 +69,6 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9633; |Not Started    |Dependency Checking         |Validate that the system has all required dependencies installed                        |
-|&#9633; |Not Started    |Pre-Install                 |Create package script to run on package installation prior to copying files into place  |
 |&#9633; |Not Started    |Post-Install                |Create package script to run on package installation after copying files into place     |
 |&#9633; |Not Started    |Create Package              |Create .txz installation package                                                        |
 
@@ -615,7 +614,6 @@ In order to be accountable to the community - but more importantly to myself - I
 ### Slackware Packaging
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#9633; |Not Started    |Pre-Install                 |Create package script to run on package installation prior to copying files into place  |
 |&#9633; |Not Started    |Post-Install                |Create package script to run on package installation after copying files into place     |
 |&#9633; |Not Started    |Create x86 Package          |Create & Sign x86 .tgz installation package                                             |
 |&#9633; |Not Started    |Create x64 Package          |Create & Sign x64 .tgz installation package                                             |
