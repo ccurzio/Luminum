@@ -88,8 +88,8 @@ body h1 {
 #get-list, #from-list {
 	display: flex;
 	flex-direction: column;
-	padding-left: 10px;
-	padding-top: 0px;
+	padding-left: 0;
+	padding-top: 0;
 	padding-bottom: 15px;
 	}
 
