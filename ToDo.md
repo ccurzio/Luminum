@@ -327,7 +327,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9633; |Not Started    |Element Generation Functions|Functions to automatically generate HTML elements on-demand                             |
 |&#9654; |*In Progress*  |Overlay Message             |Display a forced-focus message window above a full-screen overlay                       |
 |&#10003;|**Completed**  |Lumy Menus                  |Dynamically inject UI navigation options for enabled Lumy modules                       |
-
+|&#9633; |Not Started    |Asynchronous Content Updates|Routines to update page content without refreshing                                      |
 
 ### Session Management
 |        |Status         |Task                        |Description                                                                             |
