@@ -19,7 +19,7 @@ else {
 
 	<?php elseif ($_GET['view'] == "services"): ?>
 	<div class="content">
-	<h1>Service Management</h1>
+	<h1>Back-End Service Management</h1>
 
 	<?php elseif ($_GET['view'] == "os"): ?>
 	<div class="content">
