@@ -323,6 +323,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9654; |*In Progress*  |Base UI Framework           |Create the consistent foundational elements for the web user interface                  |
 |&#9654; |*In Progress*  |Include Architecture        |Rebuild include system for UI content                                                   |
 |&#9633; |Not Started    |Stylesheet Consolidation    |Consolidate style definitions and eliminate redundancies                                |
+|&#9633; |Not Started    |Invalid Input Highlight     |Create stylesheet definitions highlighting fields with invalid values                   |
 |&#9633; |Not Started    |Table Generation Functions  |Functions to automatically generate HTML tables on-demand                               |
 |&#9633; |Not Started    |Form Generation Functions   |Functions to automatically generate HTML forms on-demand                                |
 |&#9633; |Not Started    |Element Generation Functions|Functions to automatically generate HTML elements on-demand                             |
