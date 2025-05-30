@@ -5,17 +5,17 @@
 	<div class="module-content" style="display: flex; justify-content: space-between; align-items: flex-start;">
 		<div class="main-content">
 			<p style="margin-top: 10px;">
-			<span style="font-size: 20px; font-weight: bold;">I want to retrieve:</span>
+			<span style="font-size: 20px; font-weight: bold; color: #444;">I want to retrieve:</span>
 			</p>
 			<div id="get-list">
-				<div class="list-item" style="margin-bottom: 5px;"><img src="icons/reorder-dis.png" class="drag-handle" style="vertical-align: middle"> <input type="text" placeholder="Sensor" style="width: 300px;" maxlength="128"> <img src="icons/add.png" class="add" style="vertical-align: middle; margin-bottom: 3px;"></div>
+				<div class="list-item" style="margin-bottom: 5px;"><img src="icons/reorder-dis.png" class="drag-handle" style="vertical-align: middle"> <input type="text" placeholder="Sensor" style="width: 200px;" maxlength="128"> <img src="icons/add.png" class="add" style="vertical-align: middle; margin-bottom: 3px;"></div>
 			</div>
 
 			<p style="margin-top: 20px;">
-			<span style="font-size: 20px; font-weight: bold;">From</span> <select style="font-size: 15px; height: 30px; margin-left: 2px;" name="targets" id="targets" class="target-dropdown" onchange="selectSuffix();"><option name="matching" value="matching" default="default">endpoints matching</option><option name="all" value="all">all endpoints</option></select> <span id="tsuffix" style="font-size: 20px; font-weight: bold;">:</span>
+			<span style="font-size: 20px; font-weight: bold; color: #444;">From</span> <select style="font-size: 15px; height: 30px; margin-left: 2px; margin-right: 2px;" name="targets" id="targets" class="target-dropdown" onchange="selectSuffix();"><option name="matching" value="matching" default="default">endpoints matching</option><option name="all" value="all">all endpoints</option></select> <span id="tsuffix" style="font-size: 20px; font-weight: bold; color: #444;"> the following condition:</span>
 			</p>
 			<div id="from-list">
-				<div class="list-item"><img src="icons/reorder-dis.png" class="drag-handle" style="vertical-align: middle;"> <input type="text" placeholder="Sensor" style="width: 300px;" maxlength="128"> <select class="row-dropdown" style="font-size: 15px; height: 30px;" name="fromop"><option name="equals" value="equals">equals</option><option name="notequals" value="notequals">not equals</option><option name="contains" value="contains">contains</option><option name="greaterthan" value="greaterthan">greater than</option><option name="lessthan" value="lessthan">less than</option></select> <input type="text" placeholder="Value" maxlength="128"> <img src="icons/add.png" class="add" style="vertical-align: middle; margin-bottom: 3px;"></div>
+				<div class="list-item"><img src="icons/reorder-dis.png" class="drag-handle" style="vertical-align: middle;"> <input type="text" placeholder="Sensor" style="width: 200px;" maxlength="128"> <select class="row-dropdown" style="font-size: 15px; height: 30px;" name="fromop"><option name="equals" value="equals">==</option><option name="notequals" value="notequals">!=</option><option name="contains" value="contains">=~</option><option name="greaterthan" value="greaterthan">&gt;</option><option name="lessthan" value="lessthan">&lt;</option></select> <input type="text" placeholder="Value" maxlength="128"> <img src="icons/add.png" class="add" style="vertical-align: middle; margin-bottom: 3px;"></div>
 			</div>
 		</div>
 		<div class="right-box">
@@ -52,6 +52,7 @@ function addRow(event) {
 	if (container.closest('#from-list')) {
 		const rootContainer = container.classList.contains('group-container') ? container : document.getElementById('from-list');
 		insertLogicalOperators(rootContainer);
+		document.getElementById("tsuffix").textContent = "the following conditions:";
 		}
 	}
 
@@ -141,6 +142,10 @@ function insertLogicalOperators(container) {
 	// Helper function to insert operators between rows
 	function processRows(rowContainer) {
 		const rows = Array.from(rowContainer.querySelectorAll(':scope > .list-item'));
+
+		if (rows.length == 1 && container.id === 'from-list') {
+			document.getElementById("tsuffix").textContent = "the following condition:";
+			}
 
 		for (let i = 0; i < rows.length - 1; i++) {
 			const row = rows[i];
@@ -233,7 +238,7 @@ function selectSuffix() {
 		document.getElementById("tsuffix").textContent = "";
 		document.getElementById("from-list").style.opacity = "0";
 		}
-	else { document.getElementById("tsuffix").textContent = ":";
+	else { document.getElementById("tsuffix").textContent = "the following condition:";
 		document.getElementById("from-list").style.opacity = "1";
 		}
 	}
