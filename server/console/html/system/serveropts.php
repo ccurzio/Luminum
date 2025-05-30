@@ -34,10 +34,10 @@ else {
 <div class="content">
 	<h1>Server Configuration Options</h1>
 
-	<form action="/system/serveropts.php" method="POST">
+	<form id="scform" action="/system/serveropts.php" method="POST">
 	<div style="width: 100%; text-align: right; margin: -50px auto 10px auto;">
 		<button id="save" class="formgo" style="margin-right: 0;" disabled="disabled">Save Changes</button>
-		<input type="reset" id="reset" value="Reset Values" class="formgo" onclick="document.getElementById('save').disabled = true; srevcheck(); prevcheck();">
+		<input type="reset" id="reset" value="Reset Values" class="formgo" onclick="document.getElementById('save').disabled = true; return resetForm();">
 	</div>
 
 	<div class="module-content" style="padding: 0;">
@@ -96,9 +96,9 @@ else {
 			<?php foreach ($csopts as $value) { print $value; } ?>
 			</select> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">The content set to which newly-created packages will be added by default<br><br>NOTE: Orphaned packages will also be moved to this content set</span></div></td></tr>
 			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Sensor Edit History:</td><td style="background-color: transparent; border: 0;"><select id="sensorhist" style="width: 175px; height: 28px;" onchange="srevcheck();"><option value="Enabled">Enabled</option><option value="Disabled">Disabled</option></select> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Enables or disables the ability to retain previous versions of sensors.<br><br>Default: Enabled, 5 Revisions</span></div></td></tr>
-			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: normal; padding-left: 30px;"><span id="shrlabel" style="color: #444;">Sensor History Retention:</span></td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><input id="srevcnt" type="text" style="width: 60px; font-size: 15px; padding: 3px; margin-top: 0;" maxlength="2" value="5"> <span id="srlabel" style="color: #444;">Revisions</span></td></tr>
+			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: normal; padding-left: 30px;"><span id="shrlabel" style="color: #444;">Sensor History Retention:</span></td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><input id="srevcnt" type="text" style="width: 60px; font-size: 15px; padding: 3px; margin-top: 0;" maxlength="2" value="5" onchange="document.getElementById('save').disabled = false;"> <span id="srlabel" style="color: #444;">Revisions</span></td></tr>
 			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Package Edit History:</td><td style="background-color: transparent; border: 0;"><select id="packagehist" style="width: 175px; height: 28px;" onchange="prevcheck();"><option value="Enabled">Enabled</option><option value="Disabled">Disabled</option></select> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"><span class="tooltiptext">Enables or disables the ability to retain previous versions of packages.<br><br>Default: Enabled, 5 Revisions</span></div></td></tr>
-			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: normal; padding-left: 30px;"><span id="phrlabel" style="color: #444;">Package History Retention:</span></td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><input id="prevcnt" type="text" style="width: 60px; font-size: 15px; padding: 3px; margin-top: 0;" maxlength="2" value="5"> <span id="prlabel" style="color: #444;">Revisions</span></td></tr>
+			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: normal; padding-left: 30px;"><span id="phrlabel" style="color: #444;">Package History Retention:</span></td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><input id="prevcnt" type="text" style="width: 60px; font-size: 15px; padding: 3px; margin-top: 0;" maxlength="2" value="5" onchange="document.getElementById('save').disabled = false;"> <span id="prlabel" style="color: #444;">Revisions</span></td></tr>
 			</table>
 		</div>
 
@@ -194,6 +194,14 @@ else {
 </div>
 
 <script>
+function resetForm() {
+	setTimeout(function() {
+		srevcheck();
+		prevcheck();
+		}, 25);
+	return true;
+	}
+
 function srevcheck() {
 	if (document.getElementById('sensorhist').value == "Enabled") {
 		document.getElementById('shrlabel').style.color = "#444";
@@ -205,6 +213,7 @@ function srevcheck() {
 		document.getElementById('srlabel').style.color = "#777";
 		document.getElementById('srevcnt').disabled = true;
 		}
+	document.getElementById("save").disabled = false;
 	}
 
 function prevcheck() {
@@ -218,6 +227,7 @@ function prevcheck() {
 		document.getElementById('prlabel').style.color = "#777";
 		document.getElementById('prevcnt').disabled = true;
 		}
+	document.getElementById("save").disabled = false;
 	}
 
 function switchTab(evt, configSect) {
