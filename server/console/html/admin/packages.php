@@ -222,6 +222,17 @@ function switchTab(evt, configSect) {
 	evt.currentTarget.className += " tabbarsel";
 	}
 
+function labelToggle(osel) {
+	if (osel == 'Linux') { var cbSelect = 'lpselect'; }
+	else if (osel == 'Mac') { var cbSelect = 'mpselect'; }
+	else if (osel == 'Windows') { var cbSelect = 'wpselect'; }
+	const checkBox = document.getElementById(cbSelect);
+
+	if (checkBox.checked == true) { checkBox.checked = false; }
+	else { checkBox.checked = true; }
+	pkosToggle(osel);
+	}
+
 function pkosToggle(psel) {
 	if (psel == "Linux") {
 		const checkBox = document.getElementById('lpselect');
