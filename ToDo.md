@@ -157,6 +157,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9633; |Not Started    |Direct Connect Comms        |Setup and configuration of the direct client<->server messaging channel                 |
 |&#9654; |*In Progress*  |Message Format              |Develop the specific formatting for client and server messages                          |
 |&#9633; |Not Started    |Message Validation          |Validity checking of client/server messages based on signature verification             |
+|&#9633; |Not Started    |Message Decompression       |Expand received messages that arrive compressed                                         |
 |&#9633; |Not Started    |Query Format                |Develop the specific format of server-actionable user information queries               |
 |&#9633; |Not Started    |SMTP Server Configuration   |Setup and configuration of SMTP servers to be used by Luminum Server                    |
 |&#9633; |Not Started    |SMTP Configuration Test     |Validate SMTP server configurations by performing connection tests                      |
@@ -645,6 +646,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9633; |Not Started    |Sensor Processing           |Routines to execute sensor scripts and collect the output                               |
 |&#9633; |Not Started    |Package Processing          |Routines to store packages and execute embedded commands                                |
 |&#9633; |Not Started    |Message Queueing            |Development of the queue structure for pending messages                                 |
+|&#9633; |Not Started    |Message Compression         |Compress message contents before sending                                                |
 
 </li>
 </ul>
@@ -667,6 +669,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9633; |Not Started    |Sensor Processing           |Routines to execute sensor scripts and collect the output                               |
 |&#9633; |Not Started    |Package Processing          |Routines to store packages and execute embedded commands                                |
 |&#9633; |Not Started    |Message Queueing            |Development of the queue structure for pending messages                                 |
+|&#9633; |Not Started    |Message Compression         |Compress message contents before sending                                                |
 
 </li>
 </ul>
@@ -689,6 +692,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9633; |Not Started    |Sensor Processing           |Routines to execute sensor scripts and collect the output                               |
 |&#9633; |Not Started    |Package Processing          |Routines to store packages and execute embedded commands                                |
 |&#9633; |Not Started    |Message Queueing            |Development of the queue structure for pending messages                                 |
+|&#9633; |Not Started    |Message Compression         |Compress message contents before sending                                                |
 
 </li>
 </ul>
