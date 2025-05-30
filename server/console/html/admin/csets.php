@@ -150,8 +150,11 @@ function removeLetters(str) {
 				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgname" style="width: 400px;"></td><td style="background-color: transparent; border: 0; color: #444;"></td></tr>
 				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Description: <span style="color: red;">*</span></td></tr>
 				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgdesc" style="width: 400px;"></td></tr>
-				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;"><input id="restrict" type="checkbox" onclick="restrictToggle();"> Restrict Access</td></tr>
-				<tr><td style="background-color: transparent; border: 0; color: #444; font-weight: normal; padding-left: 30px;"><span id="reslabel" style="color: #777;">Restricted to: </span><select id="minlevel" style="margin-left: 2px; margin-right: 5px; margin-top: 2px; width: 170px; height: 28px;" onchange="restrictLabel();" disabled="disabled"><option value="1">Administrators</option><option value="2">Power Users</option><option value="3">Standard Users</option></select> <span id="reslevellabel" style="color: #444; font-weight: normal; visibility: hidden;">and above</span></td></tr>
+				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;"><input id="roleres" type="checkbox" onclick="rrestrictToggle();"><span onclick="rrltoggle();" style="cursor: normal; user-select: none;"> Restrict Access by Account Role</span></td></tr>
+				<tr><td style="background-color: transparent; border: 0; color: #444; font-weight: normal; padding-left: 30px;"><span id="rolereslabel" style="color: #777;">Restricted to: </span><select id="minlevel" style="margin-left: 2px; margin-right: 5px; margin-top: 2px; width: 170px; height: 28px;" onchange="restrictLabel();" disabled="disabled"><option value="1">Administrators</option><option value="2">Power Users</option><option value="3">Standard Users</option></select> <span id="reslevellabel" style="color: #444; font-weight: normal; visibility: hidden;">and above</span></td></tr>
+				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;"><input id="groupres" type="checkbox" onclick="grestrictToggle();"><span id="rglabel" onclick="rgltoggle();" style="cursor: normal; user-select: none;"> Restrict Access by User Group</span></td></tr>
+				<tr><td style="background-color: transparent; border: 0; color: #444; font-weight: normal; padding-left: 30px;"><span id="groupreslabel" style="color: #777;">Restricted to: </span><select id="groupsel" style="margin-left: 2px; margin-right: 5px; margin-top: 2px; width: 170px; height: 28px;" onchange="restrictLabel();" disabled="disabled">
+				</select> <span id="reslevellabel" style="color: #444; font-weight: normal; visibility: hidden;">and above</span></td></tr>
 				</table>
 			</div>
 
@@ -184,19 +187,43 @@ function restrictLabel() {
 	else { document.getElementById('reslevellabel').style.visibility = "hidden"; }
 	}
 
-function restrictToggle() {
-	const checkBox = document.getElementById('restrict');
+function rrestrictToggle() {
+	const checkBox = document.getElementById('roleres');
 	if (checkBox.checked == true) {
 		document.getElementById('minlevel').disabled = false;
-		document.getElementById('reslabel').style.color = '#444';
+		document.getElementById('rolereslabel').style.color = '#444';
 		}
 	else {
 		document.getElementById('minlevel').disabled = true;
 		document.getElementById('minlevel').value = 1;
-                document.getElementById('reslabel').style.color = '#777';
+                document.getElementById('rolereslabel').style.color = '#777';
 		document.getElementById('reslevellabel').style.visibility = "hidden";
 		}
 	}
+
+function grestrictToggle() {
+	const checkBox = document.getElementById('groupres');
+	if (checkBox.checked == true) {
+		document.getElementById('groupsel').disabled = false;
+		document.getElementById('groupreslabel').style.color = '#444';
+		}
+	else {
+		document.getElementById('groupsel').disabled = true;
+                document.getElementById('groupreslabel').style.color = '#777';
+		}
+	}
+
+function rrltoggle() {
+	document.getElementById('roleres').checked = !document.getElementById('roleres').checked;
+	rrestrictToggle();
+	}
+
+function rgltoggle() {
+	document.getElementById('groupres').checked = !document.getElementById('groupres').checked;
+	grestrictToggle();
+	}
+
+
 </script>
 <?php endif; ?>
 <?php endif; ?>
