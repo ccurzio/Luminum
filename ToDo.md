@@ -452,6 +452,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9654; |*In Progress*  |Session Configuration       |Interface for creating and configuring an Investigate session                           |
 |&#9633; |Not Started    |Real-Time Shell             |User interface for remote shell access to endpoints                                     |
+|&#9633; |Not Started    |Filesystem Browser          |User interface for browsing endpoint filesystems                                        |
 
 
 ### Modules 
