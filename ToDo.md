@@ -896,6 +896,17 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9633; |Not Started    |MAC|
 |&#9633; |Not Started    |WIN|
 </li>
+
+<li>
+
+#### File Exists
+
+|        |Status         |OS |
+|--------|---------------|---|
+|&#9633; |Not Started    |LIN|
+|&#9633; |Not Started    |MAC|
+|&#9633; |Not Started    |WIN|
+</li>
 </ul>
 
 ### Packages
