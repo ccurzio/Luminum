@@ -37,7 +37,7 @@ else {
 	<form id="scform" action="/system/serveropts.php" method="POST">
 	<div style="width: 100%; text-align: right; margin: -50px auto 10px auto;">
 		<button id="save" class="formgo" style="margin-right: 0;" disabled="disabled">Save Changes</button>
-		<input type="reset" id="reset" value="Reset Values" class="formgo" onclick="document.getElementById('save').disabled = true; return resetForm();">
+		<input type="reset" id="reset" value="Reset Values" class="formgo" onclick="return resetForm();">
 	</div>
 
 	<div class="module-content" style="padding: 0;">
@@ -198,6 +198,7 @@ function resetForm() {
 	setTimeout(function() {
 		srevcheck();
 		prevcheck();
+		document.getElementById('save').disabled = true;
 		}, 25);
 	return true;
 	}
