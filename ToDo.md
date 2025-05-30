@@ -784,7 +784,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9654; |*In Progress*  |Real Time Monitor           |Hooks into the kernel to monitor filesystem changes in real time                        |
-|&#9633; |Not Started    |Checksum File Scanning      |Periodically performs checksum calculations of monitored files to look for changes      |
+|&#9633; |Not Started    |Checksum Scanning           |Periodically performs checksum calculations of monitored files                          |
 </li>
 
 <li>
@@ -793,7 +793,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9654; |*In Progress*  |Real Time Monitor           |Hooks into the kernel to monitor filesystem changes in real time                        |
-|&#9633; |Not Started    |Checksum File Scanning      |Periodically performs checksum calculations of monitored files to look for changes      |
+|&#9633; |Not Started    |Checksum Scanning           |Periodically performs checksum calculations of monitored files                          |
 </li>
 
 <li>
@@ -802,7 +802,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9654; |*In Progress*  |Real Time Monitor           |Hooks into the kernel to monitor filesystem changes in real time                        |
-|&#9633; |Not Started    |Checksum File Scanning      |Periodically performs checksum calculations of monitored files to look for changes      |
+|&#9633; |Not Started    |Checksum Scanning           |Periodically performs checksum calculations of monitored files                          |
 </li>
 </ul>
 
