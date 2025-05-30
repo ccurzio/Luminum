@@ -143,6 +143,12 @@ function removeLetters(str) {
 <?php elseif ($_GET["action"] == "new"): ?>
 	<h1>Create New Content Set</h1>
 
+	<form id="ncsform" action="/admin/csets.php" method="POST">
+	<div style="width: 100%; text-align: right; margin: -50px auto 10px auto;">
+		<button id="save" class="formgo" style="margin-right: 0px;" disabled="disabled">Save Content Set</button>
+		<a href="/index.php?view=csets"><button type="button" class="formgo" style="margin-top: 5px; margin-right: 25px;">Cancel</button></a>
+	</div>
+
 	<div class="module-content" style="overflow: auto; min-width: 1000px;">
 			<div style="float: left; margin-bottom: 10px;">
 				<table style="margin-top: 10px; margin-bottom: 20px; border: 0;">
@@ -150,9 +156,9 @@ function removeLetters(str) {
 				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgname" style="width: 400px;"></td><td style="background-color: transparent; border: 0; color: #444;"></td></tr>
 				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Description: <span style="color: red;">*</span></td></tr>
 				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgdesc" style="width: 400px;"></td></tr>
-				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;"><input id="roleres" type="checkbox" onclick="rrestrictToggle();"><span onclick="rrltoggle();" style="cursor: normal; user-select: none;"> Restrict Access by Account Role</span></td></tr>
+				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;"><input id="roleres" type="checkbox" onclick="rrestrictToggle();"><span onclick="rrltoggle();" style="cursor: normal; user-select: none;"> Restrict Access by Account Role</span> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Prevents the content set and its assigned content from being accessed by users with an access level lower than the specified value</span></div></td></tr>
 				<tr><td style="background-color: transparent; border: 0; color: #444; font-weight: normal; padding-left: 30px;"><span id="rolereslabel" style="color: #777;">Restricted to: </span><select id="minlevel" style="margin-left: 2px; margin-right: 5px; margin-top: 2px; width: 170px; height: 28px;" onchange="restrictLabel();" disabled="disabled"><option value="1">Administrators</option><option value="2">Power Users</option><option value="3">Standard Users</option></select> <span id="reslevellabel" style="color: #444; font-weight: normal; visibility: hidden;">and above</span></td></tr>
-				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;"><input id="groupres" type="checkbox" onclick="grestrictToggle();"><span id="rglabel" onclick="rgltoggle();" style="cursor: normal; user-select: none;"> Restrict Access by User Group</span></td></tr>
+				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;"><input id="groupres" type="checkbox" onclick="grestrictToggle();"><span id="rglabel" onclick="rgltoggle();" style="cursor: normal; user-select: none;"> Restrict Access by User Group</span> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"><span class="tooltiptext">Prevents the content set and its assigned content from being accessed by users assigned to a user group other than the specified group</span></td></tr>
 				<tr><td style="background-color: transparent; border: 0; color: #444; font-weight: normal; padding-left: 30px;"><span id="groupreslabel" style="color: #777;">Restricted to: </span><select id="groupsel" style="margin-left: 2px; margin-right: 5px; margin-top: 2px; width: 170px; height: 28px;" onchange="restrictLabel();" disabled="disabled">
 				</select> <span id="reslevellabel" style="color: #444; font-weight: normal; visibility: hidden;">and above</span></td></tr>
 				</table>
@@ -160,7 +166,7 @@ function removeLetters(str) {
 
 			<div style="float: left; margin-top: 15px; margin-bottom: 10px; margin-left: 10px; font-weight: bold; color: #444;">
 				<div style="margin-left: 60px;">
-					Content Categories:
+					Content Categories: <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Allows for the creation of categories specific to this content set, allowing linked content to be assigned to a category</span></div>
 					<br>
 					<select id="cscats" size="12" style="width: 550px; border-radius: 8px; margin-top: 10px;"></select>
 				</div>
@@ -171,11 +177,6 @@ function removeLetters(str) {
 					New Category: <input id="newcat" type="text" style="width: 350px;"> <button id="addcat" class="formgo" style="height: 33px; vertical-align: middle; padding-left: 10px; padding-right: 10px; padding-bottom: 0; padding-top: 0; margin-bottom: 3px; margin-left: 5px;">Add</button>
 				</div>
 
-			</div>
-
-			<div style="float: right; text-align: right; position: absolute; margin-top: 8px; width: 97%;">
-				<button id="save" class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Save Content Set</button>
-				<a href="/index.php?view=csets"><button type="button" class="formgo" style="margin-top: 5px; margin-right: 0;">Cancel</button></a>
 			</div>
 
 	</div>
