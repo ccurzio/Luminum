@@ -425,6 +425,15 @@ input[type="text"] {
 	transition: border-color 0.3s, box-shadow 0.3s;
 	}
 
+.textError {
+	padding: 8px 13px;
+	font-size: 13px;
+	border: 2px solid #e00 !important;
+	border-radius: 8px;
+	outline: none;
+	transition: border-color 0.3s, box-shadow 0.3s;
+	}
+
 input[type="text"]:focus {
 	border-color: #007BFF;
 	box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
