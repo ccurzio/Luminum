@@ -8,14 +8,14 @@
 			<span style="font-size: 20px; font-weight: bold;">I want to retrieve:</span>
 			</p>
 			<div id="get-list">
-				<div class="list-item" style="margin-bottom: 5px;"><img src="icons/reorder-dis.png" class="drag-handle" style="vertical-align: middle"> <input type="text" placeholder="Sensor" style="width: 300px;"> <img src="icons/add.png" class="add" style="vertical-align: middle; margin-bottom: 3px;"></div>
+				<div class="list-item" style="margin-bottom: 5px;"><img src="icons/reorder-dis.png" class="drag-handle" style="vertical-align: middle"> <input type="text" placeholder="Sensor" style="width: 300px;" maxlength="128"> <img src="icons/add.png" class="add" style="vertical-align: middle; margin-bottom: 3px;"></div>
 			</div>
 
 			<p style="margin-top: 20px;">
 			<span style="font-size: 20px; font-weight: bold;">From</span> <select style="font-size: 15px; height: 30px; margin-left: 2px;" name="targets" id="targets" class="target-dropdown" onchange="selectSuffix();"><option name="matching" value="matching" default="default">endpoints matching</option><option name="all" value="all">all endpoints</option></select> <span id="tsuffix" style="font-size: 20px; font-weight: bold;">:</span>
 			</p>
 			<div id="from-list">
-				<div class="list-item"><img src="icons/reorder-dis.png" class="drag-handle" style="vertical-align: middle;"> <input type="text" placeholder="Sensor" style="width: 300px;"> <select class="row-dropdown" style="font-size: 15px; height: 30px;" name="fromop"><option name="equals" value="equals">equals</option><option name="notequals" value="notequals">not equals</option><option name="contains" value="contains">contains</option><option name="greaterthan" value="greaterthan">greater than</option><option name="lessthan" value="lessthan">less than</option></select> <input type="text" placeholder="Value"> <img src="icons/add.png" class="add" style="vertical-align: middle; margin-bottom: 3px;"></div>
+				<div class="list-item"><img src="icons/reorder-dis.png" class="drag-handle" style="vertical-align: middle;"> <input type="text" placeholder="Sensor" style="width: 300px;" maxlength="128"> <select class="row-dropdown" style="font-size: 15px; height: 30px;" name="fromop"><option name="equals" value="equals">equals</option><option name="notequals" value="notequals">not equals</option><option name="contains" value="contains">contains</option><option name="greaterthan" value="greaterthan">greater than</option><option name="lessthan" value="lessthan">less than</option></select> <input type="text" placeholder="Value" maxlength="128"> <img src="icons/add.png" class="add" style="vertical-align: middle; margin-bottom: 3px;"></div>
 			</div>
 		</div>
 		<div class="right-box">
