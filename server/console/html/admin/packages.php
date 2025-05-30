@@ -113,7 +113,7 @@ $pkgcount = mysqli_num_rows($pkgquery);
 				<div style="text-align: left; color: #444;">
 					<input id="lpselect" type="checkbox" style="margin-left: 8px;" onclick="pkosToggle('Linux');"> <span style="cursor: normal; user-select: none;" onclick="labelToggle('Linux')">Enabled</span>
                                 </div>
-                                <div id="lfeditor" style="background-color: #eee; margin-top: 7px; color: #444; width: 100%; opacity: 0.5;">
+                                <div id="lfeditor" style="background-color: #eee; margin-top: 7px; color: #444; width: 100%; opacity: 0.5; user-select: none;">
 					<div style="width: 90%; margin-left: 125px; padding-top: 20px;">
 					Command: <input type="text" id="lpkgcmd" style="width: 400px;" value="/bin/sh ./" disabled="disabled">
 					</div>
@@ -144,7 +144,7 @@ $pkgcount = mysqli_num_rows($pkgquery);
 				<div style="text-align: left; color: #444;">
 					<input id="mpselect" type="checkbox" style="margin-left: 8px;" onclick="pkosToggle('Mac');"> <span style="cursor: normal; user-select: none;" onclick="labelToggle('Mac');">Enabled</span>
 				</div>
-                                <div id="mfeditor" style="background-color: #eee; margin-top: 7px; color: #444; width: 100%; opacity: 0.5;">
+                                <div id="mfeditor" style="background-color: #eee; margin-top: 7px; color: #444; width: 100%; opacity: 0.5; user-select: none;">
 					<div style="width: 90%; margin-left: 125px; padding-top: 20px;">
 					Command: <input type="text" id="mpkgcmd" style="width: 400px;" value="/bin/sh ./" disabled="disabled">
 					</div>
@@ -175,7 +175,7 @@ $pkgcount = mysqli_num_rows($pkgquery);
 				<div style="text-align: left; color: #444;">
 					<input id="wpselect" type="checkbox" style="margin-left: 8px;" onclick="pkosToggle('Windows');"> <span style="cursor: normal; user-select: none;" onclick="labelToggle('Windows');">Enabled</span>
 				</div>
-                                <div id="wfeditor" style="background-color: #eee; margin-top: 7px; color: #444; width: 100%; opacity: 0.5;">
+                                <div id="wfeditor" style="background-color: #eee; margin-top: 7px; color: #444; width: 100%; opacity: 0.5; user-select: none;">
 					<div style="width: 90%; margin-left: 125px; padding-top: 20px;">
 					Command: <input type="text" id="wpkgcmd" style="width: 400px;" value="cmd.exe .\" disabled="disabled">
 					</div>
