@@ -48,7 +48,7 @@ else {
 
 		<div id="CPU" class="configtab" style="display: none;">
 			<div class="row" style="margin-left: 20px; margin-top: 20px; margin-bottom: 20px; margin-right: 20px;">
-				<div class="column" style="width: 15%; min-width: 220px;"><img src="/images/cpu.png" style="width: 200px; height: 200px;"></div>
+				<div class="column" style="width: 15%; min-width: 220px; pointer-events: none; user-select: none;"><img src="/images/cpu.png" style="width: 200px; height: 200px;"></div>
 				<div class="column" style="width: 40%; text-align: left; padding-right: 20px;">
 					<table style="border: 0;">
 						<tr><td style="width: 150px; text-align: left; color: #444; background-color: transparent; border: 0;">Model:</td><td style="font-weight: normal; color: #444; background-color: transparent; border: 0; text-align: left;"><?php print $cpumodel; ?></td></tr>
@@ -73,7 +73,7 @@ else {
 
 		<div id="Disks" class="configtab" style="display: none;">
 			<div class="row" style="margin-left: 20px; margin-top: 20px; margin-bottom: 20px; margin-right: 20px;">
-				<div class="column" style="width: 15%; min-width: 220px;"><img src="/images/drives.png" style="width: 200px; height: 200px;"></div>
+				<div class="column" style="width: 15%; min-width: 220px; pointer-events: none; user-select: none;"><img src="/images/drives.png" style="width: 200px; height: 200px;"></div>
 				<div class="column" style="width: 25%; text-align: left; padding-right: 5%;">
 					<p style="margin-left: 3px;">
 					<span style="color: #444;"><b>Connected Drives:</b> &nbsp;&nbsp; <?php print count($disks); ?><span>
@@ -101,7 +101,7 @@ else {
 				</div>
 
 				<div class="column" style="width: 35%; padding-left: 10%; text-align: right; margin-right: 20px;">
-					<div style="width: 100%; min-width: 425px; background-color: #fff; border: 1px solid #aaa; border-radius: 8px; padding: 15px;">
+					<div style="width: 100%; min-width: 425px; background-color: #fff; border: 1px solid #aaa; border-radius: 8px; padding: 15px; pointer-events: none; user-select: none;">
 						<div style="width: 100%; text-align: center; color: #777; font-size: 13px;"><b>Disk Usage</b></div>
 						<table style="border: 0; width: 400px; margin-top: 10px; margin-left: auto; margin-right: auto;">
 					<?php
@@ -128,7 +128,7 @@ else {
 
 		<div id="Memory" class="configtab" style="display: none;">
 			<div class="row" style="margin-left: 20px; margin-top: 20px; margin-bottom: 20px; margin-right: 20px;">
-				<div class="column" style="width: 15%; min-width: 220px;"><img src="/images/ram.png" style="width: 200px; height: 200px;"></div>
+				<div class="column" style="width: 15%; min-width: 220px; pointer-events: none; user-select: none;"><img src="/images/ram.png" style="width: 200px; height: 200px;"></div>
 				<div class="column" style="width: 25%; text-align: left; padding-right: 5%;">
 				</div>
 			</div>
@@ -136,7 +136,7 @@ else {
 
 		<div id="Devices" class="configtab" style="display: none;">
 			<div class="row" style="margin-left: 20px; margin-top: 20px; margin-bottom: 20px; margin-right: 20px;">
-				<div class="column" style="width: 15%; min-width: 220px;"><img src="" style="width: 200px; height: 200px;"></div>
+				<div class="column" style="width: 15%; min-width: 220px; pointer-events: none; user-select: none;"><img src="" style="width: 200px; height: 200px;"></div>
 				<div class="column" style="width: 25%; text-align: left; padding-right: 5%;">
 				</div>
 			</div>
@@ -144,7 +144,7 @@ else {
 
 		<div id="Network" class="configtab" style="display: none;">
 			<div class="row" style="margin-left: 20px; margin-top: 20px; margin-bottom: 20px; margin-right: 20px;">
-				<div class="column" style="width: 15%; min-width: 220px;"><img src="/images/network.png" style="width: 200px; height: 200px;"></div>
+				<div class="column" style="width: 15%; min-width: 220px; pointer-events: none; user-select: none;"><img src="/images/network.png" style="width: 200px; height: 200px;"></div>
 				<div class="column" style="width: 25%; text-align: left; padding-right: 5%;">
 				</div>
 			</div>
