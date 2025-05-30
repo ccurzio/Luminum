@@ -45,6 +45,7 @@ else {
 			<button type="button" class="tabbaritem tabbutton tablink tabbarsel" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'General')">General</button>
 			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Endpoints')">Endpoints</button>
 			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Content')">Content</button>
+			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Logging')">Logging</button>
 			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'SMTP')">SMTP</button>
 			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Encryption')">Encryption</button>
 			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Logins')">User Logins</button>
@@ -99,6 +100,10 @@ else {
 			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Package Edit History:</td><td style="background-color: transparent; border: 0;"><select id="packagehist" style="width: 175px; height: 28px;"><option value="Enabled">Enabled</option><option value="Disabled">Disabled</option></select> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"><span class="tooltiptext">Enables or disables the ability to retain previous versions of packages.<br><br>Default: Enabled, 5 Revisions</span></div></td></tr>
 			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: normal; padding-left: 30px;">Package History Retention:</td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><input id="prevcnt" type="text" style="width: 60px; font-size: 15px; padding: 3px; margin-top: 0;" maxlength="2" value="5"> Revisions</td></tr>
 			</table>
+		</div>
+
+		<div id="Logging" class="configtab" style="display: none;">
+			<p>Log Settings</p>
 		</div>
 
 		<div id="SMTP" class="configtab" style="display: none;">
