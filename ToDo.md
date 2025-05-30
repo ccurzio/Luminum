@@ -367,9 +367,8 @@ In order to be accountable to the community - but more importantly to myself - I
 #### Content Sets
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#9633; |Not Started    |Content Sets                |Presents a table displaying information about system content sets                       |
-|&#9633; |Not Started    |Add/Edit Content Set        |User interface to create or modify content sets                                         |
-|&#9633; |Not Started    |Content Categories          |User interface to manage categories for content sets                                    |
+|&#10003;|**Completed**  |Content Sets                |Presents a table displaying information about system content sets                       |
+|&#9654; |*In Progress*  |Add/Edit Content Set        |User interface to create or modify content sets                                         |
 </li>
 
 <li>
