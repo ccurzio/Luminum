@@ -101,9 +101,9 @@ $sensorcount = mysqli_num_rows($sensorquery);
 		<div style="float: left; margin-left: 10px;">
 			<table style="width: 250px; margin-left: auto; margin-right: auto; margin-top: 20px;">
 			<tr><td style="width: 80px;">OS</td><td>Enabled</td><td style="text-align: center; width: 80px;">Size</td></tr>
-			<tr><td style="background-color: #494a69; font-weight: normal;">Linux</td><td id="len" style="text-align: center; background-color: #494a69; font-weight: normal;"><span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span></td><td id="lsize" style="background-color: #494a69; font-weight: normal;"></td></tr>
-			<tr><td style="background-color: #494a69; font-weight: normal;">Mac</td><td id="men" style="text-align: center; background-color: #494a69; font-weight: normal;"><span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span></td><td id="msize" style="background-color: #494a69; font-weight: normal;"></tr>
-			<tr><td style="background-color: #494a69; font-weight: normal;">Windows</td><td id="wen" style="text-align: center; background-color: #494a69; font-weight: normal;"><span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span></td><td id="wsize" style="background-color: #494a69; font-weight: normal;"></tr>
+			<tr><td style="background-color: #494a69; font-weight: normal;">Linux</td><td id="len" style="text-align: center; background-color: #494a69; font-weight: normal;"><span style="font-weight: bold; font-size: 13px; color: #cf1104;">&#10060;</span></td><td id="lsize" style="background-color: #494a69; font-weight: normal;"></td></tr>
+			<tr><td style="background-color: #494a69; font-weight: normal;">Mac</td><td id="men" style="text-align: center; background-color: #494a69; font-weight: normal;"><span style="font-weight: bold; font-size: 13px; color: #cf1104;">&#10060;</span></td><td id="msize" style="background-color: #494a69; font-weight: normal;"></tr>
+			<tr><td style="background-color: #494a69; font-weight: normal;">Windows</td><td id="wen" style="text-align: center; background-color: #494a69; font-weight: normal;"><span style="font-weight: bold; font-size: 13px; color: #cf1104;">&#10060;</span></td><td id="wsize" style="background-color: #494a69; font-weight: normal;"></tr>
 			</table>
 		</div>
 
@@ -116,7 +116,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 
 			<div style="margin: 8px 0 0 0; width: 100%;" id="Linux" class="configtab">
 				<div style="text-align: left; color: #444;">
-					<input id="leselect" type="checkbox" style="margin-left: 8px;" onclick="editorToggle('Linux');"> <span style="cursor: normal; user-select: none;" onclick="labelToggle('Linux')">Enabled</span> &nbsp;&nbsp;&nbsp;&nbsp; <span id="lstlabel" style="color: #777;">Type:</span> <select id="lstype" onchange="lsformat(document.getElementById('lstype').value);" disabled="disabled"><option value="shell">Shell Script</option><option value="perl">Perl</option><option value="python">Python</option></select>
+					<input id="leselect" type="checkbox" style="margin-left: 8px;" onclick="editorToggle('Linux');"> <span style="cursor: normal; user-select: none;" onclick="labelToggle('Linux')">Enabled</span> &nbsp;&nbsp;&nbsp;&nbsp; <span id="lstlabel" style="color: #777; user-select: none;">Type: </span><select id="lstype" onchange="lsformat(document.getElementById('lstype').value);" disabled="disabled"><option value="shell">Shell Script</option><option value="perl">Perl</option><option value="python">Python</option></select>
 				</div>
 				<div id="leditor" style="margin-top: 7px;"></div>
 				<script src="/layout/src/ace.js" type="text/javascript" charset="utf-8"></script>
@@ -130,8 +130,8 @@ $sensorcount = mysqli_num_rows($sensorquery);
 			</div>
 
 			<div style="margin: 8px 0 0 0; width: 100%; display: none;" id="macOS" class="configtab">
-				<div style="text-align: left; color: #444;"">
-					<input id="meselect" type="checkbox" style="margin-left: 8px;" onclick="editorToggle('Mac');"> <span style="cursor: normal; user-select: none;" onclick="labelToggle('Mac');">Enabled</span> &nbsp;&nbsp;&nbsp;&nbsp; <span id="mstlabel" style="color: #777;">Type: <select id="mstype" onchange="msformat(document.getElementById('mstype').value)" disabled="disabled"><option value="shell">Shell Script</option><option value="perl">Perl</option><option value="python">Python</option></select>
+				<div style="text-align: left; color: #444;">
+					<input id="meselect" type="checkbox" style="margin-left: 8px;" onclick="editorToggle('Mac');"> <span style="cursor: normal; user-select: none;" onclick="labelToggle('Mac')">Enabled</span> &nbsp;&nbsp;&nbsp;&nbsp; <span id="mstlabel" style="color: #777; user-select: none;">Type: </span><select id="mstype" onchange="msformat(document.getElementById('mstype').value);" disabled="disabled"><option value="shell">Shell Script</option><option value="perl">Perl</option><option value="python">Python</option></select>
 				</div>
 				<div id="meditor" style="margin-top: 7px;"></div>
 				<script>
@@ -144,8 +144,8 @@ $sensorcount = mysqli_num_rows($sensorquery);
 			</div>
 
 			<div style="margin: 8px 0 0 0; width: 100%; display: none;" id="Windows" class="configtab">
-				<div style="text-align: left; color: #444;"">
-					<input id="weselect" type="checkbox" style="margin-left: 8px;" onclick="editorToggle('Windows');"> <span style="cursor: normal; user-select: none;" onclick="labelToggle('Windows');">Enabled</span> &nbsp;&nbsp;&nbsp;&nbsp; <span id="wstlabel" style="color: #777;">Type:</span> <select id="wstype" onchange="wsformat(document.getElementById('wstype').value)" disabled="disabled"><option value="powershell">PowerShell</option><option value="vbscript">VBScript</option><option value="batch">Batch File</option><option value="python">Python</option></select>
+				<div style="text-align: left; color: #444;">
+					<input id="weselect" type="checkbox" style="margin-left: 8px;" onclick="editorToggle('Windows');"> <span style="cursor: normal; user-select: none;" onclick="labelToggle('Windows');">Enabled</span> &nbsp;&nbsp;&nbsp;&nbsp; <span id="wstlabel" style="color: #777; user-select: none;">Type: </span><select id="wstype" onchange="wsformat(document.getElementById('wstype').value)" disabled="disabled"><option value="powershell">PowerShell</option><option value="vbscript">VBScript</option><option value="batch">Batch File</option><option value="python">Python</option></select>
 				</div>
 				<div id="weditor" style="margin-top: 7px;"></div>
 				<script>
