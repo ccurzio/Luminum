@@ -644,6 +644,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9654; |*In Progress*  |Message Handling            |The routines that parse and generate client/server messages                             |
 |&#9633; |Not Started    |Sensor Processing           |Routines to execute sensor scripts and collect the output                               |
 |&#9633; |Not Started    |Package Processing          |Routines to store packages and execute embedded commands                                |
+|&#9633; |Not Started    |Message Queueing            |Development of the queue structure for pending messages                                 |
 
 </li>
 </ul>
@@ -665,6 +666,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9654; |*In Progress*  |Message Handling            |The routines that parse and generate client/server messages                             |
 |&#9633; |Not Started    |Sensor Processing           |Routines to execute sensor scripts and collect the output                               |
 |&#9633; |Not Started    |Package Processing          |Routines to store packages and execute embedded commands                                |
+|&#9633; |Not Started    |Message Queueing            |Development of the queue structure for pending messages                                 |
 
 </li>
 </ul>
@@ -686,6 +688,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9654; |*In Progress*  |Message Handling            |The routines that parse and generate client/server messages                             |
 |&#9633; |Not Started    |Sensor Processing           |Routines to execute sensor scripts and collect the output                               |
 |&#9633; |Not Started    |Package Processing          |Routines to store packages and execute embedded commands                                |
+|&#9633; |Not Started    |Message Queueing            |Development of the queue structure for pending messages                                 |
 
 </li>
 </ul>
