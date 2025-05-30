@@ -21,6 +21,8 @@ else {
 		else if ($row["CKEY"] == "PCSPECIAL") { $pcsc = $row["CVAL"]; }
 		else if ($row["CKEY"] == "TIMEOUT") { $logintimeout = $row["CVAL"]; }
 		else if ($row["CKEY"] == "TIMEOUTWARN") { $timeoutwarn = $row["CVAL"]; }
+		else if ($row["CKEY"] == "SENREVS") { $senrevs = $row["CVAL"]; }
+		else if ($row["CKEY"] == "PKGREVS") { $pkgrevs = $row["CVAL"]; }
 		}
 
 	mysqli_select_db($db, "CONTENT") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
@@ -95,10 +97,16 @@ else {
 			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Default Content Set for new Packages: </td><td style="background-color: transparent; border: 0;"><select id="packageset" style="width: 175px; height: 28px;" onchange="formCheck()">
 			<?php foreach ($csopts as $value) { print $value; } ?>
 			</select> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">The content set to which newly-created packages will be added by default<br><br>NOTE: Orphaned packages will also be moved to this content set</span></div></td></tr>
-			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Sensor Edit History:</td><td style="background-color: transparent; border: 0;"><select id="sensorhist" style="width: 175px; height: 28px;" onchange="srevcheck();"><option value="Enabled">Enabled</option><option value="Disabled">Disabled</option></select> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Enables or disables the ability to retain previous versions of sensors.<br><br>Default: Enabled, 5 Revisions</span></div></td></tr>
-			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: normal; padding-left: 30px;"><span id="shrlabel" style="color: #444;">Sensor History Retention:</span></td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><input id="srevcnt" type="text" style="width: 60px; font-size: 15px; padding: 3px; margin-top: 0;" maxlength="2" value="5" onchange="document.getElementById('save').disabled = false;"> <span id="srlabel" style="color: #444;">Revisions</span></td></tr>
-			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Package Edit History:</td><td style="background-color: transparent; border: 0;"><select id="packagehist" style="width: 175px; height: 28px;" onchange="prevcheck();"><option value="Enabled">Enabled</option><option value="Disabled">Disabled</option></select> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"><span class="tooltiptext">Enables or disables the ability to retain previous versions of packages.<br><br>Default: Enabled, 5 Revisions</span></div></td></tr>
-			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: normal; padding-left: 30px;"><span id="phrlabel" style="color: #444;">Package History Retention:</span></td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><input id="prevcnt" type="text" style="width: 60px; font-size: 15px; padding: 3px; margin-top: 0;" maxlength="2" value="5" onchange="document.getElementById('save').disabled = false;"> <span id="prlabel" style="color: #444;">Revisions</span></td></tr>
+			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Sensor Edit History:</td><td style="background-color: transparent; border: 0;"><select id="sensorhist" style="width: 175px; height: 28px;" onchange="srevcheck();"><option value="Enabled" <?php if ($senrevs > 0) { print "selected=\"selected\""; } ?>>Enabled</option><option value="Disabled" <?php if ($senrevs == 0) { print "selected=\"selected\""; } ?>>Disabled</option></select> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Enables or disables the ability to retain previous versions of sensors.<br><br>Default: Enabled, 5 Revisions</span></div></td></tr>
+			<?php
+			if ($senrevs > 0) { print "<tr><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; padding-left: 30px;\"><span id=\"shrlabel\" style=\"color: #444;\">Sensor History Retention:</span></td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal;\"><input id=\"srevcnt\" type=\"text\" style=\"width: 60px; font-size: 15px; padding: 3px; margin-top: 0;\" maxlength=\"2\" value=\"" . $senrevs . "\" onchange=\"document.getElementById('save').disabled = false;\"> <span id=\"srlabel\" style=\"color: #444;\">Revisions</span></td></tr>\n"; }
+			else { print "<tr><td style=\"background-color: transparent; border: 0; font-weight: normal; padding-left: 30px;\"><span id=\"shrlabel\" style=\"color: #777;\">Sensor History Retention:</span></td><td style=\"color: #777; background-color: transparent; border: 0; font-weight: normal;\"><input id=\"srevcnt\" type=\"text\" style=\"width: 60px; font-size: 15px; padding: 3px; margin-top: 0;\" maxlength=\"2\" value=\"5\" onchange=\"document.getElementById('save').disabled = false;\" disabled=\"disabled\"> <span id=\"srlabel\" style=\"color: #777;\">Revisions</span></td></tr>\n"; }
+			?>
+			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Package Edit History:</td><td style="background-color: transparent; border: 0;"><select id="packagehist" style="width: 175px; height: 28px;" onchange="prevcheck();"><option value="Enabled" <?php if ($pkgrevs > 0) { print "selected=\"selected\""; } ?>>Enabled</option><option value="Disabled" <?php if ($pkgrevs == 0) { print "selected=\"selected\""; } ?>>Disabled</option></select> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"><span class="tooltiptext">Enables or disables the ability to retain previous versions of packages.<br><br>Default: Enabled, 5 Revisions</span></div></td></tr>
+			<?php
+			if ($pkgrevs > 0) { print "<tr><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; padding-left: 30px;\"><span id=\"phrlabel\" style=\"color: #444;\">Package History Retention:</span></td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal;\"><input id=\"prevcnt\" type=\"text\" style=\"width: 60px; font-size: 15px; padding: 3px; margin-top: 0;\" maxlength=\"2\" value=\"" . $pkgrevs . "\" onchange=\"document.getElementById('save').disabled = false;\"> <span id=\"prlabel\" style=\"color: #444;\">Revisions</span></td></tr>\n"; }
+			else { print "<tr><td style=\"background-color: transparent; border: 0; font-weight: normal; padding-left: 30px;\"><span id=\"phrlabel\" style=\"color: #777;\">Package History Retention:</span></td><td style=\"color: #777; background-color: transparent; border: 0; font-weight: normal;\"><input id=\"prevcnt\" type=\"text\" style=\"width: 60px; font-size: 15px; padding: 3px; margin-top: 0;\" maxlength=\"2\" value=\"5\" onchange=\"document.getElementById('save').disabled = false;\" disabled=\"disabled\"> <span id=\"prlabel\" style=\"color: #777;\">Revisions</span></td></tr>\n"; }
+			?>
 			</table>
 		</div>
 
@@ -207,6 +215,7 @@ function srevcheck() {
 	if (document.getElementById('sensorhist').value == "Enabled") {
 		document.getElementById('shrlabel').style.color = "#444";
 		document.getElementById('srlabel').style.color = "#444";
+		if (document.getElementById('srevcnt').value == "") { document.getElementById('srevcnt').value = 5; }
 		document.getElementById('srevcnt').disabled = false;
 		}
 	else {
@@ -221,6 +230,7 @@ function prevcheck() {
 	if (document.getElementById('packagehist').value == "Enabled") {
 		document.getElementById('phrlabel').style.color = "#444";
 		document.getElementById('prlabel').style.color = "#444";
+		if (document.getElementById('prevcnt').value == "") { document.getElementById('prevcnt').value = 5; }
 		document.getElementById('prevcnt').disabled = false;
 		}
 	else {
