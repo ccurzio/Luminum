@@ -368,7 +368,8 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#10003;|**Completed**  |Content Sets                |Presents a table displaying information about system content sets                       |
-|&#9654; |*In Progress*  |Add/Edit Content Set        |User interface to create or modify content sets                                         |
+|&#9654; |*In Progress*  |Create Content Set          |User interface to create content sets                                                   |
+|&#9633; |Not Started    |Edit Content Set            |User interface to edit an existing content set                                          |
 </li>
 
 <li>
@@ -377,8 +378,9 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#10003;|**Completed**  |Sensor List                 |Presents a table displaying information about all avaialble sensors                     |
-|&#9654; |*In Progress*  |Add/Edit Sensor             |User interface to create or modify sensors                                              |
+|&#9654; |*In Progress*  |Create Sensor               |User interface to create sensors                                                        |
 |&#9633; |Not Started    |New Sensor Column Config    |Form elements for splitting sensor output into table columns                            |
+|&#9633; |Not Started    |Edit Sensor                 |User interface to edit an existing sensor                                               |
 |&#10003;|**Completed**  |Linux Sensor Code Editor    |Browser-based editor with syntax highlighting for languages under Linux                 |
 |&#10003;|**Completed**  |macOS Sensor Code Editor    |Browser-based editor with syntax highlighting for languages under macOS                 |
 |&#10003;|**Completed**  |Windows Sensor Code Editor  |Browser-based editor with syntax highlighting for languages under Windows               |
@@ -390,7 +392,8 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#10003;|**Completed**  |Package List                |Presents a table displaying information about all avaialble packages                    |
-|&#9654; |*In Progress*  |Add/Edit Package            |User interface to create or modify packages                                             |
+|&#9654; |*In Progress*  |Create Package              |User interface to create packages                                                       |
+|&#9633; |Not Started    |Edit Package                |User interface to edit an existing package                                              |
 </li>
 </ul>
 
