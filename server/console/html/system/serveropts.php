@@ -85,7 +85,7 @@ else {
 			</select>
 			<div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">The method of communication used between the server and endpoint clients.<br><br><u>MQTT</u>: Message Queuing Telemetry Transport provides a method by which clients subscribe to feeds on which messages are published<br><br><u>Hub &amp; Spoke</u>: Direct client/server connections (NOT RECOMMENDED FOR LARGE MULTI-NETWORK DEPLOYMENTS)<br><br><u>Hybrid</u>: Uses a combination of both MQTT and Hub &amp; Spoke with the server automatically choosing the best method based on endpoint network positioning<br><br>Default: MQTT</span></div></td></tr>
 			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Check-In Interval: </td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><input id="checkinint" type="text" style="width: 25px; font-size: 15px; padding: 3px; margin-top: 0;" maxlength="2" value="<?php print $checkinint; ?>" onchange="formCheck()"> Minutes <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">The interval at which clients ping the server with their status and request updates<br><br>Default: 5 Minutes</span></div></td></tr>
-			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Mark as Missing After: </td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><input id="checkinint" type="text" style="width: 25px; font-size: 15px; padding: 3px; margin-top: 0;" maxlength="2" value="<?php print $missingafter; ?>" onchange="formCheck()"> Days <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">The length of time after which offline endpoints are marked as missing<br><br>Default: 90 Days</span></div></td></tr>
+			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Mark as Missing After: </td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><input id="missingafter" type="text" style="width: 25px; font-size: 15px; padding: 3px; margin-top: 0;" maxlength="2" value="<?php print $missingafter; ?>" onchange="formCheck()"> Days <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">The length of time after which offline endpoints are marked as missing<br><br>Default: 90 Days</span></div></td></tr>
 			</table>
 		</div>
 
@@ -97,14 +97,14 @@ else {
 			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Default Content Set for new Packages: </td><td style="background-color: transparent; border: 0;"><select id="packageset" style="width: 175px; height: 28px;" onchange="formCheck()">
 			<?php foreach ($csopts as $value) { print $value; } ?>
 			</select> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">The content set to which newly-created packages will be added by default<br><br>NOTE: Orphaned packages will also be moved to this content set</span></div></td></tr>
-			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Sensor Edit History:</td><td style="background-color: transparent; border: 0;"><select id="sensorhist" style="width: 175px; height: 28px;" onchange="srevcheck();"><option value="Enabled" <?php if ($senrevs > 0) { print "selected=\"selected\""; } ?>>Enabled</option><option value="Disabled" <?php if ($senrevs == 0) { print "selected=\"selected\""; } ?>>Disabled</option></select> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Enables or disables the ability to retain previous versions of sensors.<br><br>Default: Enabled, 5 Revisions</span></div></td></tr>
+			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Sensor Edit History:</td><td style="background-color: transparent; border: 0;"><select id="sensorhist" style="width: 175px; height: 28px;" onchange="srevCheck();"><option value="Enabled" <?php if ($senrevs > 0) { print "selected=\"selected\""; } ?>>Enabled</option><option value="Disabled" <?php if ($senrevs == 0) { print "selected=\"selected\""; } ?>>Disabled</option></select> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Enables or disables the ability to retain previous versions of sensors.<br><br>Default: Enabled, 5 Revisions</span></div></td></tr>
 			<?php
-			if ($senrevs > 0) { print "<tr><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; padding-left: 30px;\"><span id=\"shrlabel\" style=\"color: #444;\">Sensor History Retention:</span></td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal;\"><input id=\"srevcnt\" type=\"text\" style=\"width: 60px; font-size: 15px; padding: 3px; margin-top: 0;\" maxlength=\"2\" value=\"" . $senrevs . "\" onchange=\"document.getElementById('save').disabled = false;\"> <span id=\"srlabel\" style=\"color: #444;\">Revisions</span></td></tr>\n"; }
+			if ($senrevs > 0) { print "<tr><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; padding-left: 30px;\"><span id=\"shrlabel\" style=\"color: #444;\">Sensor History Retention:</span></td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal;\"><input id=\"srevcnt\" type=\"text\" style=\"width: 60px; font-size: 15px; padding: 3px; margin-top: 0;\" maxlength=\"2\" value=\"" . $senrevs . "\" onchange=\"formCheck();\"> <span id=\"srlabel\" style=\"color: #444;\">Revisions</span></td></tr>\n"; }
 			else { print "<tr><td style=\"background-color: transparent; border: 0; font-weight: normal; padding-left: 30px;\"><span id=\"shrlabel\" style=\"color: #777;\">Sensor History Retention:</span></td><td style=\"color: #777; background-color: transparent; border: 0; font-weight: normal;\"><input id=\"srevcnt\" type=\"text\" style=\"width: 60px; font-size: 15px; padding: 3px; margin-top: 0;\" maxlength=\"2\" value=\"5\" onchange=\"document.getElementById('save').disabled = false;\" disabled=\"disabled\"> <span id=\"srlabel\" style=\"color: #777;\">Revisions</span></td></tr>\n"; }
 			?>
-			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Package Edit History:</td><td style="background-color: transparent; border: 0;"><select id="packagehist" style="width: 175px; height: 28px;" onchange="prevcheck();"><option value="Enabled" <?php if ($pkgrevs > 0) { print "selected=\"selected\""; } ?>>Enabled</option><option value="Disabled" <?php if ($pkgrevs == 0) { print "selected=\"selected\""; } ?>>Disabled</option></select> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"><span class="tooltiptext">Enables or disables the ability to retain previous versions of packages.<br><br>Default: Enabled, 5 Revisions</span></div></td></tr>
+			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Package Edit History:</td><td style="background-color: transparent; border: 0;"><select id="packagehist" style="width: 175px; height: 28px;" onchange="prevCheck();"><option value="Enabled" <?php if ($pkgrevs > 0) { print "selected=\"selected\""; } ?>>Enabled</option><option value="Disabled" <?php if ($pkgrevs == 0) { print "selected=\"selected\""; } ?>>Disabled</option></select> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"><span class="tooltiptext">Enables or disables the ability to retain previous versions of packages.<br><br>Default: Enabled, 5 Revisions</span></div></td></tr>
 			<?php
-			if ($pkgrevs > 0) { print "<tr><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; padding-left: 30px;\"><span id=\"phrlabel\" style=\"color: #444;\">Package History Retention:</span></td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal;\"><input id=\"prevcnt\" type=\"text\" style=\"width: 60px; font-size: 15px; padding: 3px; margin-top: 0;\" maxlength=\"2\" value=\"" . $pkgrevs . "\" onchange=\"document.getElementById('save').disabled = false;\"> <span id=\"prlabel\" style=\"color: #444;\">Revisions</span></td></tr>\n"; }
+			if ($pkgrevs > 0) { print "<tr><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; padding-left: 30px;\"><span id=\"phrlabel\" style=\"color: #444;\">Package History Retention:</span></td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal;\"><input id=\"prevcnt\" type=\"text\" style=\"width: 60px; font-size: 15px; padding: 3px; margin-top: 0;\" maxlength=\"2\" value=\"" . $pkgrevs . "\" onchange=\"formCheck();\"> <span id=\"prlabel\" style=\"color: #444;\">Revisions</span></td></tr>\n"; }
 			else { print "<tr><td style=\"background-color: transparent; border: 0; font-weight: normal; padding-left: 30px;\"><span id=\"phrlabel\" style=\"color: #777;\">Package History Retention:</span></td><td style=\"color: #777; background-color: transparent; border: 0; font-weight: normal;\"><input id=\"prevcnt\" type=\"text\" style=\"width: 60px; font-size: 15px; padding: 3px; margin-top: 0;\" maxlength=\"2\" value=\"5\" onchange=\"document.getElementById('save').disabled = false;\" disabled=\"disabled\"> <span id=\"prlabel\" style=\"color: #777;\">Revisions</span></td></tr>\n"; }
 			?>
 			</table>
@@ -136,7 +136,7 @@ else {
 				}
 			?>
 			</select> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Sets the 2FA policy for all user accounts<br><br>Default: Optional</span></td></tr>
-			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Minimum Password Length: </td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><input id="passlen" type="text" style="width: 25px; font-size: 15px; padding: 3px; margin-top: 0;" maxlength="2" value="<?php print $minpass; ?>" onchange="formCheck()"> Characters</td></tr>
+			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Minimum Password Length: </td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><input id="passlen" type="text" style="width: 25px; font-size: 15px; padding: 3px; margin-top: 0;" maxlength="2" value="<?php print $minpass; ?>" onchange="formCheck();"> Characters</td></tr>
 			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Password Complexity Enforcement: </td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><select id="complexpass" style="width: 175px; height: 28px;" onchange="formCheck()">
 			<?php if ($complexpass == "Enabled") {
 				print "<option value=\"enabled\" selected=\"selected\">Enabled</option><option value=\"disabled\">Disabled</option>\n\n";
@@ -172,7 +172,7 @@ else {
 				$timeoutnum = preg_replace('/[^0-9]/', '', $logintimeout);
 				$timeouttype = preg_replace('/[^a-zA-Z]/', '', $logintimeout);
 			?>
-			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Inactivity Timeout: </td><td style="background-color: transparent; border: 0;"><input id="inactiveint" type="text" style="width: 25px; font-size: 15px; padding: 3px; margin-top: 0;" maxlength="2" <?php print "value=\"$timeoutnum\""; ?> onchange="formCheck()"> <select id="inttype" style="width: 175px; height: 28px;" onchange="formCheck()">
+			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Inactivity Timeout: </td><td style="background-color: transparent; border: 0;"><input id="inactiveint" type="text" style="width: 25px; font-size: 15px; padding: 3px; margin-top: 0;" maxlength="2" <?php print "value=\"$timeoutnum\""; ?> onchange="formCheck();"> <select id="inttype" style="width: 175px; height: 28px;" onchange="formCheck()">
 			<?php
 				if ($timeouttype == "M") {
 					print "<option value=\"min\" selected=\"selected\">Minute(s)</option><option value=\"hour\">Hour(s)</option><option value=\"day\">Day(s)</option>";
@@ -202,16 +202,62 @@ else {
 </div>
 
 <script>
+const mtElement = document.getElementById('actconfclients');
+const ciElement = document.getElementById('checkinint');
+const maElement = document.getElementById('missingafter');
+const srElement = document.getElementById('srevcnt');
+const prElement = document.getElementById('prevcnt');
+const mpElement = document.getElementById('passlen');
+const iaElement = document.getElementById('inactiveint');
+
+mtElement.addEventListener('input', function(event) {
+	document.getElementById('actconfclients').value = numbersOnly(document.getElementById('actconfclients').value);
+	formCheck();
+	});
+
+ciElement.addEventListener('input', function(event) {
+	document.getElementById('checkinint').value = numbersOnly(document.getElementById('checkinint').value);
+	formCheck();
+	});
+
+maElement.addEventListener('input', function(event) {
+	document.getElementById('missingafter').value = numbersOnly(document.getElementById('missingafter').value);
+	formCheck();
+	});
+
+srElement.addEventListener('input', function(event) {
+	document.getElementById('srevcnt').value = numbersOnly(document.getElementById('srevcnt').value);
+	formCheck();
+	});
+
+prElement.addEventListener('input', function(event) {
+	document.getElementById('prevcnt').value = numbersOnly(document.getElementById('prevcnt').value);
+	formCheck();
+	});
+
+mpElement.addEventListener('input', function(event) {
+	document.getElementById('passlen').value = numbersOnly(document.getElementById('passlen').value);
+	formCheck();
+	});
+
+iaElement.addEventListener('input', function(event) {
+	document.getElementById('inactiveint').value = numbersOnly(document.getElementById('inactiveint').value);
+	formCheck();
+	});
+
+function numbersOnly(str) { return str.replace(/[^0-9]/g, ''); }
+
 function resetForm() {
 	setTimeout(function() {
-		srevcheck();
-		prevcheck();
+		srevCheck();
+		prevCheck();
+		formCheck();
 		document.getElementById('save').disabled = true;
 		}, 25);
 	return true;
 	}
 
-function srevcheck() {
+function srevCheck() {
 	if (document.getElementById('sensorhist').value == "Enabled") {
 		document.getElementById('shrlabel').style.color = "#444";
 		document.getElementById('srlabel').style.color = "#444";
@@ -226,7 +272,7 @@ function srevcheck() {
 	document.getElementById("save").disabled = false;
 	}
 
-function prevcheck() {
+function prevCheck() {
 	if (document.getElementById('packagehist').value == "Enabled") {
 		document.getElementById('phrlabel').style.color = "#444";
 		document.getElementById('prlabel').style.color = "#444";
@@ -310,7 +356,38 @@ function formCheck() {
 		document.getElementById("ctlabel").style.color = "#777";
 		document.getElementById("eplabel").style.color = "#777";
 		}
+
 	document.getElementById("save").disabled = false;
+
+	console.log(document.getElementById("minactconf").value);
+
+	if (document.getElementById("minactconf").value == "enabled" && document.getElementById("actconfclients").value == 0) {
+		document.getElementById("save").disabled = true;
+		}
+
+	if (document.getElementById('checkinint').value == 0 || document.getElementById('checkinint').value == "") {
+		document.getElementById("save").disabled = true;
+		}
+
+	if (document.getElementById('missingafter').value == 0 || document.getElementById('missingafter').value == "") {
+		document.getElementById("save").disabled = true;
+		}
+
+	if (document.getElementById('sensorhist').value == "Enabled" && (document.getElementById('srevcnt').value == 0 || document.getElementById('srevcnt').value == "")) {
+		document.getElementById("save").disabled = true;
+		}
+
+	if (document.getElementById('packagehist').value == "Enabled" && (document.getElementById('prevcnt').value == 0 || document.getElementById('prevcnt').value == "")) {
+		document.getElementById("save").disabled = true;
+		}
+
+	if (document.getElementById('passlen').value == 0 || document.getElementById('passlen').value == "") {
+		document.getElementById("save").disabled = true;
+		}
+
+	if (document.getElementById('inactiveint').value == 0 || document.getElementById('inactiveint').value == "") {
+		document.getElementById("save").disabled = true;
+		}
 	}
 </script>
 
