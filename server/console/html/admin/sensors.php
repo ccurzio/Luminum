@@ -80,7 +80,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 				<option value="none">(None)</option>
 				</select></td></tr>
 				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444; font-weight: normal;" colspan="2"><input type="checkbox" id="case"><span style="cursor: normal; user-select: none;" onclick="caseToggle()"> Results are Case Sensitive</span></td></tr>
-				<tr><td style="background-color: transparent; border: 0; color: #444; font-weight: normal;" colspan="2"><input type="checkbox" id="split" onclick="toggleSplit()"><span style="cursor: normal; user-select: none;" onclick="csToggle()"> Split Results into Columns</span> <span class="delform" style="margin-left: 50px; opacity: 0;">Delimeter: </span><span class="delform" style="opacity: 0; color: red;">*</span><input class="delform" id="delimeter" type="text" style="opacity: 0; margin-left: 15px; width: 5px;" maxlength="1" value="|"></td></tr>
+				<tr><td style="background-color: transparent; border: 0; color: #444; font-weight: normal;" colspan="2"><input type="checkbox" id="split" onclick="toggleSplit()"><span style="cursor: normal; user-select: none;" onclick="csToggle()"> Split Results into Columns </span><span class="delform" style="margin-left: 50px; opacity: 0;">Delimeter: </span><span class="delform" style="opacity: 0; color: red;">*</span><input class="delform" id="delimeter" type="text" style="opacity: 0; margin-left: 15px; width: 5px;" maxlength="1" value="|"></td></tr>
 				</table>
 
 			</div>
@@ -92,13 +92,11 @@ $sensorcount = mysqli_num_rows($sensorquery);
 
 		<hr style="width: 99%; margin-bottom: 20px;">
 
-		<!-- Query Parameters are on the back burner for now.
 		<table style="border: 0; margin-bottom: 20px;">
 		<tr><td style="background-color: transparent; border: 0; color: #444; font-weight: normal;"><input type="checkbox" id="useparams"><span style="cursor: normal; user-select: none;" onclick="paramToggle()"> Accepts Query Parameters</span></td></tr>
 		</table>
 
 		<hr style="width: 99%;">
-		-->
 
 		<div style="float: left; margin-left: 10px;">
 			<table style="width: 250px; margin-left: auto; margin-right: auto; margin-top: 20px;">
