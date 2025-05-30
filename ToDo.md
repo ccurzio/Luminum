@@ -430,8 +430,8 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9633; |Not Started    |Networking Settings         |User interface for administrators to view/modify server network settings                |
 |&#9633; |Not Started    |Certificate Settings        |User interface for administrators to view/modify server certificate settings            |
 |&#9633; |Not Started    |Authentication Settings     |User interface for administrators to view/modify account authentication settings        |
-|&#9633; |Not Started    |Client Management           |Present a user interface for administrators to manage Luminum client software           |
-|&#9633; |Not Started    |Lumy Management             |Present a user interface for administrators to manage Lumy modules                      |
+|&#9633; |Not Started    |Client Management           |User interface for administrators to manage Luminum client software                     |
+|&#9633; |Not Started    |Lumy Management             |User interface for administrators to manage Lumy modules                                |
 </li>
 
 <li>
@@ -452,7 +452,7 @@ In order to be accountable to the community - but more importantly to myself - I
 ### Investigate
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#9654; |*In Progress*  |Session Configuration       |Interface for creating and configuring an Investigate session                           |
+|&#9654; |*In Progress*  |Session Configuration       |User interface for creating an Investigate session                                      |
 |&#9633; |Not Started    |Real-Time Shell             |User interface for remote shell access to endpoints                                     |
 |&#9633; |Not Started    |Filesystem Browser          |User interface for browsing endpoint filesystems                                        |
 
@@ -484,7 +484,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9633; |Not Started    |Overview Interface          |Present overview information of the current status of Delivery in the environment       |
-|&#9633; |Not Started    |Profile Configuration       |Present a user interface for administrators to create/modify Delivery profiles          |
+|&#9633; |Not Started    |Profile Configuration       |User interface for administrators to create/modify Delivery profiles                    |
 </li>
 
 <li>
@@ -493,7 +493,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9633; |Not Started    |Overview Interface          |Present overview information of the current status of Discovery in the environment      |
-|&#9633; |Not Started    |Profile Configuration       |Present a user interface for administrators to create/modify Discovery profiles         |
+|&#9633; |Not Started    |Profile Configuration       |User interface for administrators to create/modify Discovery profiles                   |
 </li>
 
 <li>
@@ -502,7 +502,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9633; |Not Started    |Overview Interface          |Present overview information of the current status of Efficiency in the environment     |
-|&#9633; |Not Started    |Profile Configuration       |Present a user interface for administrators to create/modify Efficiency profiles        |
+|&#9633; |Not Started    |Profile Configuration       |User interface for administrators to create/modify Efficiency profiles                  |
 </li>
 
 <li>
@@ -511,7 +511,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9633; |Not Started    |Overview Interface          |Present overview information of the current status of Integrity in the environment      |
-|&#9633; |Not Started    |Profile Configuration       |Present a user interface for administrators to create/modify Integrity profiles         |
+|&#9633; |Not Started    |Profile Configuration       |User interface for administrators to create/modify Integrity profiles                   |
 </li>
 
 <li>
@@ -520,7 +520,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9633; |Not Started    |Overview Interface          |Present overview information of the current status of Inventory in the environment      |
-|&#9633; |Not Started    |Configuration               |Present a user interface for administrators to configure Inventory                      |
+|&#9633; |Not Started    |Configuration               |User interface for administrators to configure Inventory                                |
 </li>
 
 <li>
@@ -529,7 +529,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9633; |Not Started    |Overview Interface          |Present overview information of the current status of Policy in the environment         |
-|&#9633; |Not Started    |Profile Configuration       |Present a user interface for administrators to create/modify Policy profiles            |
+|&#9633; |Not Started    |Profile Configuration       |User interface for administrators to create/modify Policy profiles                      |
 </li>
 </ul>
 
