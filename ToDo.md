@@ -202,6 +202,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9633; |Not Started    |Enable/Disable Accounts     |Routines for administrators to lock or unlock user accounts                             |
 |&#9633; |Not Started    |Account Expiration          |Implement configuration and enforcement of expiration dates for user accounts           |
 |&#9633; |Not Started    |Password Change Intervals   |Implement regular forced password change intervals for user accounts                    |
+|&#9654; |*In Progress*  |Mandatory Password Change   |Server support for requiring users to change their password on login                    |
 
 
 ### Investigate
