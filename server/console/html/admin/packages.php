@@ -96,9 +96,9 @@ $pkgcount = mysqli_num_rows($pkgquery);
 		<div style="float: left; margin-left: 10px;">
 			<table style="width: 250px; margin-left: auto; margin-right: auto; margin-top: 20px;">
 			<tr><td style="width: 80px;">OS</td><td>Enabled</td><td style="text-align: center; width: 80px;">Size</td></tr>
-			<tr><td style="background-color: #494a69; font-weight: normal;">Linux</td><td id="len" style="text-align: center; background-color: #494a69; font-weight: normal;"><span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span></td><td id="lsize" style="background-color: #494a69; font-weight: normal;"></td></tr>
-			<tr><td style="background-color: #494a69; font-weight: normal;">Mac</td><td id="men" style="text-align: center; background-color: #494a69; font-weight: normal;"><span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span></td><td id="msize" style="background-color: #494a69; font-weight: normal;"></tr>
-			<tr><td style="background-color: #494a69; font-weight: normal;">Windows</td><td id="wen" style="text-align: center; background-color: #494a69; font-weight: normal;"><span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span></td><td id="wsize" style="background-color: #494a69; font-weight: normal;"></tr>
+			<tr><td style="background-color: #494a69; font-weight: normal;">Linux</td><td id="len" style="text-align: center; background-color: #494a69; font-size: 13px;"><span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span></td><td id="lsize" style="background-color: #494a69; font-weight: normal;"></td></tr>
+			<tr><td style="background-color: #494a69; font-weight: normal;">Mac</td><td id="men" style="text-align: center; background-color: #494a69; font-size: 13px;"><span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span></td><td id="msize" style="background-color: #494a69; font-weight: normal;"></tr>
+			<tr><td style="background-color: #494a69; font-weight: normal;">Windows</td><td id="wen" style="text-align: center; background-color: #494a69; font-size: 13px;"><span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span></td><td id="wsize" style="background-color: #494a69; font-weight: normal;"></tr>
 			</table>
 		</div>
 
@@ -113,14 +113,14 @@ $pkgcount = mysqli_num_rows($pkgquery);
 				<div style="text-align: left; color: #444;">
 					<input id="lpselect" type="checkbox" style="margin-left: 8px;" onclick="pkosToggle('Linux');"> <span style="cursor: normal; user-select: none;" onclick="labelToggle('Linux')">Enabled</span>
                                 </div>
-                                <div id="leditor" style="background-color: #eee; margin-top: 7px; color: #444; width: 100%;">
+                                <div id="lfeditor" style="background-color: #eee; margin-top: 7px; color: #444; width: 100%; opacity: 0.5;">
 					<div style="width: 90%; margin-left: 125px; padding-top: 20px;">
-					Command: <input type="text" id="lpkgcmd" style="width: 400px;" value="/bin/sh ./">
+					Command: <input type="text" id="lpkgcmd" style="width: 400px;" value="/bin/sh ./" disabled="disabled">
 					</div>
 					<div style="width: 90%; margin-left: 150px; padding-top: 20px; margin-bottom: 20px;">
 						<div style="float: left; margin-right: 50px;">
 						Files:<br>
-						<select id="lfiles" size="8" style="width: 225px; border-radius: 6px;"></select>
+						<select id="lfiles" size="8" style="width: 225px; border-radius: 6px;" disabled="disabled"></select>
 						</div>
 
 						<div>
@@ -134,8 +134,8 @@ $pkgcount = mysqli_num_rows($pkgquery);
 						<br>
 						</div>
 					</div>
-					<div style="width: 90%; padding-top: 10px; margin-left: 170px;">
-						<button class="formgo" style="margin-right: 5px;">Add File</button> <button class="formgo" disabled="disabled">Remove All</button>
+					<div style="width: 90%; padding-top: 10px; margin-left: 170px; padding-bottom: 40px;">
+						<button class="formgo" id="lfadd" style="margin-right: 5px;" disabled="disabled">Add File</button> <button class="formgo" disabled="disabled">Remove All</button>
 					</div>
 				</div>
 			</div>
@@ -144,14 +144,14 @@ $pkgcount = mysqli_num_rows($pkgquery);
 				<div style="text-align: left; color: #444;">
 					<input id="mpselect" type="checkbox" style="margin-left: 8px;" onclick="pkosToggle('Mac');"> <span style="cursor: normal; user-select: none;" onclick="labelToggle('Mac');">Enabled</span>
 				</div>
-                                <div id="meditor" style="background-color: #eee; margin-top: 7px; color: #444; width: 100%;">
+                                <div id="mfeditor" style="background-color: #eee; margin-top: 7px; color: #444; width: 100%; opacity: 0.5;">
 					<div style="width: 90%; margin-left: 125px; padding-top: 20px;">
-					Command: <input type="text" id="mpkgcmd" style="width: 400px;" value="/bin/sh ./">
+					Command: <input type="text" id="mpkgcmd" style="width: 400px;" value="/bin/sh ./" disabled="disabled">
 					</div>
 					<div style="width: 90%; margin-left: 150px; padding-top: 20px; margin-bottom: 20px;">
 						<div style="float: left; margin-right: 50px;">
 						Files:<br>
-						<select id="lfiles" size="8" style="width: 225px; border-radius: 6px;"></select>
+						<select id="mfiles" size="8" style="width: 225px; border-radius: 6px;" disabled="disabled"></select>
 						</div>
 
 						<div>
@@ -165,8 +165,8 @@ $pkgcount = mysqli_num_rows($pkgquery);
 						<br>
 						</div>
 					</div>
-					<div style="width: 90%; padding-top: 10px; margin-left: 170px;">
-						<button class="formgo" style="margin-right: 5px;">Add File</button> <button class="formgo" disabled="disabled">Remove All</button>
+					<div style="width: 90%; padding-top: 10px; margin-left: 170px; padding-bottom: 40px;">
+						<button class="formgo" id="mfadd" style="margin-right: 5px;" disabled="disabled">Add File</button> <button class="formgo" disabled="disabled">Remove All</button>
 					</div>
 				</div>
 			</div>
@@ -175,14 +175,14 @@ $pkgcount = mysqli_num_rows($pkgquery);
 				<div style="text-align: left; color: #444;">
 					<input id="wpselect" type="checkbox" style="margin-left: 8px;" onclick="pkosToggle('Windows');"> <span style="cursor: normal; user-select: none;" onclick="labelToggle('Windows');">Enabled</span>
 				</div>
-                                <div id="weditor" style="background-color: #eee; margin-top: 7px; color: #444; width: 100%;">
+                                <div id="wfeditor" style="background-color: #eee; margin-top: 7px; color: #444; width: 100%; opacity: 0.5;">
 					<div style="width: 90%; margin-left: 125px; padding-top: 20px;">
-					Command: <input type="text" id="wpkgcmd" style="width: 400px;" value="cmd.exe .\">
+					Command: <input type="text" id="wpkgcmd" style="width: 400px;" value="cmd.exe .\" disabled="disabled">
 					</div>
 					<div style="width: 90%; margin-left: 150px; padding-top: 20px; margin-bottom: 20px;">
 						<div style="float: left; margin-right: 50px;">
 						Files:<br>
-						<select id="lfiles" size="8" style="width: 225px; border-radius: 6px;"></select>
+						<select id="wfiles" size="8" style="width: 225px; border-radius: 6px;" disabled="disabled"></select>
 						</div>
 
 						<div>
@@ -196,8 +196,8 @@ $pkgcount = mysqli_num_rows($pkgquery);
 						<br>
 						</div>
 					</div>
-					<div style="width: 90%; padding-top: 10px; margin-left: 170px;">
-						<button class="formgo" style="margin-right: 5px;">Add File</button> <button class="formgo" disabled="disabled">Remove All</button>
+					<div style="width: 90%; padding-top: 10px; margin-left: 170px; padding-bottom: 40px;">
+						<button class="formgo" id="wfadd" style="margin-right: 5px;" disabled="disabled">Add File</button> <button class="formgo" disabled="disabled">Remove All</button>
 					</div>
 				</div>
 			</div>
@@ -222,7 +222,70 @@ function switchTab(evt, configSect) {
 	evt.currentTarget.className += " tabbarsel";
 	}
 
-function pkosToggke() {
+function pkosToggle(psel) {
+	if (psel == "Linux") {
+		const checkBox = document.getElementById('lpselect');
+		if (checkBox.checked == true) { enableOS('Linux'); }
+		else { disableOS('Linux'); }
+		}
+	else if (psel == "Mac") {
+		const checkBox = document.getElementById('mpselect');
+		if (checkBox.checked == true) { enableOS('Mac'); }
+		else { disableOS('Mac'); }
+		}
+	else if (psel == "Windows") {
+		const checkBox = document.getElementById('wpselect');
+		if (checkBox.checked == true) { enableOS('Windows'); }
+		else { disableOS('Windows'); }
+		}
+	}
+
+function enableOS(osel) {
+	if (osel == "Linux") {
+		lfeditor.style.opacity = 1;
+		document.getElementById('lfiles').disabled = false;
+		document.getElementById('lpkgcmd').disabled = false;
+		document.getElementById('lfadd').disabled = false;
+		document.getElementById('len').innerHTML = '<span style=\"font-weight: bold; font-size: 16px; color: #0ec940;\">✓</span>';
+		}
+	else if (osel == "Mac") {
+		mfeditor.style.opacity = 1;
+		document.getElementById('mfiles').disabled = false;
+		document.getElementById('mpkgcmd').disabled = false;
+		document.getElementById('mfadd').disabled = false;
+		document.getElementById('men').innerHTML = '<span style=\"font-weight: bold; font-size: 16px; color: #0ec940;\">✓</span>';
+		}
+	else if (osel == "Windows") {
+		wfeditor.style.opacity = 1;
+		document.getElementById('wfiles').disabled = false;
+		document.getElementById('wpkgcmd').disabled = false;
+		document.getElementById('wfadd').disabled = false;
+		document.getElementById('wen').innerHTML = '<span style=\"font-weight: bold; font-size: 16px; color: #0ec940;\">✓</span>';
+		}
+	}
+
+function disableOS(osel) {
+	if (osel == "Linux") {
+		lfeditor.style.opacity = 0.5;
+		document.getElementById('lfiles').disabled = true;
+		document.getElementById('lpkgcmd').disabled = true;
+		document.getElementById('lfadd').disabled = true;
+		document.getElementById('len').innerHTML = '<span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span>';
+		}
+	else if (osel == "Mac") {
+		mfeditor.style.opacity = 0.5;
+		document.getElementById('mfiles').disabled = true;
+		document.getElementById('mpkgcmd').disabled = true;
+		document.getElementById('mfadd').disabled = true;
+		document.getElementById('men').innerHTML = '<span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span>';
+		}
+	else if (osel == "Windows") {
+		wfeditor.style.opacity = 0.5;
+		document.getElementById('wfiles').disabled = true;
+		document.getElementById('wpkgcmd').disabled = true;
+		document.getElementById('wfadd').disabled = true;
+		document.getElementById('wen').innerHTML = '<span style=\"font-weight: bold; font-size: 13px; color: #cf1104;\">&#10060;</span>';
+		}
 	}
 </script>
 
