@@ -37,7 +37,7 @@ $pkgcount = mysqli_num_rows($pkgquery);
 				print "<option value=\"" . $csrow["ID"] . "\">" . $csrow["NAME"] . "</option>\n";
 				}
 			?>
-		</select> Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($pkgcount == 0) { print "disabled=\"disabled\""; } ?>></div></td></tr>
+		</select> Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($pkgcount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
 		<tr><td style="width: 15px;">
 		<?php
 			if ($pkgcount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
@@ -75,9 +75,9 @@ $pkgcount = mysqli_num_rows($pkgquery);
 			<div style="float: left; margin-bottom: 10px;">
 				<table style="margin-top: 10px; margin-bottom: 20px; border: 0;">
 				<tr><td style="background-color: transparent; border: 0; color: #444;">Name: <span style="color: red;">*</span></td><td style="background-color: transparent; border: 0; color: #444;">Download Timeout: <span style="color: red;">*</span> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Specifies how long the client should wait to fully download the package files before aborting the operation<br><br>Default: 2 Minutes</span></div></td></tr>
-				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgname" style="width: 400px;"></td><td style="background-color: transparent; border: 0; color: #444;"><input id="timeout" type="text" style="width: 30px;" value="2"><select id="tint" style="width: 100px; margin-left: 10px; height: 33px;"><option value="sec">Second(s)</option><option value="min" selected="selected">Minute(s)</option></select></td></tr>
+				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgname" style="width: 400px;" maxlength="128"></td><td style="background-color: transparent; border: 0; color: #444;"><input id="timeout" type="text" style="width: 30px;" value="2" maxlength="3"><select id="tint" style="width: 100px; margin-left: 10px; height: 33px;"><option value="sec">Second(s)</option><option value="min" selected="selected">Minute(s)</option></select></td></tr>
 				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Description: <span style="color: red;">*</span></td><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Completion Timeout: <span style="color: red;">*</span> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Specifies how long the client should wait for the specified command to finish<br><br>Default: 5 Minutes</span></div></td></tr>
-				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgdesc" style="width: 400px;"></td><td style="background-color: transparent; border: 0; color: #444;"><input id="dtimeout" type="text" style="width: 30px;" value="5"><select id="tint" style="width: 100px; margin-left: 10px; height: 33px;"><option value="sec">Second(s)</option><option value="min" selected="selected">Minute(s)</option></select></td></tr></td></tr>
+				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgdesc" style="width: 400px;" maxlength="128"></td><td style="background-color: transparent; border: 0; color: #444;"><input id="dtimeout" type="text" style="width: 30px;" value="5" maxlength="3"><select id="tint" style="width: 100px; margin-left: 10px; height: 33px;"><option value="sec">Second(s)</option><option value="min" selected="selected">Minute(s)</option></select></td></tr></td></tr>
 				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Content Set: <span style="color: red;">*</span></td><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Category:</td></tr>
 				<tr><td style="background-color: transparent; border: 0; color: #444;"><select id="contentset" name="contentset" style="font-size: 15px; height: 33px; width: 430px; margin-left: 2px; margin-right: 30px;">
 				<?php
@@ -206,6 +206,19 @@ $pkgcount = mysqli_num_rows($pkgquery);
 	</div>
 
 <script>
+const dtElement = document.getElementById('timeout');
+const ctElement = document.getElementById('dtimeout');
+
+dtElement.addEventListener('input', function(event) {
+	document.getElementById('timeout').value = numbersOnly(document.getElementById('timeout').value);
+	//formCheck();
+	});
+
+ctElement.addEventListener('input', function(event) {
+	document.getElementById('dtimeout').value = numbersOnly(document.getElementById('dtimeout').value);
+	//formCheck();
+	});
+
 function switchTab(evt, configSect) {
 	var i, x, tablinks;
 	x = document.getElementsByClassName("configtab");
@@ -315,6 +328,9 @@ function formatBytes(bytes, decimals = 2) {
 
 	return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`
 	}
+
+function numbersOnly(str) { return str.replace(/[^0-9]/g, ''); }
+
 </script>
 
 	<?php else: ?>
