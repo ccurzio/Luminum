@@ -233,12 +233,15 @@ initSortable();
 
 function selectSuffix() {
 	var val = document.getElementById("targets").value;
+	const itemCount = document.querySelectorAll('#from-list .list-item').length;
 
 	if (val == "all") {
 		document.getElementById("tsuffix").textContent = "";
 		document.getElementById("from-list").style.opacity = "0";
 		}
-	else { document.getElementById("tsuffix").textContent = "the following condition:";
+	else {
+		if (itemCount > 1) { document.getElementById("tsuffix").textContent = "the following conditions:"; }
+		else { document.getElementById("tsuffix").textContent = "the following condition:"; }
 		document.getElementById("from-list").style.opacity = "1";
 		}
 	}
