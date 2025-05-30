@@ -7,14 +7,19 @@ $endtime = microtime(true);
 $duration = number_format((float)$endtime - $starttime, 2, '.', '');
 $cscount = mysqli_num_rows($csquery);
 ?>
+
 <div class="content">
+
+<?php if ($_GET["view"] == "csets"): ?>
+	<?php if (!isset($_GET["action"])): ?>
+
 	<h1>Content Sets</h1>
 
 	<div class="module-content">
                 <?php
                 print "<div style=\"display: block; width: 100%; text-align: right;\">\n";
                 if (isset($acctrole) && $acctrole <= 2) {
-                        print "<button class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\">Create New</button>\n";
+                        print "<a href=\"/index.php?view=csets&action=new\"><button class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\">Create New</button></a>\n";
                         print "<button id=\"modify\" class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\" disabled=\"disabled\">Modify Selected</button>\n";
                         print "<button id=\"delete\" class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\" disabled=\"disabled\">Delete Selected</button>\n";
                         }
@@ -134,3 +139,64 @@ function removeLetters(str) {
 	return str.replace(/[a-zA-Z]/g, '');
 	}
 </script>
+
+<?php elseif ($_GET["action"] == "new"): ?>
+	<h1>Create New Content Set</h1>
+
+	<div class="module-content" style="overflow: auto; min-width: 1000px;">
+			<div style="float: left; margin-bottom: 10px;">
+				<table style="margin-top: 10px; margin-bottom: 20px; border: 0;">
+				<tr><td style="background-color: transparent; border: 0; color: #444;">Name: <span style="color: red;">*</span></td></tr>
+				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgname" style="width: 400px;"></td><td style="background-color: transparent; border: 0; color: #444;"></td></tr>
+				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Description: <span style="color: red;">*</span></td></tr>
+				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgdesc" style="width: 400px;"></td></tr>
+				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;"><input id="restrict" type="checkbox" onclick="restrictToggle();"> Restrict Access</td></tr>
+				<tr><td style="background-color: transparent; border: 0; color: #444; font-weight: normal; padding-left: 30px;"><span id="reslabel" style="color: #777;">Restricted to: </span><select id="minlevel" style="margin-left: 2px; margin-right: 5px; margin-top: 2px; width: 170px; height: 28px;" onchange="restrictLabel();" disabled="disabled"><option value="1">Administrators</option><option value="2">Power Users</option><option value="3">Standard Users</option></select> <span id="reslevellabel" style="color: #444; font-weight: normal; visibility: hidden;">and above</span></td></tr>
+				</table>
+			</div>
+
+			<div style="float: left; margin-top: 15px; margin-bottom: 10px; margin-left: 10px; font-weight: bold; color: #444;">
+				<div style="margin-left: 60px;">
+					Content Categories:
+					<br>
+					<select id="cscats" size="12" style="width: 550px; border-radius: 8px; margin-top: 10px;"></select>
+				</div>
+
+				<div style="text-align: left; margin-top: 10px; margin-left: 60px; font-weight: normal; color: #444;">
+					<button id="rmselcat" class="formgo" style="margin-right: 5px; margin-bottom: 10px;" disabled="disabled">Remove Selected</button> <button id="rmallcat" class="formgo" style="margin-bottom: 10px;" disabled="disabled">Remove All</button>
+					<br>
+					New Category: <input id="newcat" type="text" style="width: 350px;"> <button id="addcat" class="formgo" style="height: 33px; vertical-align: middle; padding-left: 10px; padding-right: 10px; padding-bottom: 0; padding-top: 0; margin-bottom: 3px; margin-left: 5px;">Add</button>
+				</div>
+
+			</div>
+
+			<div style="float: right; text-align: right; position: absolute; margin-top: 8px; width: 97%;">
+				<button id="save" class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Save Content Set</button>
+				<a href="/index.php?view=csets"><button type="button" class="formgo" style="margin-top: 5px; margin-right: 0;">Cancel</button></a>
+			</div>
+
+	</div>
+
+<script>
+function restrictLabel() {
+	const selectedLevel = document.getElementById('minlevel');
+	if (selectedLevel.value > 1) { document.getElementById('reslevellabel').style.visibility = "visible"; }
+	else { document.getElementById('reslevellabel').style.visibility = "hidden"; }
+	}
+
+function restrictToggle() {
+	const checkBox = document.getElementById('restrict');
+	if (checkBox.checked == true) {
+		document.getElementById('minlevel').disabled = false;
+		document.getElementById('reslabel').style.color = '#444';
+		}
+	else {
+		document.getElementById('minlevel').disabled = true;
+		document.getElementById('minlevel').value = 1;
+                document.getElementById('reslabel').style.color = '#777';
+		document.getElementById('reslevellabel').style.visibility = "hidden";
+		}
+	}
+</script>
+<?php endif; ?>
+<?php endif; ?>
