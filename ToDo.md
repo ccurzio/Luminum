@@ -712,6 +712,9 @@ In order to be accountable to the community - but more importantly to myself - I
 ## Client Modules
 
 ### Query
+|        |Status         |Task                        |Description                                                                             |
+|--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+|&#9633; |Not Started    |Query Processing            |Accept, parse, and respond to server-initiated queries                                  |
 
 <ul>
 <li>
@@ -732,6 +735,10 @@ In order to be accountable to the community - but more importantly to myself - I
 
 
 ### Delivery
+|        |Status         |Task                        |Description                                                                             |
+|--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+|&#9633; |Not Started    |Configuration               |Options and location for client-side Delivery configuration                             |
+|&#9633; |Not Started    |Local Storage               |Client-side storage for software installation information                               |
 
 <ul>
 <li>
@@ -752,11 +759,10 @@ In order to be accountable to the community - but more importantly to myself - I
 
 
 ### Discovery
-
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9633; |Not Started    |Configuration               |Options and location for client-side Discovery configuration                            |
-|&#9633; |Not Started    |Local Storage               |Client-side information storage for scan discovery information                          |
+|&#9633; |Not Started    |Local Storage               |Client-side storage for scan discovery information                                      |
 |&#9633; |Not Started    |Scan Messaging              |Message format for scan discovery information                                           |
 
 <ul>
@@ -787,6 +793,10 @@ In order to be accountable to the community - but more importantly to myself - I
 
 
 ### Efficiency
+|        |Status         |Task                        |Description                                                                             |
+|--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+|&#9633; |Not Started    |Configuration               |Options and location for client-side Efficiency configuration                           |
+|&#9633; |Not Started    |Local Storage               |Client-side storage for endpoint performance information                                |
 
 <ul>
 <li>
@@ -813,7 +823,7 @@ In order to be accountable to the community - but more importantly to myself - I
 
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#9633; |Not Started    |Local Storage               |Client-side information storage for filesystem information                              |
+|&#9633; |Not Started    |Local Storage               |Client-side storage for filesystem information                                          |
 |&#9654; |*In Progress*  |Alert Messaging             |Message format for filesystem modification alerts                                       |
 |&#9633; |Not Started    |Bulk Alert Transmission     |Message format for sending stored/queued alerts                                         |
 
@@ -848,7 +858,9 @@ In order to be accountable to the community - but more importantly to myself - I
 
 
 ### Inventory
-
+|        |Status         |Task                        |Description                                                                             |
+|--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+|&#9633; |Not Started    |Configuration               |Options and location for client-side Inventory configuration                            |
 <ul>
 <li>
 
@@ -871,8 +883,8 @@ In order to be accountable to the community - but more importantly to myself - I
 
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+|&#9633; |Not Started    |Configuration               |Options and location for client-side Policy configuration                               |
 |&#9633; |Not Started    |YAML Parser                 |Parser for reading and applying YAML-based rulesets                                     |
-
 <ul>
 <li>
   
