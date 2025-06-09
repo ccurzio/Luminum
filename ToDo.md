@@ -129,7 +129,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9654; |*In Progress*  |PCLETNUM       |Disabled         |Letters/Numbers required in passwords                                                   |
 |&#9654; |*In Progress*  |PCSPECIAL      |Disabled         |Special characters required in passwords                                                |
 |&#9654; |*In Progress*  |2FA            |Optional         |Two-Factor Authentication policy for user accounts                                      |
-|&#9633; |Not Started    |PASSKEYS       |Enabled          |PassKey Support                                                                         |
+|&#9633; |Not Started    |PASSKEYS       |Disabled         |PassKey Support                                                                         |
 |&#9633; |Not Started    |USERLOGLVL     |Disabled         |Account-specific log levels                                                             |
 |&#9654; |*In Progress*  |SENREVS        |5                |Maximum revision history for sensors                                                    |
 |&#9654; |*In Progress*  |PKGREVS        |5                |Maximum revision history for packages                                                   |
@@ -354,7 +354,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9633; |Not Started    |Authenticator 2FA Setup     |Authenticator-based two-factor Authentication setup process for users                   |
 |&#9633; |Not Started    |SMS 2FA Setup               |SMS-based two-factor Authentication setup process for users                             |
 |&#9633; |Not Started    |Email 2FA Setup             |Email-based two-factor Authentication setup process for users                           |
-|&#9633; |Not Started    |Email 2FA Setup             |PassKey setup process for users                                                         |
+|&#9633; |Not Started    |PassKey 2FA Setup           |PassKey setup process for users                                                         |
 |&#9633; |Not Started    |Password Change             |Implement functions for user-initiated change of password                               |
 
 
