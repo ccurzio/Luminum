@@ -223,7 +223,7 @@ In order to be accountable to the community - but more importantly to myself - I
 #### Content Sets
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#9654; |*In Progress*  |Content Set Records         |Create structure for recording content sets in the database                             |
+|&#10003;|**Completed**  |Content Set Records         |Create structure for recording content sets in the database                             |
 |&#9633; |Not Started    |Content Set Management      |Routines for adding/modifying/deleting content sets                                     |
 |&#9633; |Not Started    |Category Management         |Routines to manage categories for content sets                                          |
 </li>
@@ -233,7 +233,7 @@ In order to be accountable to the community - but more importantly to myself - I
 #### Sensors
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#9654; |*In Progress*  |Database Sensor Storage     |Create structure for storing sensors in the database                                    |
+|&#10003;|**Completed**  |Database Sensor Storage     |Create structure for storing sensors in the database                                    |
 |&#9633; |Not Started    |Sensor Management           |Routines for adding/modifying/deleting sensors                                          |
 |&#9633; |Not Started    |Revision Control            |Routines to manage and view previous versions of sensors                                |
 </li>
@@ -326,9 +326,9 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9654; |*In Progress*  |Base UI Framework           |Create the consistent foundational elements for the web user interface                  |
-|&#9654; |*In Progress*  |Include Architecture        |Rebuild include system for UI content                                                   |
+|&#9654; |*In Progress*  |Include Architecture        |Rebuild include system for user interface code block elements                           |
 |&#9633; |Not Started    |Stylesheet Consolidation    |Consolidate style definitions and eliminate redundancies                                |
-|&#9633; |Not Started    |Invalid Input Highlight     |Create stylesheet definitions highlighting fields with invalid values                   |
+|&#10003;|**Completed**  |Invalid Input Highlight     |Create stylesheet definitions highlighting fields with invalid values                   |
 |&#9633; |Not Started    |Table Generation Functions  |Functions to automatically generate HTML tables on-demand                               |
 |&#9633; |Not Started    |Form Generation Functions   |Functions to automatically generate HTML forms on-demand                                |
 |&#9633; |Not Started    |Element Generation Functions|Functions to automatically generate HTML elements on-demand                             |
@@ -341,7 +341,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#10003;|**Completed**  |Console Login Processing    |Present a login screen and start a session or reject based on credentials               |
 |&#10003;|**Completed**  |Session Timeout             |Automatically terminate a user session if left inactive                                 |
-|&#9633; |Not Started    |Timeout Warning             |Display a timeout warning 2 minutes before automatic inactivity logout                  |
+|&#9654; |*In Progress*  |Timeout Warning             |Display a timeout warning 2 minutes before automatic inactivity logout                  |
 |&#9633; |Not Started    |Two-Factor Authentication   |Capture user sessions and shunt to 2FA validation on login                              |
 |&#9633; |Not Started    |Mandatory Password Change   |Capture user sessions and shunt to a change password interface on login                 |
 |&#9654; |*In Progress*  |Permissions Adjustments     |Show or hide UI elements/options based on the user's access level                       |
