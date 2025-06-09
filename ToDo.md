@@ -931,7 +931,7 @@ In order to be accountable to the community - but more importantly to myself - I
 
 |        |Status         |OS |
 |--------|---------------|---|
-|&#9654; |*In Progress*  |LIN|
+|&#10003;|**Completed**  |LIN|
 |&#10003;|**Completed**  |MAC|
 |&#9633; |Not Started    |WIN|
 </li>
