@@ -129,6 +129,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9654; |*In Progress*  |PCLETNUM       |Disabled         |Letters/Numbers required in passwords                                                   |
 |&#9654; |*In Progress*  |PCSPECIAL      |Disabled         |Special characters required in passwords                                                |
 |&#9654; |*In Progress*  |2FA            |Optional         |Two-Factor Authentication policy for user accounts                                      |
+|&#9633; |Not Started    |PASSKEYS       |Enabled          |PassKey Support                                                                         |
 |&#9633; |Not Started    |USERLOGLVL     |Disabled         |Account-specific log levels                                                             |
 |&#9654; |*In Progress*  |SENREVS        |5                |Maximum revision history for sensors                                                    |
 |&#9654; |*In Progress*  |PKGREVS        |5                |Maximum revision history for packages                                                   |
@@ -168,14 +169,14 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9654; |*In Progress*  |Network Listener            |The actual process that opens on a secure network interface to listen for connections   |
-|&#9654; |*In Progress*  |Message Handling            |The routines that parse messages from the server and/or endpoints                       |
+|&#9654; |*In Progress*  |Message Handling            |Routines that parse messages from the server and/or endpoints                           |
 |&#9633; |Not Started    |Client Certificate          |Attach a requirement for client certificats to the listener process                     |
 |&#9654; |*In Progress*  |Lumy Scanning               |Include Lumys based on enabled/disabled state in configuration and file include presence|
 |&#9654; |*In Progress*  |Client Onboarding           |Processing for newly-added clients on first report to the server                        |
 |&#9654; |*In Progress*  |Client Deactivation         |Processing the removal of clients from the server                                       |
 |&#9654; |*In Progress*  |Check-In Processing         |Handle server-side updates on regular client check-ins                                  |
 |&#9633; |Not Started    |Action Queueing             |Development of the queue structure for pending queries and actions                      |
-|&#9633; |Not Started    |Action Polling              |Development of the routines that watch for and then send new queries or actions         |
+|&#9633; |Not Started    |Action Polling              |Development of routines that watch for and then send new queries or actions             |
 
 
 ### Logging
@@ -204,6 +205,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9633; |Not Started    |Enable/Disable Accounts     |Routines for administrators to lock or unlock user accounts                             |
 |&#9633; |Not Started    |Account Expiration          |Implement configuration and enforcement of expiration dates for user accounts           |
 |&#9633; |Not Started    |Password Change Intervals   |Implement regular forced password change intervals for user accounts                    |
+|&#9633; |Not Started    |PassKey Support             |Implement PassKey Support for account logins                                            |
 |&#9654; |*In Progress*  |Mandatory Password Change   |Server support for requiring users to change their password on login                    |
 
 
@@ -310,6 +312,8 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9633; |Not Started    |Include File                |Create module include for broker process to attach the Policy Lumy                      |
 |&#9633; |Not Started    |Database Structure          |Create and grant permissions to Policy-specific databases and tables                    |
 |&#9633; |Not Started    |Profiles                    |Establish configuration profiles for Policy deployments                                 |
+|&#9633; |Not Started    |Firewall Rules Store        |Create database structure for storing firewall rules on a per-machine basis             |
+|&#9633; |Not Started    |IPS/IDS Rules Store         |Create database structure for storing IPS/IDS rules on a per-machine basis              |
 </li>
 </ul>
 
@@ -350,6 +354,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9633; |Not Started    |Authenticator 2FA Setup     |Authenticator-based two-factor Authentication setup process for users                   |
 |&#9633; |Not Started    |SMS 2FA Setup               |SMS-based two-factor Authentication setup process for users                             |
 |&#9633; |Not Started    |Email 2FA Setup             |Email-based two-factor Authentication setup process for users                           |
+|&#9633; |Not Started    |Email 2FA Setup             |PassKey setup process for users                                                         |
 |&#9633; |Not Started    |Password Change             |Implement functions for user-initiated change of password                               |
 
 
@@ -545,7 +550,7 @@ In order to be accountable to the community - but more importantly to myself - I
 ### Linux Support
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#9633; |Not Started    |Setup Utility (Text)        |Create plaintext interface for a step-by-step setup wizard                              |
+|&#9654; |*In Progress*  |Setup Utility (Text)        |Create plaintext interface for a step-by-step setup wizard                              |
 |&#9633; |Not Started    |Setup Utility (ncurses)     |Create ncurses interface for a step-by-step setup wizard                                |
 |&#9633; |Not Started    |Unattended Install          |Create automated process for unattended installation                                    |
 |&#9633; |Not Started    |Key Management              |Routines to create a new public/private key pair                                        |
@@ -557,7 +562,7 @@ In order to be accountable to the community - but more importantly to myself - I
 ### macOS Support
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#9633; |Not Started    |Setup Utility (Text)        |Create plaintext interface for a step-by-step setup wizard                              |
+|&#9654; |*In Progress*  |Setup Utility (Text)        |Create plaintext interface for a step-by-step setup wizard                              |
 |&#9633; |Not Started    |Setup Utility (GUI)         |Create grapical step-by-step setup wizard                                               |
 |&#9633; |Not Started    |Unattended Install          |Create automated process for unattended installation                                    |
 |&#9633; |Not Started    |Key Management              |Routines to create a new public/private key pair                                        |
@@ -581,10 +586,10 @@ In order to be accountable to the community - but more importantly to myself - I
 ### Debian Packaging
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#9633; |Not Started    |Pre-Install                 |Create package script to run on package installation prior to copying files into place  |
-|&#9633; |Not Started    |Post-Install                |Create package script to run on package installation after copying files into place     |
+|&#9654; |*In Progress*  |Pre-Install                 |Create package script to run on package installation prior to copying files into place  |
+|&#9654; |*In Progress*  |Post-Install                |Create package script to run on package installation after copying files into place     |
 |&#9633; |Not Started    |Create x86 Package          |Create & Sign x86 .deb installation package                                             |
-|&#9633; |Not Started    |Create x64 Package          |Create & Sign x64 .deb installation package                                             |
+|&#9654; |*In Progress*  |Create x64 Package          |Create & Sign x64 .deb installation package                                             |
 |&#9633; |Not Started    |Create ARM Package          |Create & Sign ARM .deb installation package                                             |
 
 
@@ -645,7 +650,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9633; |Not Started    |Service Management          |Routines to register the client as a service with the host operating system             |
 |&#9633; |Not Started    |Tamper Protection           |Configure the operating system to secure the client against user access                 |
 |&#9633; |Not Started    |Sanctioned Uninstall        |Routines to validate permission to uninstall the client against the server              |
-|&#9654; |*In Progress*  |Message Handling            |The routines that parse and generate client/server messages                             |
+|&#9654; |*In Progress*  |Message Handling            |Routines that parse and generate client/server messages                                 |
 |&#9633; |Not Started    |Sensor Processing           |Routines to execute sensor scripts and collect the output                               |
 |&#9633; |Not Started    |Package Processing          |Routines to store packages and execute embedded commands                                |
 |&#9633; |Not Started    |Message Queueing            |Development of the queue structure for pending messages                                 |
@@ -669,7 +674,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9633; |Not Started    |Service Management          |Routines to register the client as a service with the host operating system             |
 |&#9633; |Not Started    |Tamper Protection           |Configure the operating system to secure the client against user access                 |
 |&#9633; |Not Started    |Sanctioned Uninstall        |Routines to validate permission to uninstall the client against the server              |
-|&#9654; |*In Progress*  |Message Handling            |The routines that parse and generate client/server messages                             |
+|&#9654; |*In Progress*  |Message Handling            |Routines that parse and generate client/server messages                                 |
 |&#9633; |Not Started    |Sensor Processing           |Routines to execute sensor scripts and collect the output                               |
 |&#9633; |Not Started    |Package Processing          |Routines to store packages and execute embedded commands                                |
 |&#9633; |Not Started    |Message Queueing            |Development of the queue structure for pending messages                                 |
@@ -692,7 +697,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9633; |Not Started    |Service Management          |Routines to register the client as a service with the host operating system             |
 |&#9633; |Not Started    |Tamper Protection           |Configure the operating system to secure the client against user access                 |
 |&#9633; |Not Started    |Sanctioned Uninstall        |Routines to validate permission to uninstall the client against the server              |
-|&#9654; |*In Progress*  |Message Handling            |The routines that parse and generate client/server messages                             |
+|&#9654; |*In Progress*  |Message Handling            |Routines that parse and generate client/server messages                                 |
 |&#9633; |Not Started    |Sensor Processing           |Routines to execute sensor scripts and collect the output                               |
 |&#9633; |Not Started    |Package Processing          |Routines to store packages and execute embedded commands                                |
 |&#9633; |Not Started    |Message Queueing            |Development of the queue structure for pending messages                                 |
@@ -748,20 +753,35 @@ In order to be accountable to the community - but more importantly to myself - I
 
 ### Discovery
 
+|        |Status         |Task                        |Description                                                                             |
+|--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+|&#9633; |Not Started    |Configuration               |Options and location for client-side Discovery configuration                            |
+|&#9633; |Not Started    |Local Storage               |Client-side information storage for scan discovery information                          |
+|&#9633; |Not Started    |Scan Messaging              |Message format for scan discovery information                                           |
+
 <ul>
 <li>
 
 #### Linux
+|        |Status         |Task                        |Description                                                                             |
+|--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+|&#9633; |Not Started    |nmap integration            |Integration with nmap on Linux                                                          |
 </li>
 
 <li>
 
 #### macOS
+|        |Status         |Task                        |Description                                                                             |
+|--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+|&#9633; |Not Started    |nmap integration            |Integration with nmap on macOS                                                          |
 </li>
 
 <li>
 
 #### Windows
+|        |Status         |Task                        |Description                                                                             |
+|--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+|&#9633; |Not Started    |nmap integration            |Integration with nmap on Windows                                                        |
 </li>
 </ul>
 
@@ -777,6 +797,9 @@ In order to be accountable to the community - but more importantly to myself - I
 <li>
 
 #### macOS
+|        |Status         |Task                        |Description                                                                             |
+|--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+|&#9633; |Not Started    |System Profiler Integration |Parsing and storing information from system_profiler                                    |
 </li>
 
 <li>
@@ -788,13 +811,19 @@ In order to be accountable to the community - but more importantly to myself - I
 
 ### Integrity
 
+|        |Status         |Task                        |Description                                                                             |
+|--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+|&#9633; |Not Started    |Local Storage               |Client-side information storage for filesystem information                              |
+|&#9654; |*In Progress*  |Alert Messaging             |Message format for filesystem modification alerts                                       |
+|&#9633; |Not Started    |Bulk Alert Transmission     |Message format for sending stored/queued alerts                                         |
+
 <ul>
 <li>
 
 #### Linux
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#9654; |*In Progress*  |Real Time Monitor           |Hooks into the kernel to monitor filesystem changes in real time                        |
+|&#9654; |*In Progress*  |Real Time Monitor           |OS/Kernel hooks to monitor filesystem changes in real time                              |
 |&#9633; |Not Started    |Checksum Scanning           |Periodically performs checksum calculations of monitored files                          |
 </li>
 
@@ -803,7 +832,7 @@ In order to be accountable to the community - but more importantly to myself - I
 #### macOS
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#9654; |*In Progress*  |Real Time Monitor           |Hooks into the kernel to monitor filesystem changes in real time                        |
+|&#9654; |*In Progress*  |Real Time Monitor           |OS/Kernel hooks to monitor filesystem changes in real time                              |
 |&#9633; |Not Started    |Checksum Scanning           |Periodically performs checksum calculations of monitored files                          |
 </li>
 
@@ -812,7 +841,7 @@ In order to be accountable to the community - but more importantly to myself - I
 #### Windows
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#9654; |*In Progress*  |Real Time Monitor           |Hooks into the kernel to monitor filesystem changes in real time                        |
+|&#9654; |*In Progress*  |Real Time Monitor           |OS/Kernel hooks to monitor filesystem changes in real time                              |
 |&#9633; |Not Started    |Checksum Scanning           |Periodically performs checksum calculations of monitored files                          |
 </li>
 </ul>
@@ -840,20 +869,39 @@ In order to be accountable to the community - but more importantly to myself - I
 
 ### Policy
 
+|        |Status         |Task                        |Description                                                                             |
+|--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+|&#9633; |Not Started    |YAML Parser                 |Parser for reading and applying YAML-based rulesets                                     |
+
 <ul>
 <li>
-
+  
 #### Linux
+|        |Status         |Task                        |Description                                                                             |
+|--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+|&#9633; |Not Started    |Network Hooking             |OS/Kernel interface for network monitoring/management                                   |
+|&#9633; |Not Started    |IDS/IPS Integration         |Create or integrate intrusion detection/prevention systems                              |
+|&#9633; |Not Started    |Firewall Management         |Modify on-device firewall rules according to stored configuration                       |
 </li>
 
 <li>
 
 #### macOS
+|        |Status         |Task                        |Description                                                                             |
+|--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+|&#9633; |Not Started    |Network Hooking             |OS/Kernel interface for network monitoring/management                                   |
+|&#9633; |Not Started    |IDS/IPS Integration         |Create or integrate intrusion detection/prevention systems                              |
+|&#9633; |Not Started    |Firewall Management         |Modify on-device firewall rules according to stored configuration                       |
 </li>
 
 <li>
-
+  
 #### Windows
+|        |Status         |Task                        |Description                                                                             |
+|--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+|&#9633; |Not Started    |Network Hooking             |OS/Kernel interface for network monitoring/management                                   |
+|&#9633; |Not Started    |IDS/IPS Integration         |Create or integrate intrusion detection/prevention systems                              |
+|&#9633; |Not Started    |Firewall Management         |Modify on-device firewall rules according to stored configuration                       |
 </li>
 </ul>
 
@@ -871,8 +919,8 @@ In order to be accountable to the community - but more importantly to myself - I
 
 |        |Status         |OS |
 |--------|---------------|---|
-|&#9633; |Not Started    |LIN|
-|&#9633; |Not Started    |MAC|
+|&#9654; |*In Progress*  |LIN|
+|&#10003;|**Completed**  |MAC|
 |&#9633; |Not Started    |WIN|
 </li>
 
