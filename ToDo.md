@@ -299,7 +299,7 @@ In order to be accountable to the community - but more importantly to myself - I
 #### Inventory
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#9633; |Not Started    |Include File                |Create module include for broker process to attach the Integrity Lumy                   |
+|&#9633; |Not Started    |Include File                |Create module include for broker process to attach the Inventory Lumy                   |
 |&#9633; |Not Started    |Database Structure          |Create and grant permissions to Inventory-specific databases and tables                 |
 |&#9633; |Not Started    |OSQuery Integration         |Support for integrating with OSQuery                                                    |
 </li>
