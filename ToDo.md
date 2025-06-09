@@ -413,12 +413,12 @@ In order to be accountable to the community - but more importantly to myself - I
 #### Information
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#9654; |*In Progress*  |Luminum Information         |User interface to display general Luminum server information                            |
+|&#10003;|**Completed**  |Luminum Information         |User interface to display general Luminum server information                            |
 |&#10003;|**Completed**  |CPU Information             |User interface to display server CPU information                                        |
-|&#9654; |*In Progress*  |Storage Information         |User interface to display server disk information                                       |
+|&#10003;|**Completed**  |Storage Information         |User interface to display server disk information                                       |
 |&#9633; |Not Started    |Memory Information          |User interface to display server memory information                                     |
 |&#9633; |Not Started    |Device Information          |User interface to display server connected device information                           |
-|&#9633; |Not Started    |Network Information         |User interface to display server network interface information                          |
+|&#9654; |*In Progress*  |Network Information         |User interface to display server network interface information                          |
 |&#10003;|**Completed**  |User Accounts               |Presents a table displaying information about all user accounts                         |
 </li>
 
