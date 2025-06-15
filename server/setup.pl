@@ -8,6 +8,10 @@ use Curses::UI;
 
 my $text = 0;
 my $step = 0;
+my $lang;
+my $win;
+my $label;
+my $wizard;
 my $wizlabel;
 my $wizbuttons;
 my $wizaction;
@@ -25,8 +29,8 @@ my $nextbsc;
 my $backbsc;
 my $exitbsc;
 
-
 if ($ENV{LANG} =~ /en_/ || $ENV{LANG} eq "") {
+	$lang = "EN";
 	$nextbutton = " Next > ";
 	$backbutton = " < Back ";
 	$exitbutton = " Cancel ";
@@ -36,6 +40,7 @@ if ($ENV{LANG} =~ /en_/ || $ENV{LANG} eq "") {
 	$introlabel = "Welcome to the Luminum Server setup wizard. This tool will guide you\nthrough the steps to install Luminum Server on this system.";
 	}
 elsif ($ENV{LANG} =~ /de_/) {
+	$lang = "DE";
 	$nextbutton = " Nächste > ";
 	$backbutton = "< Zurück ";
 	$exitbutton = " Stornieren ";
@@ -45,6 +50,7 @@ elsif ($ENV{LANG} =~ /de_/) {
 	$introlabel = "Willkommen beim Luminum Server-Setup-Assistenten. Dieses Tool führt\nSie durch die einzelnen Schritte zur Installation von Luminum Server\nauf diesem System.";
 	}
 elsif ($ENV{LANG} =~ /it_/) {
+	$lang = "IT";
 	$nextbutton = " Prossimo > ";
 	$backbutton = "< Precedente ";
 	$exitbutton = " Cancellare ";
@@ -54,6 +60,7 @@ elsif ($ENV{LANG} =~ /it_/) {
 	$introlabel = "Benvenuti alla procedura guidata di installazione di Luminum Server.\nQuesto strumento vi guiderà attraverso i passaggi necessari per\ninstallare Luminum Server su questo sistema.";
 	}
 elsif ($ENV{LANG} =~ /fr_/) {
+	$lang = "FR";
 	$nextbutton = " Suivant > ";
 	$backbutton = "< Précédent ";
 	$exitbutton = " Annuler ";
@@ -63,6 +70,7 @@ elsif ($ENV{LANG} =~ /fr_/) {
 	$introlabel = "Bienvenue dans l'assistant d'installation de Luminum Server. Cet\noutil vous guidera pas à pas pour installer Luminum Server\nsur votre système.";
 	}
 elsif ($ENV{LANG} =~ /es_/) {
+	$lang = "ES";
 	$nextbutton = " Próximo >";
 	$backbutton = "< Previo ";
 	$exitbutton = " Cancelar ";
@@ -80,8 +88,8 @@ foreach (@ARGV) {
 	}
 
 if ($text == 0) {
-	my $win = $cui->add('base', 'Window');
-	my $label = $win->add('setuplabel', 'Label',
+	$win = $cui->add('base', 'Window');
+	$label = $win->add('setuplabel', 'Label',
 		-bg	=> "blue",
 		-text	=> "Luminum Server Setup\n--------------------",
 		-bold	=> 1,
@@ -90,7 +98,7 @@ if ($text == 0) {
 		);
 	$label->draw;
 
-	my $wizard = $win->add('welcdialog','Window',
+	$wizard = $win->add('welcdialog','Window',
 		-centered	=> 1,
 		-width		=> 78,
 		-height		=> 30,
@@ -118,7 +126,6 @@ if ($text == 0) {
 			-label		=> $nextbutton,
 			-value		=> "next",
 			-shortcut	=> $nextbsc,
-			-onpress	=> sub { $wizard->delete('wizbuttons'); undef($wizbuttons); }
 			} ],
 		-fg		=> "black",
 		-buttonalignment=> "right",
