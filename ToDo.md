@@ -198,6 +198,14 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9654; |*In Progress*  |Mandatory Password Change   |Server support for requiring users to change their password on login                    |
 
 
+### Command-Line Tools
+|        |Status         |Task                        |Description                                                                             |
+|--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+|&#9633; |Not Started    |Configuration Tool          |Set server configuration parameters from the command line                               |
+|&#9633; |Not Started    |Question Builder            |Create queries and get answers from the server command line                             |
+|&#9633; |Not Started    |Package Delivery            |Deploy packages to endpoints from the server command line                               |
+
+
 ### Investigate
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
