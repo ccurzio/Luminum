@@ -885,6 +885,8 @@ In order to be accountable to the community - but more importantly to myself - I
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9633; |Not Started    |Configuration               |Options and location for client-side Policy configuration                               |
 |&#9633; |Not Started    |YARA Parser                 |Parser for reading and applying YARA-based rulesets                                     |
+|&#9633; |Not Started    |Network Inspection Engine   |Engine for inspecting and actioning network traffic                                     |
+|&#9633; |Not Started    |File Inspection Engine      |Engine for inspecting and actioning files and contents                                  |
 <ul>
 <li>
   
