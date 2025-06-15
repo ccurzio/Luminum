@@ -884,7 +884,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9633; |Not Started    |Configuration               |Options and location for client-side Policy configuration                               |
-|&#9633; |Not Started    |YAML Parser                 |Parser for reading and applying YAML-based rulesets                                     |
+|&#9633; |Not Started    |YARA Parser                 |Parser for reading and applying YARA-based rulesets                                     |
 <ul>
 <li>
   
