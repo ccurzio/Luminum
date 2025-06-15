@@ -8,10 +8,6 @@ use Curses::UI;
 
 my $text = 0;
 my $cancel = 0;
-my $wizback = " Cancel ";
-my $wizbs = "C";
-my $wiznext = " Next ";
-my $wizns = "N";
 my $path = "/opt/Luminum/LuminumServer";
 my $LADDR;
 my $LPORT;
@@ -46,14 +42,14 @@ if ($text == 0) {
 
 	my $wizbuttons = $wizard->add('wizbuttons','Buttonbox',
 		-buttons => [ {
-			-label		=> "$wizback",
-			-value		=> "back",
-			-shortcut	=> "$wizbs",
+			-label		=> " Cancel ",
+			-value		=> "exit",
+			-shortcut	=> "C",
 			},
 		{
-			-label		=> $wiznext,
+			-label		=> " Next ",
 			-value		=> "next",
-			-shortcut	=> "$wizns",
+			-shortcut	=> "N",
 			} ],
 		-fg		=> "black",
 		-buttonalignment=> "right",
