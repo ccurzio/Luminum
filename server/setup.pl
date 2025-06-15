@@ -80,14 +80,14 @@ elsif ($ENV{LANG} =~ /es_/) {
 	$introlabel = "Bienvenido al asistente de configuración de Luminum Server. Esta\nherramienta le guiará por los pasos para instalar Luminum\nServer en este sistema.";
 	}
 
-my $cui = new Curses::UI(-color_support => 1, -intellidraw => 1);
-$cui->set_binding(sub { exit(0); }, "\cC");
-
 foreach (@ARGV) {
 	if ($_ =~ /--textonly/) { $text = 1; }
 	}
 
 if ($text == 0) {
+	my $cui = new Curses::UI(-color_support => 1, -intellidraw => 1);
+	$cui->set_binding(sub { exit(0); }, "\cC");
+
 	$win = $cui->add('base', 'Window');
 	$label = $win->add('setuplabel', 'Label',
 		-bg	=> "blue",
@@ -141,6 +141,22 @@ if ($text == 0) {
 	$cui->mainloop();
 	}
 else {
+	$SIG{INT} = sub {
+		print "\e[?25h";
+		system(`/usr/bin/which clear`);
+		print "Luminum Server setup aborted.\n\n";
+		exit(0);
+		};
+	print "\e[?25l";
+	system(`/usr/bin/which clear`);
+	print "Luminum Server Setup\n--------------------\n\n";
+	print "$introlabel\n\n";
+	print "NOTE: Use CTRL+C to cancel setup at any time. Unsaved changes will be lost.\n\n";
+	print "[Next] ";
+	my $cont = <STDIN>;
+
+	system(`/usr/bin/which clear`);
+	print "Luminum Server Setup\n--------------------\n\n";
 	}
 
 sub createCert {
