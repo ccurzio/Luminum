@@ -9,33 +9,24 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9654; |*In Progress*  |Setup Utility (Text)        |Create plain text step-by-step setup wizard to run when first installed                 |
 |&#9633; |Not Started    |Setup Utility (ncurses)     |Create ncurses step-by-step setup wizard to run when first installed                    |
 |&#9633; |Not Started    |OS User Accounts            |Automatically create necessary OS service accounts for Luminum Server                   |
+|&#9633; |Not Started    |Detect Installation         |Routines to detect a current existing Luminum Server configuration                      |
 |&#9654; |*In Progress*  |Configuration Save/Import   |Routines to save the server configuration and import an existing config on first setup  |
 |&#9654; |*In Progress*  |Certificate Setup           |Routines to create or import server certificates                                        |
 |&#9654; |*In Progress*  |Key Setup                   |Routines to create or import public/private keys                                        |
 |&#9633; |Not Started    |Database Setup              |Automatically configure the database software and set root password                     |
-|&#9633; |Not Started    |Database Structure          |Create Luminum Server databases and tables                                              |
-|&#9633; |Not Started    |Database User Accounts      |Create necessary Luminum Server database user accounts and grant permissions            |
+|&#9633; |Not Started    |Database Structure          |Automatically create Luminum Server databases and tables                                |
+|&#9633; |Not Started    |Database User Accounts      |Automatically create necessary Luminum Server database user accounts with permissions   |
 |&#9633; |Not Started    |nginx Configuration         |Routines to automatically configure the nginx webserver software for Luminum            |
-|&#9633; |Not Started    |Apache Configuration        |Routines to automatically configure the Apache webserver software for Luminum           |
-|&#9633; |Not Started    |lighttpd Configuration      |Routines to automatically configure the lighttpd webserver software for Luminum         |
 |&#9633; |Not Started    |PHP Configuration           |Routines to configure PHP running under nginx for Luminum                               |
-
-
-### Web Server Integrations
-|        |Status         |Task                        |Description                                                                             |
-|--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#10003;|**Completed**  |nginx                       |Luminum Server install with web console running on nginx                                |
-|&#9633; |Not Started    |Apache                      |Luminum Server install with web console running on Apache httpd                         |
-|&#9633; |Not Started    |lighttpd                    |Luminum Server install with web console running on lighttpd                             |
 
 
 ### Debian Support
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9633; |Not Started    |Dependency Checking         |Validate that the system has all required dependencies installed                        |
-|&#9633; |Not Started    |Pre-Install                 |Create package script to run on package installation prior to copying files into place  |
-|&#9633; |Not Started    |Post-Install                |Create package script to run on package installation after copying files into place     |
-|&#9633; |Not Started    |Create Package              |Create .deb installation package                                                        |
+|&#9654; |*In Progress*  |Pre-Install                 |Create package script to run on package installation prior to copying files into place  |
+|&#9654; |*In Progress*  |Post-Install                |Create package script to run on package installation after copying files into place     |
+|&#9654; |*In Progress*  |Create Package              |Create .deb installation package                                                        |
 
 
 ### Ubuntu Support
@@ -106,47 +97,45 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Key            |Default Value    |Description                                                                             |
 |--------|---------------|---------------|-----------------|----------------------------------------------------------------------------------------|
 |&#10003;|**Completed**  |SID            |                 |The unique Luminum Server ID                                                            |
-|&#9654; |*In Progress*  |SKEY           |                 |The server key used by clients to verify association                                    |
-|&#9654; |*In Progress*  |LADDR          |                 |The address of the interface to be used by the network listener                         |
-|&#9654; |*In Progress*  |LPORT          |10465            |Port number for the network listener                                                    |
-|&#9654; |*In Progress*  |SSLCERT        |                 |Path to the SSL Certificate to be used by Luminum Server                                |
-|&#9654; |*In Progress*  |SSLPRVKEY      |                 |Path to the private key associated with SSLCERT                                         |
-|&#9654; |*In Progress*  |SSLPUBKEY      |                 |Path to the public key associated with SSLCERT                                          |
-|&#9654; |*In Progress*  |PKPASS         |                 |Private key passphrase                                                                  |
-|&#9654; |*In Progress*  |SHOST          |                 |The server's fully-qualified domain name                                                |
-|&#9654; |*In Progress*  |INSTALLDATE    |                 |Date and time Luminum Server was installed                                              |
+|&#10003;|**Completed**  |SKEY           |                 |The server key used by clients to verify association                                    |
+|&#10003;|**Completed**  |SSLCERT        |                 |Path to the SSL Certificate to be used by Luminum Server                                |
+|&#10003;|**Completed**  |SSLPRVKEY      |                 |Path to the private key associated with SSLCERT                                         |
+|&#10003;|**Completed**  |SSLPUBKEY      |                 |Path to the public key associated with SSLCERT                                          |
+|&#10003;|**Completed**  |SHOST          |                 |The server's fully-qualified domain name                                                |
+|&#10003;|**Completed**  |INSTALLDATE    |                 |Date and time Luminum Server was installed                                              |
 |&#10003;|**Completed**  |ENLUMYS        |                 |A comma-separated list of currently enabled Lumys                                       |
-|&#9654; |*In Progress*  |TARGETCONF     |Enabled          |Action confirmation based on the number of targeted endpoints                           |
-|&#9654; |*In Progress*  |TCONFTHRESHOLD |250              |Number of targeted endpoints to trigger action confirmation                             |
-|&#9654; |*In Progress*  |ENDPOINTCOMM   |mqtt             |Method used by the server and clients to communicate                                    |
-|&#9654; |*In Progress*  |CHECKININT     |5                |The interval (in minutes) at which clients will check in                                |
-|&#9654; |*In Progress*  |MISSINGAFTER   |90               |Days when the system determines offline clients are missing                             |
-|&#9654; |*In Progress*  |TIMEOUT        |15M              |Time a user is inactive before their session is terminated                              |
-|&#9654; |*In Progress*  |TIMEOUTWARN    |Enabled          |Warn users 2 minutes before session is terminated for inactivity                        |
-|&#9654; |*In Progress*  |MINPASS        |8                |Minimum password character length                                                       |
-|&#9654; |*In Progress*  |COMPLEXPASS    |Disabled         |Enforce password complexity requirements                                                |
-|&#9654; |*In Progress*  |PCUPPERLOWER   |Disabled         |Upper/Lowercase letters required in passwords                                           |
-|&#9654; |*In Progress*  |PCLETNUM       |Disabled         |Letters/Numbers required in passwords                                                   |
-|&#9654; |*In Progress*  |PCSPECIAL      |Disabled         |Special characters required in passwords                                                |
-|&#9654; |*In Progress*  |2FA            |Optional         |Two-Factor Authentication policy for user accounts                                      |
-|&#9633; |Not Started    |PASSKEYS       |Disabled         |PassKey Support                                                                         |
-|&#9633; |Not Started    |USERLOGLVL     |Disabled         |Account-specific log levels                                                             |
-|&#9654; |*In Progress*  |SENREVS        |5                |Maximum revision history for sensors                                                    |
-|&#9654; |*In Progress*  |PKGREVS        |5                |Maximum revision history for packages                                                   |
-|&#9633; |Not Started    |INVESTIGATE    |Enabled          |Enable or Disable Luminum Investigate                                                   |
+|&#10003;|**Completed**  |TARGETCONF     |Enabled          |Action confirmation based on the number of targeted endpoints                           |
+|&#10003;|**Completed**  |TCONFTHRESHOLD |250              |Number of targeted endpoints to trigger action confirmation                             |
+|&#10003;|**Completed**  |ENDPOINTCOMM   |mqtt             |Method used by the server and clients to communicate                                    |
+|&#10003;|**Completed**  |CHECKININT     |5                |The interval (in minutes) at which clients will check in                                |
+|&#10003;|**Completed**  |MISSINGAFTER   |90               |Days when the system determines offline clients are missing                             |
+|&#10003;|**Completed**  |UTIMEOUT       |15M              |Time a user is inactive before their session is terminated                              |
+|&#10003;|**Completed**  |UTIMEOUTWARN   |Enabled          |Warn users 2 minutes before session is terminated for inactivity                        |
+|&#10003;|**Completed**  |MINPASS        |8                |Minimum password character length                                                       |
+|&#10003;|**Completed**  |COMPLEXPASS    |Disabled         |Enforce password complexity requirements                                                |
+|&#10003;|**Completed**  |PCUPPERLOWER   |Disabled         |Upper/Lowercase letters required in passwords                                           |
+|&#10003;|**Completed**  |PCLETNUM       |Disabled         |Letters/Numbers required in passwords                                                   |
+|&#10003;|**Completed**  |PCSPECIAL      |Disabled         |Special characters required in passwords                                                |
+|&#10003;|**Completed**  |2FA            |Optional         |Two-Factor Authentication policy for user accounts                                      |
+|&#10003;|**Completed**  |PASSKEYS       |Disabled         |PassKey Support                                                                         |
+|&#10003;|**Completed**  |USERLOGGING    |Disabled         |Account-specific server logging                                                         |
+|&#10003;|**Completed**  |SENREVS        |5                |Maximum revision history for sensors                                                    |
+|&#10003;|**Completed**  |PKGREVS        |5                |Maximum revision history for packages                                                   |
+|&#10003;|**Completed**  |INVESTIGATE    |Enabled          |Enable or Disable Luminum Investigate                                                   |
 </li>
 
 <li>
   
 #### Base Configuration Options/Values
-|        |Status         |Key            |Default Value    |Description                                                                             |
-|--------|---------------|---------------|-----------------|----------------------------------------------------------------------------------------|
-|&#10003;|**Completed**  |SID            |                 |The unique Luminum Server ID                                                            |
-|  --    |*DEPRECATED*   |~~SKEY~~       |                 |~~The server key used by clients to verify association~~                                |
-|  --    |*DEPRECATED*   |~~IPADDR~~     |                 |~~The address of the interface to be used by the network listener~~                     |
-|  --    |*DEPRECATED*   |~~PORT~~       |                 |~~Port number for the network listener~~                                                |
-|&#10003;|**Completed**  |DBPASS         |                 |The password for the "Luminum" database account                                         |
-|  --    |*DEPRECATED*   |~~PKPASS~~     |                 |~~The passphrase for the server's private key~~                                         |
+|        |Status         |Key            |Default Value              |Description                                                                      |
+|--------|---------------|---------------|---------------------------|---------------------------------------------------------------------------------|
+|&#10003;|**Completed**  |SID            |                           |The unique Luminum Server ID                                                     |
+|&#10003;|**Completed**  |SVRPATH        |/opt/Luminum/LuminumServer |The installation path for Luminum Server                                         |
+|&#10003;|**Completed**  |DBPASS         |                           |The password for the "Luminum" database account                                  |
+|&#10003;|**Completed**  |LADDR          |                           |The IP address of the interface to be used by the network listener               |
+|&#10003;|**Completed**  |LPORT          |10465                      |Port number for the network listener                                             |
+|&#10003;|**Completed**  |WADDR          |                           |The IP address of the interface to be used by the HTTPS Web Console              |
+|&#10003;|**Completed**  |WPORT          |443                        |Port number for access to the HTTPS Web Console                                  |
 
 </li>
 </ul>
