@@ -7,10 +7,10 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9654; |*In Progress*  |Setup Utility (Text)        |Create plain text step-by-step setup wizard to run when first installed                 |
-|&#9633; |Not Started    |Setup Utility (ncurses)     |Create ncurses step-by-step setup wizard to run when first installed                    |
+|&#9654; |*In Progress*  |Setup Utility (ncurses)     |Create ncurses step-by-step setup wizard to run when first installed                    |
 |&#9633; |Not Started    |OS User Accounts            |Automatically create necessary OS service accounts for Luminum Server                   |
 |&#9633; |Not Started    |Detect Installation         |Routines to detect a current existing Luminum Server configuration                      |
-|&#9654; |*In Progress*  |Configuration Save/Import   |Routines to save the server configuration and import an existing config on first setup  |
+|&#9654; |*In Progress*  |Configuration Import        |Routines to import an existing config on first setup                                    |
 |&#9654; |*In Progress*  |Certificate Setup           |Routines to create or import server certificates                                        |
 |&#9654; |*In Progress*  |Key Setup                   |Routines to create or import public/private keys                                        |
 |&#9633; |Not Started    |Database Setup              |Automatically configure the database software and set root password                     |
@@ -89,6 +89,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#10003;|**Completed**  |Parameter Functions         |Create functions to set server configuration parameters                                 |
 |&#9654; |*In Progress*  |DB Configuration Values     |Create key/value pairs for storing primary configuration options in the database        |
 |&#9654; |*In Progress*  |File Configuration Values   |Create key/value pairs for storing base configuration options in a config file          |
+|&#9633; |Not Started    |Configuration Export        |Routines to export and save the server configuration                                    |
 
 <ul>
 <li>
