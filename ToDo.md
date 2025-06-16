@@ -22,7 +22,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9633; |Not Started    |Database Structure          |Automatically create Luminum Server databases and tables                                |
 |&#9633; |Not Started    |Database User Accounts      |Automatically create database user accounts with permissions                            |
 |&#9633; |Not Started    |nginx Configuration         |Routines to automatically configure the nginx webserver software for Luminum            |
-|&#9633; |Not Started    |PHP Configuration           |Routines to configure PHP running under nginx for Luminum                               |
+|&#9633; |Not Started    |PHP Configuration           |Routines to automatically configure PHP and associated nginx support                    |
 
 
 ### Debian Support
