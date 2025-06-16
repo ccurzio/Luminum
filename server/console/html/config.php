@@ -68,6 +68,7 @@ else {
 		<?php print "<tr><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\">Primary DNS Server:</td><td style=\"color: #444; background-color: transparent; border: 0;\"><input id=\"dnsserver\" type=\"text\" style=\"width: 200px; font-size: 15px; padding: 3px; margin-top: 0;\" maxlength=\"39\" value=\"$dnscfg[1]\" onchange=\"formCheck();\" tabindex=\"4\"></td></tr>\n"; ?>
 		<?php print "<tr><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\">DNS Search Suffix:</td><td style=\"color: #444; background-color: transparent; border: 0;\"><input id=\"suffix\" type=\"text\" style=\"width: 200px; font-size: 15px; padding: 3px; margin-top: 0;\" maxlength=\"39\" value=\"$dnscfg[0]\" onchange=\"formCheck();\" tabindex=\"5\"></td></tr>\n"; ?>
 		</table>
+		<br>
 	</div>
 
 	<?php elseif ($_GET['view'] == "auth"): ?>
