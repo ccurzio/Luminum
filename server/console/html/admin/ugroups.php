@@ -24,9 +24,8 @@ $ugcount = mysqli_num_rows($ugquery);
 		<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Get Info</button>
 
 		<table style="margin-top: 10px; text-align: left;">
-		<tr><td colspan="6"><div style="padding: 6px 0 6px 5px;">0 of 0 items</div></td></tr>
-		<tr>
-		<td style="width: 15px; text-align: center; padding: 0;"><?php
+		<tr><td colspan="9"><div style="position: absolute; padding-top: 5px; padding-left: 5px;">0 of <?php print $ugcount; ?> items</div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;" maxlength="64" <?php if ($ugcount == 0) { print "disabled=\"disabled\""; } ?>></div></td></tr>
+		<tr><td style="width: 15px; text-align: center; padding: 0;"><?php
 			if ($ugcount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
 			else { print "<input id=\"selectall\" type=\"checkbox\" onclick=\"allToggle();\">"; }
 		?></td>
