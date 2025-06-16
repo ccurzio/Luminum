@@ -7,7 +7,7 @@ if ($acctrole > 1) {
 else {
 	if (!isset($_GET['view']) || $_GET['view'] == "updates"): ?>
 	<div class="content">
-	<h1>System Updates</h1>
+	<h1>Luminum Update</h1>
 
 	<?php elseif ($_GET['view'] == "diagnostics"): ?>
 	<div class="content">
