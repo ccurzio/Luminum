@@ -86,11 +86,14 @@ else {
 <?php elseif ($_GET['view'] == "packages"): ?>
 <?php include ("admin/packages.php"); ?>
 
+<?php elseif ($_GET['view'] == "sensors"): ?>
+<?php include ("admin/sensors.php"); ?>
+
 <?php elseif ($_GET['view'] == "csets"): ?>
 <?php include ("admin/csets.php"); ?>
 
-<?php elseif ($_GET['view'] == "sensors"): ?>
-<?php include ("admin/sensors.php"); ?>
+<?php elseif ($_GET['view'] == "savedqueries"): ?>
+<?php include ("admin/savedqueries.php"); ?>
 
 <?php elseif ($_GET['view'] == "ugroups"): ?>
 <?php include ("admin/ugroups.php"); ?>
