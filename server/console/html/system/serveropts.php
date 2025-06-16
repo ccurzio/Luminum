@@ -23,6 +23,9 @@ else {
 		else if ($row["CKEY"] == "UTIMEOUTWARN") { $timeoutwarn = $row["CVAL"]; }
 		else if ($row["CKEY"] == "SENREVS") { $senrevs = $row["CVAL"]; }
 		else if ($row["CKEY"] == "PKGREVS") { $pkgrevs = $row["CVAL"]; }
+		else if ($row["CKEY"] == "PASSKEYS") { $passkeys = $row["CVAL"]; }
+		else if ($row["CKEY"] == "USERLOGGING") { $userlogging = $row["CVAL"]; }
+		else if ($row["CKEY"] == "INVESTIGATE") { $investigate = $row["CVAL"]; }
 		}
 
 	mysqli_select_db($db, "CONTENT") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
@@ -60,12 +63,22 @@ else {
 				print "\t\t\t\t<option value=\"enabled\" selected=\"selected\">Enabled</option><option value=\"disabled\">Disabled</option>\n";
 				}
 			else {
-				print "\t\t\t\t<option value=\"enabled\">Enabled</option><option value=\"enabled\">Enabled</option><option value=\"disabled\" selected=\"selected\">Disabled</option>\n";
+				print "\t\t\t\t<option value=\"enabled\">Enabled</option><option value=\"disabled\" selected=\"selected\">Disabled</option>\n";
 				}
 			?>
 			</select>
 			<div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Specifies the minimum number of targeted clients requiring confirmation for action deployments<br><br>Default: Enabled; 250 Endpoints</span></div></td></tr>
 			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: normal; padding-left: 30px;"><span id="ctlabel">Confirmation Threshold:</span></td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><input id="actconfclients" type="text" style="width: 60px; font-size: 15px; padding: 3px; margin-top: 0;" maxlength="5" value="<?php print $targetconfthreshold; ?>" onchange="formCheck();"> <span id="eplabel">Endpoints</span></td></tr>
+			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Luminum Investigate: </td><td style="color: #444; background-color: transparent; border: 0;"><select id="invconf" style="width: 175px; height: 28px;" onchange="formCheck();">
+			<?php if ($investigate == "Enabled") {
+				print "\t\t\t\t<option value=\"enabled\" selected=\"selected\">Enabled</option><option value=\"disabled\">Disabled</option>\n";
+				}
+			else {
+				print "\t\t\t\t<option value=\"enabled\">Enabled</option><option value=\"disabled\" selected=\"selected\">Disabled</option>\n";
+				}
+			?>
+			</select>
+			<div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Enable or disable Luminum Investigate<br><br>Default: Enabled</span></div></td></tr>
 			</table>
 		</div>
 
