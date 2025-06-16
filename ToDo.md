@@ -9,10 +9,10 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9654; |*In Progress*  |Setup Utility (Text)        |Create plain text step-by-step setup wizard to run when first installed                 |
 |&#9654; |*In Progress*  |Setup Utility (ncurses)     |Create ncurses step-by-step setup wizard to run when first installed                    |
 |&#10003;|**Completed**  |Setup Translation Support   |Multiple language support for the Setup Utility                                         |
-|&#9654; |*In Progress*  |German Language Translation |Setup Utility text translated to German                                                 |
-|&#9654; |*In Progress*  |Italian Language Translation|Setup Utility text translated to Italian                                                |
-|&#9654; |*In Progress*  |French Language Translation |Setup Utility text translated to French                                                 |
-|&#9654; |*In Progress*  |Spanish Language Translation|Setup Utility text translated to Spanish                                                |
+|&#9654; |*In Progress*  |German Setup Text           |Setup Utility text translated to German                                                 |
+|&#9654; |*In Progress*  |Italian Setup Text          |Setup Utility text translated to Italian                                                |
+|&#9654; |*In Progress*  |French Setup Text           |Setup Utility text translated to French                                                 |
+|&#9654; |*In Progress*  |Spanish Setup Text          |Setup Utility text translated to Spanish                                                |
 |&#9633; |Not Started    |OS User Accounts            |Automatically create necessary OS service accounts for Luminum Server                   |
 |&#9654; |*In Progress*  |Detect Installation         |Routines to detect a current existing Luminum Server configuration                      |
 |&#9654; |*In Progress*  |Configuration Import        |Routines to import an existing config on first setup                                    |
