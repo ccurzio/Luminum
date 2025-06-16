@@ -81,8 +81,7 @@ else {
 <?php include ("admin/actionhistory.php"); ?>
 
 <?php elseif ($_GET['view'] == "cgroups"): ?>
-<div class="content">
-	<h1>Computer Groups</h1>
+<?php include ("admin/cgroups.php"); ?>
 
 <?php elseif ($_GET['view'] == "packages"): ?>
 <?php include ("admin/packages.php"); ?>
@@ -93,14 +92,14 @@ else {
 <?php elseif ($_GET['view'] == "sensors"): ?>
 <?php include ("admin/sensors.php"); ?>
 
+<?php elseif ($_GET['view'] == "ugroups"): ?>
+<?php include ("admin/ugroups.php"); ?>
+
 <?php elseif ($_GET['view'] == "sysinfo"): ?>
 <?php include ("system/sysinfo.php"); ?>
 
 <?php elseif ($_GET['view'] == "users"): ?>
 <?php include ("system/users.php"); ?>
-
-<?php elseif ($_GET['view'] == "ugroups"): ?>
-<?php include ("system/usergroups.php"); ?>
 
 <?php endif; ?>
 
