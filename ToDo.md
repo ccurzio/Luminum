@@ -213,7 +213,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 | --     |Not Started    |Configuration Tool          |Set server configuration parameters from the command line                               |
-| --     |Not Started    |Question Builder            |Create queries and get answers from the server command line                             |
+| --     |Not Started    |Query Builder               |Create queries and get answers from the server command line                             |
 | --     |Not Started    |Package Delivery            |Deploy packages to endpoints from the server command line                               |
 
 
@@ -490,7 +490,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9654; |*In Progress*  |Query Interface             |Present a dynamic user interface for users to construct queries                         |
 | --     |Not Started    |Query Data Parsing          |Convert entered data in the query UI to a system-parseable query statement              |
 | --     |Not Started    |Query Saving                |Routines to save a query for future use                                                 |
-| --     |Not Started    |Query Loading               |Routines to load a saved query into Query Builder                                       |
+| --     |Not Started    |Query Loading               |Routines to load and ask saved queries                                                  |
 
 </li>
 
