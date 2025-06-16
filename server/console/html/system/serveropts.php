@@ -19,8 +19,8 @@ else {
 		else if ($row["CKEY"] == "PCUPPERLOWER") { $pcul = $row["CVAL"]; }
 		else if ($row["CKEY"] == "PCLETNUM") { $pcln = $row["CVAL"]; }
 		else if ($row["CKEY"] == "PCSPECIAL") { $pcsc = $row["CVAL"]; }
-		else if ($row["CKEY"] == "TIMEOUT") { $logintimeout = $row["CVAL"]; }
-		else if ($row["CKEY"] == "TIMEOUTWARN") { $timeoutwarn = $row["CVAL"]; }
+		else if ($row["CKEY"] == "UTIMEOUT") { $logintimeout = $row["CVAL"]; }
+		else if ($row["CKEY"] == "UTIMEOUTWARN") { $timeoutwarn = $row["CVAL"]; }
 		else if ($row["CKEY"] == "SENREVS") { $senrevs = $row["CVAL"]; }
 		else if ($row["CKEY"] == "PKGREVS") { $pkgrevs = $row["CVAL"]; }
 		}
