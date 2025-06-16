@@ -5,7 +5,7 @@ if ($acctrole > 1) {
 	print "<h1 style=\"color: red\">Access Denied</h1>\n";
 	}
 else {
-	if (!isset($_GET['view']) || $_GET['view'] == "updates"): ?>
+	if (!isset($_GET['view']) || $_GET['view'] == "update"): ?>
 	<div class="content">
 	<h1>Luminum Update</h1>
 
@@ -28,6 +28,10 @@ else {
 	<?php elseif ($_GET['view'] == "logs"): ?>
 	<div class="content">
 	<h1>System Logs</h1>
+
+	<?php else: ?>
+	<div class="content">
+	<h1 style="color: red">Access Denied</h1>
 
 	<?php endif;
 	} ?>
