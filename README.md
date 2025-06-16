@@ -15,14 +15,19 @@ Keep in mind that Luminum is still in the initial development stages, so it does
 - **Web Interface:** Luminum Server provides an intuitive web interface for endpoint and server data retrieval, configuration, and management. 
 
 #### The current planned Lumy modules include:
-- **Query:** The core module of the system which allows administrators and users to retrieve data from endpoints
-- **Summary:** Automatically report query result data in specified intervals to various logging, reporting, and communication systems
+- **Query\*:** The core module of the system which allows administrators and users to retrieve data from endpoints
+- **Summary\*:** Automatically report query result data in specified intervals to various logging, reporting, and communication systems
 - **Delivery:** Deploys applications to endpoints and provides application installation management
 - **Discovery:** Performs network scanning from the server as well as endpoints to discover devices and running services
 - **Efficiency:** Analyzes and logs various aspects of endpoint performance
 - **Integrity:** Provides file integrity monitoring on endpoints
 - **Inventory:** Allows administrators to compile a full inventory of both network-connected devices as well as software installed on those devices
 - **Policy:** Enforcement of endpoint security and system management policies including firewall configuration, IDS/IPS, and IoCs
+
+<sub>* Indicates a core module that is always installed</sub>
+<br>
+ 
+<br>
 
 The server package is supported primarily under Debian Linux, however I am exploring support for additional distributions as well. I am also strongly considering creating a Docker container for the server-side application. The endpoint clients will run on a range of operating systems and platforms including Linux (Debian, CentOS/Red Hat, Slackware, etc.), macOS, and Windows. I'm tentatively looking at supporting OpenBSD and FreeBSD as well, though I have far less BSD experience (limited to FreeBSD) than Linux/Mac/Windows. AIX support is also planned (eventually probably possibly maybe hopefully) because AIX is getting left behind when it comes to security. 
 
