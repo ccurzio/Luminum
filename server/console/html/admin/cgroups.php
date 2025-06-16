@@ -29,7 +29,7 @@ $cgcount = mysqli_num_rows($cgquery);
 			if ($cgcount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
 			else { print "<input id=\"selectall\" type=\"checkbox\" onclick=\"allToggle();\">"; }
 		?></td>
-		<td style="width: 400px;">Name</td><td style="width: 50px;">Author</td><td style="width: 50px;">Members</td><td style="width: 175px;">Create Date</td><td style="width: 175px;">Last Modification</td><td style="width: 50px;">Modified By</td></tr>
+		<td style="width: 400px;">Name</td><td style="width: 50px;">Members</td><td style="width: 50px;">Author</td><td style="width: 175px;">Create Date</td><td style="width: 175px;">Last Modification</td><td style="width: 50px;">Modified By</td></tr>
 		<?php
 			if ($cgcount == 0) {
 				print "<tr><td colspan=\"8\" style=\"text-align: center; background-color: #494a69; font-weight: normal; font-style: italic;\">No Results</td></tr>\n";
