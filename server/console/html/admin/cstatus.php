@@ -19,7 +19,7 @@ $wincount = 0;
 		<div style="display: block; width: 100%; text-align: right;">
 			<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled" id="deploy">Deploy Action</button> <button class="formgo" id="investigate" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Investigate</button> <button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled" id="getinfo">Get Info</button>
 			<table id="cstable" style="margin-top: 10px; text-align: left;">
-			<tr><td colspan="8"><div style="position: absolute; padding-top: 5px; padding-left: 5px;">??? of <?php print "$clientscount"; ?> items <img id="refresh" src="icons/refresh.png" style="cursor: pointer; margin-left: 10px; width: 15px; height: 15px; vertical-align: top;" onclick="reloadTable()"></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($clientscount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
+			<tr><td colspan="8"><div style="position: absolute; padding-top: 5px; padding-left: 5px;"><?php print $lincount + $maccount + $wincount . " of $clientscount"; ?> items <img id="refresh" src="icons/refresh.png" style="cursor: pointer; margin-left: 10px; width: 15px; height: 15px; vertical-align: top;" onclick="reloadTable()"></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($clientscount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
 			<tr><td style="width: 15px;">
 			<?php
 			if ($clientscount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
@@ -42,6 +42,7 @@ $wincount = 0;
 					}
 				}
 			?>
+			<tr style="height: 35px;"><td colspan="8"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;"><i>Query Completed in <?php print $duration; ?> Seconds</i></div></td></tr>
 			</table>
 		</div>
 	</div>
