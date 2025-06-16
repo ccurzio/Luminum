@@ -343,6 +343,9 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9654; |*In Progress*  |Overlay Message             |Display a forced-focus message window above a full-screen overlay                       |
 |&#10003;|**Completed**  |Lumy Menus                  |Dynamically inject UI navigation options for enabled Lumy modules                       |
 |&#9633; |Not Started    |Asynchronous Content Updates|Routines to update page content without refreshing                                      |
+|&#9633; |Not Started    |Dark Mode                   |Create a stylesheet for dark mode                                                       |
+|&#9633; |Not Started    |Timezone Support            |Implement system-wide routines to display the time in the user's timezone               |
+
 
 ### Session Management
 |        |Status         |Task                        |Description                                                                             |
@@ -358,12 +361,13 @@ In order to be accountable to the community - but more importantly to myself - I
 ### User Account Settings
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#10003;|**Completed**  |Settings Interface          |Present a user interface to view/modify account details                                 |
+|&#9654; |*In Progress*  |Settings Interface          |Present a user interface to view/modify account details                                 |
 |&#9633; |Not Started    |Authenticator 2FA Setup     |Authenticator-based two-factor Authentication setup process for users                   |
 |&#9633; |Not Started    |SMS 2FA Setup               |SMS-based two-factor Authentication setup process for users                             |
 |&#9633; |Not Started    |Email 2FA Setup             |Email-based two-factor Authentication setup process for users                           |
 |&#9633; |Not Started    |PassKey 2FA Setup           |PassKey setup process for users                                                         |
 |&#9633; |Not Started    |Password Change             |Implement functions for user-initiated change of password                               |
+|&#9633; |Not Started    |Timezone Select             |Implement functions for per-user timezone configuration                                 |
 
 
 ### Administration
@@ -375,8 +379,8 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#10003;|**Completed**  |Action History              |Presents a table displaying information about past actions                              |
 |&#9633; |Not Started    |Computer Groups             |Presents a table displaying information about all computer groups                       |
 
-### Content 
 
+### Content
 <ul>
 <li>
   
