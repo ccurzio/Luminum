@@ -177,7 +177,7 @@ $ienabled = $invinfo["CVAL"];
 					print "<a href=\"#\" class=\"submenu-link\" style=\"cursor: default;\">Maintenance <span class=\"arrow\" style=\"margin-left: 48%;\">▸</span></a>\n";
 					print "<div class=\"submenu-content\">\n";
 					print "<a href=\"/maintenance.php?view=diagnostics\">Diagnostics</a>\n";
-					print "<a href=\"/maintenance.php?view=updates\">System Update</a>\n";
+					print "<a href=\"/maintenance.php?view=update\">Luminum Update</a>\n";
 					print "<a href=\"/maintenance.php?view=downtime\">Outage Management</a>\n";
 					print "<a href=\"/maintenance.php?view=os\">Operating System</a>\n";
 					print "<a href=\"/maintenance.php?view=services\">Back-End Services</a>\n";
