@@ -337,10 +337,10 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9654; |*In Progress*  |Base UI Framework           |Create the consistent foundational elements for the web user interface                  |
 |&#9654; |*In Progress*  |Include Architecture        |Rebuild include system for user interface code block elements                           |
 | --     |Not Started    |Stylesheet Consolidation    |Consolidate style definitions and eliminate redundancies                                |
-|&#10003;|**Completed**  |Invalid Input Highlight     |Create stylesheet definitions highlighting fields with invalid values                   |
 | --     |Not Started    |Table Generation Functions  |Functions to automatically generate HTML tables on-demand                               |
 | --     |Not Started    |Form Generation Functions   |Functions to automatically generate HTML forms on-demand                                |
 | --     |Not Started    |Element Generation Functions|Functions to automatically generate HTML elements on-demand                             |
+|&#10003;|**Completed**  |Invalid Input Highlight     |Create stylesheet definitions highlighting fields with invalid values                   |
 |&#9654; |*In Progress*  |Overlay Message             |Display a forced-focus message window above a full-screen overlay                       |
 |&#10003;|**Completed**  |Lumy Menus                  |Dynamically inject UI navigation options for enabled Lumy modules                       |
 | --     |Not Started    |Asynchronous Content Updates|Routines to update page content without refreshing                                      |
