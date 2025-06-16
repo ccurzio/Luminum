@@ -448,7 +448,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9633; |Not Started    |SMTP Settings               |User interface for administrators to configure SMTP servers and settings                |
 |&#9633; |Not Started    |Encryption Settings         |User interface for administrators to configure encryption settings                      |
 |&#9654; |*In Progress*  |User Login Settings         |User interface for administrators to view/modify user login settings                    |
-|&#9654; |*In Progress*  |Networking Settings         |User interface for administrators to view/modify server network settings                |
+|&#10003;|**Completed**  |Networking Settings         |User interface for administrators to view/modify server network settings                |
 |&#10003;|**Completed**  |Connectivity Status         |Display user interface elements to reflect network connectivity status                  |
 |&#9633; |Not Started    |Certificate Settings        |User interface for administrators to view/modify server certificate settings            |
 |&#9633; |Not Started    |Authentication Settings     |User interface for administrators to view/modify account authentication settings        |
