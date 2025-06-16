@@ -488,8 +488,10 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9654; |*In Progress*  |Query Interface             |Present a dynamic user interface for users to construct queries                         |
-| --     |Not Started    |Question Summary            |Convert entered data in the query UI to a human-readable summary                        |
 | --     |Not Started    |Query Data Parsing          |Convert entered data in the query UI to a system-parseable query statement              |
+| --     |Not Started    |Query Saving                |Routines to save a query for future use                                                 |
+| --     |Not Started    |Query Loading               |Routines to load a saved query into Query Builder                                       |
+
 </li>
 
 <li>
