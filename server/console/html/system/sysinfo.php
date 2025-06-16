@@ -22,6 +22,7 @@ else {
 	$uptime = str_replace("\n", "",shell_exec("/usr/bin/uptime -p | /usr/bin/sed -e 's/up //'"));
 	$disks = array_filter(preg_split("/\r\n|\n|\r/",shell_exec("/usr/bin/lsblk | /usr/bin/grep disk | /usr/bin/sed -E 's/^([A-Za-z0-9]+).*$/\\1/'")));
 	$ifaces = shell_exec("/usr/sbin/ifconfig | /usr/bin/grep inet | /usr/bin/grep -v 127.0 | /usr/bin/wc -l");
+	$disksinfo = shell_exec("/usr/bin/lsblk -o MODEL,STATE,VENDOR --nodeps | /usr/bin/grep -v VENDOR | /usr/bin/grep -vE '(DVD|CD)' | /usr/bin/sed -E 's/\s+running /,/g'");
 ?>
 
 <div class="content">
@@ -93,6 +94,10 @@ else {
 							$dcap = substr(shell_exec("lsblk -a -o name,size /dev/$diskval | /usr/bin/grep -E '$diskval\s+' | /usr/bin/sed -E 's/$diskval\s+//'"), 0, -1);
 							$dparts = array_filter(preg_split("/\r\n|\n|\r/",shell_exec("lsblk -a -o name,size,type,mountpoints /dev/$diskval --list | /usr/bin/grep -vE '(NAME|disk)' | /usr/bin/sed -E 's/part \[SWAP\]/swap/; s/\\s+/ /; s/(K|M|G|T)/\\1B/'")));
 							print "\t\t\t\t\t\t<tr><td colspan=\"2\" style=\"text-align: left; color: #444; background-color: transparent; border: 0;\"><u>	Disk $dcnt (/dev/$diskval)</u>:</td></tr>\n";
+							if (is_array($disksinfo)) { $hdinfo = explode(",",$disksinfo[$dcnt-1]); }
+							else { $hdinfo = explode(",",$disksinfo); }
+							print "\t\t\t\t\t\t<tr><td style=\"text-align: left; color: #444; background-color: transparent; border: 0;\">Manufacturer:</td><td style=\"font-weight: normal; color: #444; background-color: transparent; border: 0; text-align: left;\">" . $hdinfo[1] . "</td></tr>\n";
+							print "\t\t\t\t\t\t<tr><td style=\"text-align: left; color: #444; background-color: transparent; border: 0;\">Model:</td><td style=\"font-weight: normal; color: #444; background-color: transparent; border: 0; text-align: left;\">" . $hdinfo[0] . "</td></tr>\n";
 							print "\t\t\t\t\t\t<tr><td style=\"text-align: left; color: #444; background-color: transparent; border: 0;\">Capacity:</td><td style=\"font-weight: normal; color: #444; background-color: transparent; border: 0; text-align: left;\">" . $dcap . "B</td></tr>\n";
 							print "\t\t\t\t\t\t<tr><td style=\"text-align: left; color: #444; background-color: transparent; border: 0;\">Partitions:</td><td style=\"font-weight: normal; color: #444; background-color: transparent; border: 0; text-align: left;\">" . count($dparts) . "</td></tr>\n";
 							foreach ($dparts as $part) {
