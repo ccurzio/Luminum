@@ -21,9 +21,10 @@ if (!isset($_SESSION['SID'])) {
 
 $userquery = mysqli_query($db, "select ROLE from USERS where ENABLED = 1 and ID = (select ID from SESSION where SID = '" . $_SESSION["SID"] . "')");
 $userinfo = $userquery->fetch_assoc();
-
 $acctrole = $userinfo["ROLE"];
 
+$iquery = mysqli_query($db, "select CVAL from SYSTEM.CONFIG where CKEY = 'INVESTIGATE'");
+$invinfo = $iquery->fetch_assoc();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -80,14 +81,15 @@ $acctrole = $userinfo["ROLE"];
 					</button>
 				</a>
 			</div>
-			<div class="dropdown">
-				<a href="/investigate.php">
-					<button class="dropbtn" style="cursor: pointer;">
-						<img src="icons/investigate.png" class="icon">
-						Investigate
-					</button>
-				</a>
-			</div>
+			<?php if ($invinfo["CVAL"] == "Enabled") {
+				print "\t\t\t\t<div class=\"dropdown\">\n";
+				print "\t\t\t\t<a href=\"/investigate.php\">\n";
+				print "\t\t\t\t<button class=\"dropbtn\" style=\"cursor: pointer;\">\n";
+				print "\t\t\t\t\t<img src=\"icons/investigate.png\" class=\"icon\">Investigate</button>\n";
+				print "\t\t\t\t</a>\n";
+				print "\t\t\t</div>\n\n";
+				}
+			?>
 
 			<div class="dropdown">
 				<button class="dropbtn">
