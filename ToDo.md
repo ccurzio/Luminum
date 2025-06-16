@@ -31,7 +31,8 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9633; |Not Started    |Dependency Checking         |Validate that the system has all required dependencies installed                        |
 |&#9654; |*In Progress*  |Pre-Install                 |Create package script to run on package installation prior to copying files into place  |
 |&#9654; |*In Progress*  |Post-Install                |Create package script to run on package installation after copying files into place     |
-|&#9654; |*In Progress*  |Create Package              |Create .deb installation package                                                        |
+|&#9654; |*In Progress*  |Create Server Package       |Create .deb installation package for Luminum Server                                     |
+|&#9633; |Not Started    |Create Core Content Package |Create .deb installation package for Luminum Core Content                               |
 
 
 ### Ubuntu Support
@@ -40,7 +41,8 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9633; |Not Started    |Dependency Checking         |Validate that the system has all required dependencies installed                        |
 |&#9633; |Not Started    |Pre-Install                 |Create package script to run on package installation prior to copying files into place  |
 |&#9633; |Not Started    |Post-Install                |Create package script to run on package installation after copying files into place     |
-|&#9633; |Not Started    |Create Package              |Create .deb installation package                                                        |
+|&#9633; |Not Started    |Create Server Package       |Create .deb installation package for Luminum Server                                     |
+|&#9633; |Not Started    |Create Core Content Package |Create .deb installation package for Luminum Core Content                               |
 
 
 ### RHEL Support
@@ -49,7 +51,8 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9633; |Not Started    |Dependency Checking         |Validate that the system has all required dependencies installed                        |
 |&#9633; |Not Started    |Pre-Install                 |Create package script to run on package installation prior to copying files into place  |
 |&#9633; |Not Started    |Post-Install                |Create package script to run on package installation after copying files into place     |
-|&#9633; |Not Started    |Create Package              |Create .rpm installation package                                                        |
+|&#9633; |Not Started    |Create Server Package       |Create .rpm installation package for Luminum Server                                     |
+|&#9633; |Not Started    |Create Core Content Package |Create .rpm installation package for Luminum Core Content                               |
 
 
 ### CentOS Support
@@ -58,7 +61,8 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9633; |Not Started    |Dependency Checking         |Validate that the system has all required dependencies installed                        |
 |&#9633; |Not Started    |Pre-Install                 |Create package script to run on package installation prior to copying files into place  |
 |&#9633; |Not Started    |Post-Install                |Create package script to run on package installation after copying files into place     |
-|&#9633; |Not Started    |Create Package              |Create .rpm installation package                                                        |
+|&#9633; |Not Started    |Create Server Package       |Create .rpm installation package for Luminum Server                                     |
+|&#9633; |Not Started    |Create Core Content Package |Create .rpm installation package for Luminum Core Content                               |
 
 
 ### Slackware Support
@@ -66,7 +70,8 @@ In order to be accountable to the community - but more importantly to myself - I
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9633; |Not Started    |Dependency Checking         |Validate that the system has all required dependencies installed                        |
 |&#9633; |Not Started    |Post-Install                |Create package script to run on package installation after copying files into place     |
-|&#9633; |Not Started    |Create Package              |Create .txz installation package                                                        |
+|&#9633; |Not Started    |Create Server Package       |Create .txz installation package for Luminum Server                                     |
+|&#9633; |Not Started    |Create Core Content Package |Create .txz installation package for Luminum Core Content                               |
 
 
 ### Docker
