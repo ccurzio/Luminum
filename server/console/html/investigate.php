@@ -1,4 +1,11 @@
-<?php include ("layout/header.php"); ?>
+<?php include ("layout/header.php");
+
+if ($ienabled == "Disabled") {
+	print "<div class=\"content\">\n";
+	print "<h1 style=\"color: red\">Access Denied</h1>\n";
+	}
+else { ?>
+
 <div class="content">
 	<h1>Investigate</h1>
 
@@ -23,5 +30,7 @@
 			?>
 		</div>
 	</div>
+
+<?php } ?>
 
 <?php include ("layout/footer.php"); ?>
