@@ -39,6 +39,10 @@ $cgcount = mysqli_num_rows($cgquery);
 		</table>
 	</div>
 
+	<?php elseif ($_GET["action"] == "new"): ?>
+
+	<h1>Create Computer Group</h1>
+
 	<?php endif; ?>
 
 <?php endif; ?>
