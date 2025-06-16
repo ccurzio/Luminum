@@ -82,7 +82,9 @@ $pkgcount = mysqli_num_rows($pkgquery);
 				<tr><td style="background-color: transparent; border: 0; color: #444;"><select id="contentset" name="contentset" style="font-size: 15px; height: 33px; width: 430px; margin-left: 2px; margin-right: 30px;">
 				<?php
 				while ($csrow = mysqli_fetch_assoc($csets)) {
-					print "<option value=\"" . $csrow["ID"] . "\">" . $csrow["NAME"] . "</option>\n";
+					if ($csrow["NAME"] != "Luminum Core") {
+						print "<option value=\"" . $csrow["ID"] . "\">" . $csrow["NAME"] . "</option>\n";
+						}
 					}
 				?>
 				</select></td><td style="background-color: transparent; border: 0; color: #444;"><select id="category" style="font-size: 15px; height: 33px; width: 430px; margin-left: 2px; margin-right: 30px;">
