@@ -39,6 +39,10 @@ $ugcount = mysqli_num_rows($ugquery);
 		</table>
 	</div>
 
+	<?php elseif ($_GET["action"] == "new"): ?>
+
+	<h1>Create User Group</h1>
+
 	<?php endif; ?>
 
 <?php endif; ?>
