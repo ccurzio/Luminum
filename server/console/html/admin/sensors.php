@@ -21,10 +21,10 @@ $sensorcount = mysqli_num_rows($sensorquery);
 		print "<div style=\"display: block; width: 100%; text-align: right;\">\n";
 		if (isset($acctrole) && $acctrole <= 2) {
 			print "<a href=\"/index.php?view=sensors&action=new\"><button class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\">Create New</button></a>\n";
-			print "<button class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\" disabled=\"disabled\">Modify Selected</button>\n";
-			print "<button class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\" disabled=\"disabled\">Delete Selected</button>\n";
+			print "<button id=\"modify\" class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\" disabled=\"disabled\">Modify Selected</button>\n";
+			print "<button id=\"delete\" class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\" disabled=\"disabled\">Delete Selected</button>\n";
 			}
-		print "<button class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\" disabled=\"disabled\">Get Info</button>\n";
+		print "<button id=\"getinfo\" class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\" disabled=\"disabled\">Get Info</button>\n";
 		print "</div>\n";
 		?>
 		<table style="margin-top: 10px;">
@@ -39,7 +39,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 		<tr><td style="width: 15px;">
 		<?php
 			if ($sensorcount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
-			else { print "<input type=\"checkbox\">"; }
+			else { print "<input id=\"selectall\" type=\"checkbox\" onclick=\"allToggle();\">"; }
 		?>
 		</td><td style="width: 100px;">Name</td><td style="width: 125px;">Description</td><td style="width: 50px;">Supports</td><td style="width: 50px;">Author</td><td style="width: 100px;">Create Date</td><td style="width: 100px;">Last Modification</td><td style="width: 100px;">Modified By</td></tr>
 		<?php
@@ -52,7 +52,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 				if ($row["MAC"] == 1) { $compat .= "<img src=\"/images/macos.png\" alt=\"macOS\" style=\"width: 24px; height: 24px;\">"; }
 				if ($row["LIN"] == 1) { $compat .= "<img src=\"/images/linux.png\" alt=\"Linux\" style=\"width: 24px; height: 24px;\">"; }
 				if ($row["WIN"] == 1) { $compat .= "<img src=\"/images/windows.png\" alt=\"Windows\" style=\"width: 24px; height: 24px;\">"; }
-				print "<tr><td id=\"" . $row["ID"] . "A\" style=\"width: 15px; background-color: #494a69;\"><input id=\"ID" . $row["ID"] . "\" type=\"checkbox\" onclick=\"rowHighlight(" . $row["ID"] . ")\"></td><td id=\"" . $row["ID"] . "B\" style=\"width: 50px; background-color: #494a69; font-weight: normal;\">" . $row["NAME"] . "</td><td id=\"" . $row["ID"] . "C\" style=\"width: 75px; background-color: #494a69; font-weight: normal;\">" . $row["DESCRIPTION"] . "</td><td id=\"" . $row["ID"] . "D\" style=\"background-color: #494a69; font-weight: normal;\">" . $compat . "</td><td id=\"" . $row["ID"] . "E\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["AUTHOR"] . "</td><td id=\"" . $row["ID"] . "F\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $row["CREATED"] . "</td>" . "<td id=\"" . $row["ID"] . "G\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $row["MODIFIED"] . "</td><td id=\"" . $row["ID"] . "H\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["EDITOR"] . "</td></tr>\n";
+				print "<tr><td id=\"" . $row["ID"] . "A\" style=\"width: 15px; background-color: #494a69;\"><input id=\"ID" . $row["ID"] . "\" class=\"sensorrow\" type=\"checkbox\" onclick=\"rowHighlight(" . $row["ID"] . "); allCheck();\"></td><td id=\"" . $row["ID"] . "B\" style=\"width: 50px; background-color: #494a69; font-weight: normal;\">" . $row["NAME"] . "</td><td id=\"" . $row["ID"] . "C\" style=\"width: 75px; background-color: #494a69; font-weight: normal;\">" . $row["DESCRIPTION"] . "</td><td id=\"" . $row["ID"] . "D\" style=\"background-color: #494a69; font-weight: normal;\">" . $compat . "</td><td id=\"" . $row["ID"] . "E\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["AUTHOR"] . "</td><td id=\"" . $row["ID"] . "F\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $row["CREATED"] . "</td>" . "<td id=\"" . $row["ID"] . "G\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $row["MODIFIED"] . "</td><td id=\"" . $row["ID"] . "H\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["EDITOR"] . "</td></tr>\n";
 				}
 			}
 		?>
@@ -177,44 +177,44 @@ tiElement.addEventListener('input', function(event) {
 	});
 
 function caseToggle() {
-	const checkBox = document.getElementById("case");
+	const checkbox = document.getElementById("case");
 
-	if (checkBox.checked == true) { checkBox.checked = false; }
-	else { checkBox.checked = true; }
+	if (checkbox.checked == true) { checkbox.checked = false; }
+	else { checkbox.checked = true; }
 	}
 
 function csToggle() {
-	const checkBox = document.getElementById("split");
+	const checkbox = document.getElementById("split");
 
-	if (checkBox.checked == true) { checkBox.checked = false; }
-	else { checkBox.checked = true; }
+	if (checkbox.checked == true) { checkbox.checked = false; }
+	else { checkbox.checked = true; }
 	toggleSplit();
 	}
 
 function paramToggle() {
-	const checkBox = document.getElementById("useparams");
+	const checkbox = document.getElementById("useparams");
 
-	if (checkBox.checked == true) { checkBox.checked = false; }
-	else { checkBox.checked = true; }
+	if (checkbox.checked == true) { checkbox.checked = false; }
+	else { checkbox.checked = true; }
 	}
 
 function labelToggle(editor) {
 	if (editor == 'Linux') { var cbSelect = 'leselect'; }
 	else if (editor == 'Mac') { var cbSelect = 'meselect'; }
 	else if (editor == 'Windows') { var cbSelect = 'weselect'; }
-	const checkBox = document.getElementById(cbSelect);
+	const checkbox = document.getElementById(cbSelect);
 
-	if (checkBox.checked == true) { checkBox.checked = false; }
-	else { checkBox.checked = true; }
+	if (checkbox.checked == true) { checkbox.checked = false; }
+	else { checkbox.checked = true; }
 	editorToggle(editor);
 	}
 
 function toggleSplit() {
 	const delements = document.getElementsByClassName("delform");
-	const checkBox = document.getElementById("split");
+	const checkbox = document.getElementById("split");
 	var len = delements.length;
 
-	if (checkBox.checked == true) { var ol = 1; }
+	if (checkbox.checked == true) { var ol = 1; }
 	else { var ol = 0; }
 
 	for (var i=0 ; i<len; i++) {
@@ -281,18 +281,18 @@ function wsformat(value) {
 
 function editorToggle(edsel) {
 	if (edsel == "Linux") {
-		const checkBox = document.getElementById('leselect');
-		if (checkBox.checked == true) { enableEditor('Linux'); }
+		const checkbox = document.getElementById('leselect');
+		if (checkbox.checked == true) { enableEditor('Linux'); }
 		else { disableEditor('Linux'); }
 		}
 	else if (edsel == "Mac") {
-		const checkBox = document.getElementById('meselect');
-		if (checkBox.checked == true) { enableEditor('Mac'); }
+		const checkbox = document.getElementById('meselect');
+		if (checkbox.checked == true) { enableEditor('Mac'); }
 		else { disableEditor('Mac'); }
 		}
 	else if (edsel == "Windows") {
-		const checkBox = document.getElementById('weselect');
-		if (checkBox.checked == true) { enableEditor('Windows'); }
+		const checkbox = document.getElementById('weselect');
+		if (checkbox.checked == true) { enableEditor('Windows'); }
 		else { disableEditor('Windows'); }
 		}
 	}
@@ -390,3 +390,82 @@ disableEditor('Windows');
 		<?php endif; ?>
 	<?php endif; ?>
 <?php endif; ?>
+
+<script>
+function rowHighlight(idnum) {
+	var checkbox = document.getElementById("ID" + idnum);
+	const checkboxes = document.querySelectorAll('input[class="sensorrow"]');
+	var checkTrigger = 0;
+
+	checkboxes.forEach(checkbox => {
+		if (checkbox.checked == true) { checkTrigger++; }
+		});
+
+	if (checkbox.checked == true) {
+		var bgcolor = "#686993";
+		var buttontoggle = false;
+		}
+	else {
+		var bgcolor = "#494a69";
+		if (checkTrigger == 0) { var buttontoggle = "disabled"; }
+		}
+
+	if (checkTrigger > 1) {
+		document.getElementById("getinfo").disabled = "disabled";
+		document.getElementById("modify").disabled = "disabled";
+		}
+	else {
+		document.getElementById("getinfo").disabled = buttontoggle;
+		if (document.getElementById(idnum + "E").innerText != "lumadmin") {
+			document.getElementById("modify").disabled = buttontoggle;
+			}
+		}
+
+	if (checkTrigger == checkboxes.length) {
+		document.getElementById("delete").disabled = "disabled";
+		}
+	else {
+		if (document.getElementById(idnum + "E").innerText != "lumadmin") {
+			document.getElementById("delete").disabled = buttontoggle;
+			}
+		}
+
+	document.getElementById(idnum + "A").style.backgroundColor = bgcolor;
+	document.getElementById(idnum + "B").style.backgroundColor = bgcolor;
+	document.getElementById(idnum + "C").style.backgroundColor = bgcolor;
+	document.getElementById(idnum + "D").style.backgroundColor = bgcolor;
+	document.getElementById(idnum + "E").style.backgroundColor = bgcolor;
+	document.getElementById(idnum + "F").style.backgroundColor = bgcolor;
+	document.getElementById(idnum + "G").style.backgroundColor = bgcolor;
+	document.getElementById(idnum + "H").style.backgroundColor = bgcolor;
+	}
+
+function allToggle() {
+	const allCheckbox = document.getElementById("selectall");
+	const checkboxes = document.querySelectorAll('input[class="sensorrow"]');
+
+	checkboxes.forEach(checkbox => {
+		checkbox.checked = allCheckbox.checked;
+		var rowId = removeLetters(checkbox.id);
+		rowHighlight(rowId);
+		});
+	}
+
+function allCheck() {
+	const checkboxes = document.querySelectorAll('input[class="sensorrow"]');
+	var checkTrigger = 0;
+
+	checkboxes.forEach(checkbox => {
+		if (checkbox.checked == true) { checkTrigger++; }
+		});
+
+	if (checkTrigger == checkboxes.length) {
+		document.getElementById("selectall").checked = "checked";
+		}
+	else { document.getElementById("selectall").checked = false; }
+	}
+
+function removeLetters(str) {
+	return str.replace(/[a-zA-Z]/g, '');
+	}
+</script>
