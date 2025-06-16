@@ -183,6 +183,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 | --     |Not Started    |Configuration Changes       |Generate log entries for changes to the system configuration                            |
+| --     |Not Started    |Health Check                |Generate log entries for periodic system health checks                                  |
 | --     |Not Started    |User sign-in/sign-out       |Generate log entries for instances of user login/logout                                 |
 | --     |Not Started    |Invalid Credentials         |Generate log entries for failed login attempts                                          |
 | --     |Not Started    |Navigation                  |Generate log entries for user page navigation                                           |
