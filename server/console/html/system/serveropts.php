@@ -26,6 +26,7 @@ else {
 		else if ($row["CKEY"] == "PASSKEYS") { $passkeys = $row["CVAL"]; }
 		else if ($row["CKEY"] == "USERLOGGING") { $userlogging = $row["CVAL"]; }
 		else if ($row["CKEY"] == "INVESTIGATE") { $investigate = $row["CVAL"]; }
+		else if ($row["CKEY"] == "OWNEREMAIL") { $owner = $row["CVAL"]; }
 		}
 
 	mysqli_select_db($db, "CONTENT") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
@@ -58,6 +59,7 @@ else {
 
 		<div id="General" class="configtab">
 			<table style="width: 50%; border: 0; margin-left: auto; margin-right: auto; margin-top: 15px; margin-bottom: 15px;">
+			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Administrator Email Address:</td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><input id="adminemail" type="text" style="width: 200px; font-size: 15px; padding: 3px; margin-top: 0;" maxlength="128" onchange="formCheck();" value="<?php print $owner; ?>"> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"><span class="tooltiptext">Email address provided to users to contact with questions or issues regarding Luminum Server.</span></td></tr>
 			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Minimum Action Target Confirmation: </td><td style="color: #444; background-color: transparent; border: 0;"><select id="minactconf" style="width: 175px; height: 28px;" onchange="formCheck();">
 			<?php if ($targetconf == "Enabled") {
 				print "\t\t\t\t<option value=\"enabled\" selected=\"selected\">Enabled</option><option value=\"disabled\">Disabled</option>\n";
@@ -222,6 +224,7 @@ const srElement = document.getElementById('srevcnt');
 const prElement = document.getElementById('prevcnt');
 const mpElement = document.getElementById('passlen');
 const iaElement = document.getElementById('inactiveint');
+const owElement = document.getElementById('adminemail');
 
 mtElement.addEventListener('input', function(event) {
 	document.getElementById('actconfclients').value = numbersOnly(document.getElementById('actconfclients').value);
@@ -258,7 +261,14 @@ iaElement.addEventListener('input', function(event) {
 	formCheck();
 	});
 
+owElement.addEventListener('input', function(event) { formCheck(); });
+
 function numbersOnly(str) { return str.replace(/[^0-9]/g, ''); }
+
+function isValidEmail(email) {
+	const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+	return emailRegex.test(email);
+	}
 
 function resetForm() {
 	setTimeout(function() {
@@ -374,7 +384,11 @@ function formCheck() {
 
 	document.getElementById("save").disabled = false;
 
-	console.log(document.getElementById("minactconf").value);
+	if (!isValidEmail(document.getElementById("adminemail").value)) {
+		document.getElementById("save").disabled = true;
+		document.getElementById("adminemail").classList.add('textError');
+		}
+	else { document.getElementById("adminemail").classList.remove('textError'); }
 
 	if (document.getElementById("minactconf").value == "enabled" && document.getElementById("actconfclients").value == 0) {
 		document.getElementById("save").disabled = true;
