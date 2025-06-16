@@ -22,7 +22,7 @@ Keep in mind that Luminum is still in the initial development stages, so it does
 - **Efficiency:** Analyzes and logs various aspects of endpoint performance
 - **Integrity:** Provides file integrity monitoring on endpoints
 - **Inventory:** Allows administrators to compile a full inventory of both network-connected devices as well as software installed on those devices
-- **Policy:** Enforcement of endpoint security and system management policies
+- **Policy:** Enforcement of endpoint security and system management policies including firewall configuration, IDS/IPS, and IoCs
 
 The server package is supported primarily under Debian Linux, however I am exploring support for additional distributions as well. I am also strongly considering creating a Docker container for the server-side application. The endpoint clients will run on a range of operating systems and platforms including Linux (Debian, CentOS/Red Hat, Slackware, etc.), macOS, and Windows. I'm tentatively looking at supporting OpenBSD and FreeBSD as well, though I have far less BSD experience (limited to FreeBSD) than experience with Linux/Mac/Windows. AIX support is also planned (eventually probably possibly maybe hopefully) because AIX is getting left behind when it comes to security. 
 
