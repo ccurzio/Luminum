@@ -97,8 +97,8 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#10003;|**Completed**  |Parameter Functions         |Create functions to set server configuration parameters                                 |
-|&#9654; |*In Progress*  |DB Configuration Values     |Create key/value pairs for storing primary configuration options in the database        |
-|&#9654; |*In Progress*  |File Configuration Values   |Create key/value pairs for storing base configuration options in a config file          |
+|&#10003;|**Completed**  |DB Configuration Values     |Create key/value pairs for storing primary configuration options in the database        |
+|&#10003;|**Completed**  |File Configuration Values   |Create key/value pairs for storing base configuration options in a config file          |
 | --     |Not Started    |Configuration Export        |Routines to export and save the server configuration                                    |
 
 <ul>
