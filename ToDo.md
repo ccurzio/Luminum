@@ -20,7 +20,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9654; |*In Progress*  |Key Setup                   |Routines to create or import public/private keys                                        |
 |&#9633; |Not Started    |Database Setup              |Automatically configure the database software and set root password                     |
 |&#9633; |Not Started    |Database Structure          |Automatically create Luminum Server databases and tables                                |
-|&#9633; |Not Started    |Database User Accounts      |Automatically create necessary Luminum Server database user accounts with permissions   |
+|&#9633; |Not Started    |Database User Accounts      |Automatically create database user accounts with permissions                            |
 |&#9633; |Not Started    |nginx Configuration         |Routines to automatically configure the nginx webserver software for Luminum            |
 |&#9633; |Not Started    |PHP Configuration           |Routines to configure PHP running under nginx for Luminum                               |
 
