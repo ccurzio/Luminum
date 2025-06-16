@@ -2,7 +2,7 @@
 mysqli_select_db($db, "CONTENT") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
 
 $starttime = microtime(true);
-$sensorquery = mysqli_query($db, "select ID,NAME,DESCRIPTION,!ifnull(MSCRIPT,1) as MAC,!ifnull(LSCRIPT,1) as LIN,!ifnull(WSCRIPT,1) as WIN,AUTHOR,CREATED,MODIFIED,EDITOR from SENSORS order by ID");
+$sensorquery = mysqli_query($db, "select s.ID,s.NAME,s.DESCRIPTION,!ifnull(s.MSCRIPT,1) as MAC,!ifnull(s.LSCRIPT,1) as LIN,!ifnull(s.WSCRIPT,1) as WIN,u.USERNAME as AUTHOR,s.CREATED,s.MODIFIED,s.EDITOR from SENSORS s left join AUTH.USERS u ON s.AUTHOR = u.ID order by NAME;");
 $csets = mysqli_query($db, "select ID,NAME from SETS where NAME != 'Luminum Core' order by NAME");
 $endtime = microtime(true);
 
@@ -41,14 +41,18 @@ $sensorcount = mysqli_num_rows($sensorquery);
 			if ($sensorcount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
 			else { print "<input type=\"checkbox\">"; }
 		?>
-		</td><td style="width: 200px;">Name</td><td>Description</td><td style="width: 100px;">Supports</td><td style="width: 100px;">Author</td><td style="width: 175px;">Create Date</td><td style="width: 175px;">Last Modification</td><td style="width: 100px;">Modified By</td></tr>
+		</td><td style="width: 100px;">Name</td><td style="width: 125px;">Description</td><td style="width: 50px;">Supports</td><td style="width: 50px;">Author</td><td style="width: 100px;">Create Date</td><td style="width: 100px;">Last Modification</td><td style="width: 100px;">Modified By</td></tr>
 		<?php
 		if ($sensorcount == 0) {
 			print "<tr><td colspan=\"8\" style=\"text-align: center; background-color: #494a69; font-weight: normal; font-style: italic;\">No Results</td></tr>\n";
 			}
 		else {
 			while($row = mysqli_fetch_assoc($sensorquery)) {
-				print "<tr><td id=\"" . $row["ID"] . "A\" style=\"width: 15px; background-color: #494a69;\"><input id=\"ID" . $row["ID"] . "\" type=\"checkbox\" onclick=\"rowHighlight(" . $row["ID"] . ")\"></td><td id=\"" . $row["ID"] . "B\" style=\"width: 50px; background-color: #494a69; font-weight: normal;\">" . $row["NAME"] . "</td><td id=\"" . $row["ID"] . "C\" style=\"width: 75px; background-color: #494a69; font-weight: normal;\">" . $row["DESCRIPTION"] . "</td><td id=\"" . $row["ID"] . "D\" style=\"width: 120px; background-color: #494a69; font-weight: normal;\">" . "COMPAT" . "</td><td id=\"" . $row["ID"] . "E\" style=\"background-color: #494a69; font-weight: normal;\">" . "AUTHOR" . "</td><td id=\"" . $row["ID"] . "F\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $row["CREATED"] . "</td>" . "<td id=\"" . $row["ID"] . "G\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $row["MODIFIED"] . "</td><td id=\"" . $row["ID"] . "H\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["EDITOR"] . "</td></tr>\n";
+				$compat = "";
+				if ($row["MAC"] == 1) { $compat .= "<img src=\"/images/macos.png\" alt=\"macOS\" style=\"width: 24px; height: 24px;\">"; }
+				if ($row["LIN"] == 1) { $compat .= "<img src=\"/images/linux.png\" alt=\"Linux\" style=\"width: 24px; height: 24px;\">"; }
+				if ($row["WIN"] == 1) { $compat .= "<img src=\"/images/windows.png\" alt=\"Windows\" style=\"width: 24px; height: 24px;\">"; }
+				print "<tr><td id=\"" . $row["ID"] . "A\" style=\"width: 15px; background-color: #494a69;\"><input id=\"ID" . $row["ID"] . "\" type=\"checkbox\" onclick=\"rowHighlight(" . $row["ID"] . ")\"></td><td id=\"" . $row["ID"] . "B\" style=\"width: 50px; background-color: #494a69; font-weight: normal;\">" . $row["NAME"] . "</td><td id=\"" . $row["ID"] . "C\" style=\"width: 75px; background-color: #494a69; font-weight: normal;\">" . $row["DESCRIPTION"] . "</td><td id=\"" . $row["ID"] . "D\" style=\"background-color: #494a69; font-weight: normal;\">" . $compat . "</td><td id=\"" . $row["ID"] . "E\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["AUTHOR"] . "</td><td id=\"" . $row["ID"] . "F\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $row["CREATED"] . "</td>" . "<td id=\"" . $row["ID"] . "G\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $row["MODIFIED"] . "</td><td id=\"" . $row["ID"] . "H\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["EDITOR"] . "</td></tr>\n";
 				}
 			}
 		?>
@@ -103,13 +107,13 @@ $sensorcount = mysqli_num_rows($sensorquery);
 		<div style="float: left; margin-left: 10px;">
 			<table style="width: 250px; margin-left: auto; margin-right: auto; margin-top: 20px;">
 			<tr><td style="width: 80px;">OS</td><td>Enabled</td><td style="text-align: center; width: 80px;">Size</td></tr>
-			<tr><td style="background-color: #494a69; font-weight: normal;">Linux</td><td id="len" style="text-align: center; background-color: #494a69; font-weight: normal;"><span style="font-weight: bold; font-size: 13px; color: #cf1104;">&#10060;</span></td><td id="lsize" style="background-color: #494a69; font-weight: normal;"></td></tr>
-			<tr><td style="background-color: #494a69; font-weight: normal;">Mac</td><td id="men" style="text-align: center; background-color: #494a69; font-weight: normal;"><span style="font-weight: bold; font-size: 13px; color: #cf1104;">&#10060;</span></td><td id="msize" style="background-color: #494a69; font-weight: normal;"></tr>
-			<tr><td style="background-color: #494a69; font-weight: normal;">Windows</td><td id="wen" style="text-align: center; background-color: #494a69; font-weight: normal;"><span style="font-weight: bold; font-size: 13px; color: #cf1104;">&#10060;</span></td><td id="wsize" style="background-color: #494a69; font-weight: normal;"></tr>
+			<tr><td style="background-color: #494a69; font-weight: normal;">Linux</td><td id="len" style="text-align: center; background-color: #494a69; font-weight: normal;"><span style="font-weight: bold; font-size: 13px; color: #cf1104;">&#10060;</span></td><td id="lsize" style="background-color: #494a69; font-weight: normal; text-align: center;"></td></tr>
+			<tr><td style="background-color: #494a69; font-weight: normal;">Mac</td><td id="men" style="text-align: center; background-color: #494a69; font-weight: normal;"><span style="font-weight: bold; font-size: 13px; color: #cf1104;">&#10060;</span></td><td id="msize" style="background-color: #494a69; font-weight: normal; text-align: center;"></td></tr>
+			<tr><td style="background-color: #494a69; font-weight: normal;">Windows</td><td id="wen" style="text-align: center; background-color: #494a69; font-weight: normal;"><span style="font-weight: bold; font-size: 13px; color: #cf1104;">&#10060;</span></td><td id="wsize" style="background-color: #494a69; font-weight: normal; text-align: center;"></td></tr>
 			</table>
 		</div>
 
-		<div class="module-content" style="padding: 0 1px 1px 0; width: 600px; margin-left: auto; margin-right: auto; margin-top: 40px;">
+		<div class="module-content" style="padding: 0 1px 1px 0; width: 700px; margin-left: auto; margin-right: auto; margin-top: 30px;">
 			<div class="tabbar tabbarback">
 				<button type="button" class="tabbaritem tabbutton tablink tabbarsel" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Linux')">Linux</button>
 				<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'macOS')">macOS</button>
@@ -120,10 +124,11 @@ $sensorcount = mysqli_num_rows($sensorquery);
 				<div style="text-align: left; color: #444;">
 					<input id="leselect" type="checkbox" style="margin-left: 8px;" onclick="editorToggle('Linux');"> <span style="cursor: normal; user-select: none;" onclick="labelToggle('Linux')">Enabled</span> &nbsp;&nbsp;&nbsp;&nbsp; <span id="lstlabel" style="color: #777; user-select: none;">Type: </span><select id="lstype" onchange="lsformat(document.getElementById('lstype').value);" disabled="disabled"><option value="shell">Shell Script</option><option value="perl">Perl</option><option value="python">Python</option></select>
 				</div>
-				<div id="leditor" style="margin-top: 7px;"></div>
+				<div id="leditor" style="margin-top: 7px; width: 100%;"></div>
 				<script src="/layout/src/ace.js" type="text/javascript" charset="utf-8"></script>
 				<script>
 					var leditor = ace.edit("leditor");
+					leditor.setShowPrintMargin(false);
 					leditor.getSession().setMode("ace/mode/sh");
 					leditor.getSession().on('change', function() {
 						document.getElementById('lsize').innerHTML = formatBytes(leditor.session.getValue().length,1);
@@ -135,9 +140,10 @@ $sensorcount = mysqli_num_rows($sensorquery);
 				<div style="text-align: left; color: #444;">
 					<input id="meselect" type="checkbox" style="margin-left: 8px;" onclick="editorToggle('Mac');"> <span style="cursor: normal; user-select: none;" onclick="labelToggle('Mac')">Enabled</span> &nbsp;&nbsp;&nbsp;&nbsp; <span id="mstlabel" style="color: #777; user-select: none;">Type: </span><select id="mstype" onchange="msformat(document.getElementById('mstype').value);" disabled="disabled"><option value="shell">Shell Script</option><option value="perl">Perl</option><option value="python">Python</option></select>
 				</div>
-				<div id="meditor" style="margin-top: 7px;"></div>
+				<div id="meditor" style="margin-top: 7px; width: 100%;"></div>
 				<script>
 					var meditor = ace.edit("meditor");
+					meditor.setShowPrintMargin(false);
 					meditor.getSession().setMode("ace/mode/sh");
 					meditor.getSession().on('change', function() {
 						document.getElementById('msize').innerHTML = formatBytes(meditor.session.getValue().length,1);
@@ -149,9 +155,10 @@ $sensorcount = mysqli_num_rows($sensorquery);
 				<div style="text-align: left; color: #444;">
 					<input id="weselect" type="checkbox" style="margin-left: 8px;" onclick="editorToggle('Windows');"> <span style="cursor: normal; user-select: none;" onclick="labelToggle('Windows');">Enabled</span> &nbsp;&nbsp;&nbsp;&nbsp; <span id="wstlabel" style="color: #777; user-select: none;">Type: </span><select id="wstype" onchange="wsformat(document.getElementById('wstype').value)" disabled="disabled"><option value="powershell">PowerShell</option><option value="vbscript">VBScript</option><option value="batch">Batch File</option><option value="python">Python</option></select>
 				</div>
-				<div id="weditor" style="margin-top: 7px;"></div>
+				<div id="weditor" style="margin-top: 7px; width: 100%;"></div>
 				<script>
 					var weditor = ace.edit("weditor");
+					weditor.setShowPrintMargin(false);
 					weditor.getSession().setMode("ace/mode/powershell");
 					weditor.getSession().on('change', function() {
 						document.getElementById('wsize').innerHTML = formatBytes(weditor.session.getValue().length,1);
