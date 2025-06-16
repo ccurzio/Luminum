@@ -23,6 +23,7 @@ my $LPORT;
 my $WADDR;
 my $WPORT;
 
+my $mainlabel;
 my $breaklabel;
 my $introlabel;
 my $abortlabel;
@@ -41,6 +42,9 @@ my $newconfsc;
 
 if ($ENV{LANG} =~ /en_/ || $ENV{LANG} eq "") {
 	$lang = "EN";
+	$mainlabel = "Luminum Server Setup\n";
+	$mainlabel .= "-" x length($mainlabel);
+	chop($mainlabel);
 	$nextbutton = " Next > ";
 	$backbutton = " < Back ";
 	$exitbutton = " Cancel ";
@@ -58,6 +62,9 @@ if ($ENV{LANG} =~ /en_/ || $ENV{LANG} eq "") {
 	}
 elsif ($ENV{LANG} =~ /de_/) {
 	$lang = "DE";
+	$mainlabel = "Luminum Server Aufstellen";
+	$mainlabel .= "-" x length($mainlabel);
+	chop($mainlabel);
 	$nextbutton = " Nächste > ";
 	$backbutton = "< Zurück ";
 	$exitbutton = " Stornieren ";
@@ -75,6 +82,9 @@ elsif ($ENV{LANG} =~ /de_/) {
 	}
 elsif ($ENV{LANG} =~ /it_/) {
 	$lang = "IT";
+	$mainlabel = "Luminum Server Impostare";
+	$mainlabel .= "-" x length($mainlabel);
+	chop($mainlabel);
 	$nextbutton = " Prossimo > ";
 	$backbutton = "< Precedente ";
 	$exitbutton = " Cancellare ";
@@ -92,6 +102,9 @@ elsif ($ENV{LANG} =~ /it_/) {
 	}
 elsif ($ENV{LANG} =~ /fr_/) {
 	$lang = "FR";
+	$mainlabel = "Luminum Server Installation";
+	$mainlabel .= "-" x length($mainlabel);
+	chop($mainlabel);
 	$nextbutton = " Suivant > ";
 	$backbutton = "< Précédent ";
 	$exitbutton = " Annuler ";
@@ -109,6 +122,9 @@ elsif ($ENV{LANG} =~ /fr_/) {
 	}
 elsif ($ENV{LANG} =~ /es_/) {
 	$lang = "ES";
+	$mainlabel = "Luminum Server Configuración";
+	$mainlabel .= "-" x length($mainlabel);
+	chop($mainlabel);
 	$nextbutton = " Próximo >";
 	$backbutton = "< Previo ";
 	$exitbutton = " Cancelar ";
@@ -136,7 +152,7 @@ if ($text == 0) {
 	$win = $cui->add('base', 'Window');
 	$label = $win->add('setuplabel', 'Label',
 		-bg	=> "blue",
-		-text	=> "Luminum Server Setup\n--------------------",
+		-text	=> "$mainlabel",
 		-bold	=> 1,
 		-width	=> -1,
 		-height	=> -1,
@@ -196,7 +212,7 @@ else {
 		};
 	print "\e[?25l";
 	system(`/usr/bin/which clear`);
-	print "Luminum Server Setup\n--------------------\n\n";
+	print "$mainlabel\n\n";
 	print "$introlabel\n\n";
 	print "$breaklabel\n\n";
 	print "[$nextbutton]";
@@ -206,7 +222,7 @@ else {
 	print "\e[?25h";
 	ReadMode ('normal');
 	system(`/usr/bin/which clear`);
-	print "Luminum Server Setup\n--------------------\n\n";
+	print "$mainlabel\n\n";
 
 	if (-e "/opt/Luminum/LuminumServer/config/server.conf.db") {
 		my $prompt = 0;
@@ -228,9 +244,11 @@ else {
 		if (lc($useconf) eq lc($reconfsc)) {
 			print "$iconflabel\...";
 			}
-		elsif (lc($useconf) eq lc($newconfsc)) {
 
-			}
+		print "\e[?25h";
+		ReadMode ('normal');
+		system(`/usr/bin/which clear`);
+		print "$mainlabel\n\n";
 		}
 	}
 
