@@ -143,7 +143,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#10003;|**Completed**  |SID            |                           |The unique Luminum Server ID                                                     |
 |&#10003;|**Completed**  |SVRPATH        |/opt/Luminum/LuminumServer |The installation path for Luminum Server                                         |
 |&#10003;|**Completed**  |DBPASS         |                           |The password for the "Luminum" database account                                  |
-|&#10003;|**Completed**  |LADDR          |                           |The IP address of the interface to be used by the network listener               |
+|&#10003;|**Completed**  |LADDR          |                           |The IP address to be used by the network listener                                |
 |&#10003;|**Completed**  |LPORT          |10465                      |Port number for the network listener                                             |
 |&#10003;|**Completed**  |WADDR          |                           |The IP address of the interface to be used by the HTTPS Web Console              |
 |&#10003;|**Completed**  |WPORT          |443                        |Port number for access to the HTTPS Web Console                                  |
