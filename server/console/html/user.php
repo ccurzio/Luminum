@@ -53,7 +53,12 @@
 				else {
 					print "<td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\">Two-Factor Authentication: <div class=\"tooltip\"><img src=\"/icons/help.png\" style=\"width: 15px; height: 15px; opacity: 0.33; vertical-align: top;\"><span class=\"tooltiptext\">Enabling 2FA requires your account to be enrolled in at least one authentication method. Selecting one or more methods will begin the enrollment process once you've entered your password and saved changes to your account.<br><br>NOTE: Deselecting a method and saving changes will revoke your enrollment for that method.<br><br>NOTE: Disabling 2FA and saving changes while enrolled in any authentication methods will retain those enrollments.</span></td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; vertical-align: top;\" rowspan=\"4\">\n";
 					if ($tfua == "False") {
-						print "<select id=\"2FA\" style=\"height: 28px; width: 200px; margin-top: 3px; margin-left: 3px;\" tabindex=\"8\" onchange=\"tfdisablereset(); formCheck();\"><option value=\"enabled\">Enabled</option><option value=\"disabled\" selected=\"selected\">Disabled</option></select><br>\n";
+						if ($userinfo["SYS2FA"] == "Required") {
+							print "<select id=\"2FA\" style=\"pointer-events: none; opacity: 0.5; height: 28px; width: 200px; margin-top: 3px; margin-left: 3px;\" tabindex=\"8\" onchange=\"tfdisablereset(); formCheck();\"><option value=\"enabled\" selected=\"selected\">Required</option></select><br>\n";
+							}
+						else {
+							print "<select id=\"2FA\" style=\"height: 28px; width: 200px; margin-top: 3px; margin-left: 3px;\" tabindex=\"8\" onchange=\"tfdisablereset(); formCheck();\"><option value=\"enabled\">Enabled</option><option value=\"disabled\" selected=\"selected\">Disabled</option></select><br>\n";
+							}
 						print "<div style=\"margin-top: 15px;\">";
 						if ($tfapp == "True") { print "<input type=\"checkbox\" onclick=\"tfmcheck();\"> <span id=\"applabel\" style=\"style=\"color: #444; cursor: pointer; user-select: none;\" onclick=\"appToggle();\">Authenticator</span><br>\n"; }
 						else { print "<input id=\"app2fa\" type=\"checkbox\" disabled=\"disabled\"> <span id=\"applabel\" style=\"color: #777; cursor: normal; user-select: none;\" onclick=\"appToggle();\">Authenticator</span><br>\n"; }
@@ -93,6 +98,7 @@ window.onload = function() {
 	document.getElementById("app2fa").addEventListener('change', (event) => { tfmcheck(); })
 	document.getElementById("sms2fa").addEventListener('change', (event) => { tfmcheck(); })
 	document.getElementById("eml2fa").addEventListener('change', (event) => { tfmcheck(); })
+	formCheck();
 	}
 
 function resetForm() {
