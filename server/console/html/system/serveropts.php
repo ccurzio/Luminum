@@ -420,7 +420,7 @@ function formCheck() {
 		}
 	else { document.getElementById('prevcnt').classList.remove('textError'); }
 
-	if (document.getElementById('passlen').value == 0 || document.getElementById('passlen').value == "") {
+	if (document.getElementById('passlen').value == 0 || document.getElementById('passlen').value == "" || document.getElementById('passlen').value < 8) {
 		document.getElementById("save").disabled = true;
 		document.getElementById('passlen').classList.add('textError');
 		}
