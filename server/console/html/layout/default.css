@@ -301,11 +301,14 @@ body h1 {
 
 .tabbutton:hover{
 	color: #fff !important;
-	background-color: #5084bf !important;
+	/* background-color: #5084bf !important; */
+	background-color: #6c91ba !important;
 	}
 
 .tabbarsel {
-	background-color: #84afe0 !important;
+	color: #fff !important;
+	/* background-color: #84afe0 !important; */
+	background-color: #426ea1 !important;
 	}
 
 .configtab {
