@@ -149,6 +149,23 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#10003;|**Completed**  |WPORT          |443                        |Port number for access to the HTTPS Web Console                                  |
 
 </li>
+
+<li>
+
+#### Licensing
+|        |Status         |Task                        |Description                                                                             |
+|--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+| --     |Not Started    |License Key Generation      |Routines to generate Luminum Server license keys                                        |
+| --     |Not Started    |Lumy License Generation     |Routines to generate Lumy module license keys                                           |
+| --     |Not Started    |License Installation        |Server mechanisms to accept and install Luminum Server licenses                         |
+| --     |Not Started    |License Validation          |Routines to validate server licensing with Luminum, LLC                                 |
+| --     |Not Started    |Lumy License Validation     |Routines to validate Lumy module licensing with Luminum, LLC                            |
+| --     |Not Started    |Expiration Processing       |Routines to lock/downgrade Luminum Server when license expires                          |
+| --     |Not Started    |Draft Community EULA        |End-user license agreement for Luminum Server Community Edition (CE)                    |
+| --     |Not Started    |Draft Commercial EULA       |End-user license agreement for Luminum Server Enterprise                                |
+
+
+</li>
 </ul>
 
 ### Communication
@@ -336,12 +353,14 @@ In order to be accountable to the community - but more importantly to myself - I
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9654; |*In Progress*  |Base UI Framework           |Create the consistent foundational elements for the web user interface                  |
 |&#9654; |*In Progress*  |Include Architecture        |Rebuild include system for user interface code block elements                           |
+|&#10003;|**Completed**  |Console Header              |Dynamic UI header with logo and dropdown menus                                          |
+|&#10003;|**Completed**  |Console Footer              |Dynamic UI footer with session and system information                                   |
 | --     |Not Started    |Table Generation Functions  |Functions to automatically generate HTML tables on-demand                               |
 | --     |Not Started    |Form Generation Functions   |Functions to automatically generate HTML forms on-demand                                |
 | --     |Not Started    |Element Generation Functions|Functions to automatically generate HTML elements on-demand                             |
 |&#10003;|**Completed**  |Invalid Input Highlight     |Create stylesheet definitions highlighting fields with invalid values                   |
 |&#9654; |*In Progress*  |Overlay Message             |Display a forced-focus message window above a full-screen overlay                       |
-|&#10003;|**Completed**  |Lumy Menus                  |Dynamically inject UI navigation options for enabled Lumy modules                       |
+|&#10003;|**Completed**  |Lumy Menus                  |Dynamically inject UI navigation header options for enabled Lumy modules                |
 | --     |Not Started    |Asynchronous Content Updates|Routines to update page content without refreshing                                      |
 | --     |Not Started    |Stylesheet Consolidation    |Consolidate style definitions and eliminate redundancies                                |
 | --     |Not Started    |Per-User Stylesheets        |Support for user-defined stylesheets                                                    |
@@ -437,10 +456,11 @@ In order to be accountable to the community - but more importantly to myself - I
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#10003;|**Completed**  |Luminum Information         |User interface to display general Luminum server information                            |
 |&#10003;|**Completed**  |CPU Information             |User interface to display server CPU information                                        |
+|&#10003;|**Completed**  |CPU Utilization             |Rolling line graph showing server CPU usage over the last 4 hours                       |
 |&#10003;|**Completed**  |Storage Information         |User interface to display server disk information                                       |
 | --     |Not Started    |Memory Information          |User interface to display server memory information                                     |
 | --     |Not Started    |Device Information          |User interface to display server connected device information                           |
-|&#9654; |*In Progress*  |Network Information         |User interface to display server network interface information                          |
+| --     |Not Started    |Network Information         |User interface to display server network interface information                          |
 |&#10003;|**Completed**  |User Accounts               |Presents a table displaying information about all user accounts                         |
 </li>
 
@@ -566,6 +586,21 @@ In order to be accountable to the community - but more importantly to myself - I
 | --     |Not Started    |Profile Configuration       |User interface for administrators to create/modify Policy profiles                      |
 </li>
 </ul>
+
+
+### Support
+
+<ul>
+<li>
+
+#### Documentation
+|        |Status         |Task                        |Description                                                                             |
+|--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+| --     |Not Started    |
+
+</li>  
+</ul>
+
 
 <br>
 <br>
