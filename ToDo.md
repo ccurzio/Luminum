@@ -168,6 +168,17 @@ In order to be accountable to the community - but more importantly to myself - I
 </li>
 </ul>
 
+### Health
+|        |Status         |Task                        |Description                                                                             |
+|--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+| --     |Not Started    |Luminum Protection          |Periodic scanning to detect changes to critical Luminum Server files                    |
+| --     |Not Started    |Kernel Protection           |Periodic scanning to detect changes to the system kernel                                |
+| --     |Not Started    |Service Validation          |Periodic scanning to ensure all necessary/configured services are running               |
+| --     |Not Started    |Disk Checking               |Periodic checking for available disk space                                              |
+| --     |Not Started    |CPU Checking                |Periodic checking for extended high CPU utilization                                     |
+| --     |Not Started    |Memory Checking             |Periodic checking for extended high memory utilization                                  |
+
+
 ### Communication
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
