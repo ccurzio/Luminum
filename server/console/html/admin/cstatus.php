@@ -2,7 +2,7 @@
 mysqli_select_db($db, "CLIENTS") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
 
 $starttime = microtime(true);
-$clientsquery = mysqli_query($db, "select ID,HOSTNAME,IPV4,OSPLATFORM,OSRELEASE,CLIENTVER,CSTATE,LASTSEEN from STATUS where MISSING = 0 order by ID");
+$clientsquery = mysqli_query($db, "select ID,HOSTNAME,IPV4,OSPLATFORM,OSRELEASE,CLIENTVER,CSTATE,LASTSEEN from STATUS where MISSING = 0 order by HOSTNAME");
 $endtime = microtime(true);
 
 $duration = number_format((float)$endtime - $starttime, 2, '.', '');
@@ -19,13 +19,13 @@ $wincount = 0;
 		<div style="display: block; width: 100%; text-align: right;">
 			<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled" id="deploy">Deploy Action</button> <button class="formgo" id="investigate" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Investigate</button> <button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled" id="getinfo">Get Info</button>
 			<table id="cstable" style="margin-top: 10px; text-align: left;">
-			<tr><td colspan="8"><div style="position: absolute; padding-top: 5px; padding-left: 5px;"><?php print $lincount + $maccount + $wincount . " of $clientscount"; ?> items <img id="refresh" src="icons/refresh.png" style="cursor: pointer; margin-left: 10px; width: 15px; height: 15px; vertical-align: top;" onclick="reloadTable()"></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($clientscount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
+			<tr><td colspan="8"><div style="position: absolute; padding-top: 5px; padding-left: 5px;"><?php print "<span id=\"selcount\">0</span> <span id=\"totcount\">of $clientscount"; ?> items</span> <img id="refresh" src="icons/refresh.png" style="cursor: pointer; margin-left: 5px; width: 15px; height: 15px; vertical-align: top;" onclick="reloadTable()"></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($clientscount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
 			<tr><td style="width: 15px;">
 			<?php
 			if ($clientscount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
 			else { print "<input id=\"selectall\" type=\"checkbox\" onclick=\"allToggle()\">"; }
 			?>
-			</td><td>Hostname</td><td style="width: 125px;">IP Address</td><td style="width: 50px;">Platform</td><td style="width: 150px;">Operating System</td><td style="width: 120px;">Client Version</td><td style="width: 60px;">Status</td><td style="width: 175px;">Last Check-In</td></tr>
+			</td><td>Hostname</td><td style="width: 125px;">IP Address</td><td style="width: 50px; text-align: center;">Platform</td><td style="width: 150px;">Operating System</td><td style="width: 120px;">Client Version</td><td style="width: 60px; text-align: center;">Status</td><td style="width: 175px;">Last Check-In</td></tr>
 			<?php
 			if ($clientscount == 0) {
 				print "<tr><td colspan=\"9\" style=\"text-align: center; background-color: #494a69; font-weight: normal; font-style: italic;\">No Results</td></tr>\n";
@@ -38,7 +38,7 @@ $wincount = 0;
 					if ($row["CSTATE"] == "OK") { $staticon = "sysgreen.png"; }
 					else if ($row["CSTATE"] == "WARN") { $staticon = "sysyellow.png"; }
 					else if ($row["CSTATE"] == "CRIT") { $staticon = "sysred.png"; }
-					print "<tr><td id=\"" . $row["ID"] . "A\" style=\"width: 15px; background-color: #494a69;\"><input class=\"client\" id=\"ID" . $row["ID"] . "\" type=\"checkbox\" onclick=\"rowHighlight(" . $row["ID"] . ")\"></td><td id=\"" . $row["ID"] . "B\" style=\"width: 50px; background-color: #494a69; font-weight: normal;\">" . $row["HOSTNAME"] . "</td><td id=\"" . $row["ID"] . "C\" style=\"width: 75px; background-color: #494a69; font-weight: normal;\">" . $row["IPV4"] . "</td><td id=\"" . $row["ID"] . "D\" style=\"width: 24px; background-color: #494a69; font-weight: normal; text-align: center;\"><img src=\"images/" . strtolower($row["OSPLATFORM"]) . ".png\" style=\"width: 24px; height: 24px; margin-top: 2px;\"></td><td id=\"" . $row["ID"] . "E\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["OSRELEASE"] . "</td><td id=\"" . $row["ID"] . "F\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $row["CLIENTVER"] . "</td>" . "<td id=\"" . $row["ID"] . "G\" style=\"width: 24px; background-color: #494a69; font-weight: normal; text-align: center; padding-top: 7px;\"><img src=\"/icons/" . $staticon . "\" alt=\"" . $row["CSTATE"] . "\"></td><td id=\"" . $row["ID"] . "H\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["LASTSEEN"] . "</td></tr>\n";
+					print "<tr><td id=\"" . $row["ID"] . "A\" style=\"width: 15px; background-color: #494a69;\"><input class=\"client\" id=\"ID" . $row["ID"] . "\" type=\"checkbox\" onclick=\"rowHighlight(" . $row["ID"] . ")\"></td><td id=\"" . $row["ID"] . "B\" style=\"width: 50px; background-color: #494a69; font-weight: normal;\">" . $row["HOSTNAME"] . "</td><td id=\"" . $row["ID"] . "C\" style=\"width: 75px; background-color: #494a69; font-weight: normal;\">" . $row["IPV4"] . "</td><td id=\"" . $row["ID"] . "D\" style=\"width: 24px; background-color: #494a69; font-weight: normal; text-align: center;\"><img src=\"images/" . strtolower($row["OSPLATFORM"]) . ".png\" style=\"width: 24px; height: 24px; margin-top: 2px;\"></td><td id=\"" . $row["ID"] . "E\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["OSRELEASE"] . "</td><td id=\"" . $row["ID"] . "F\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $row["CLIENTVER"] . "</td>" . "<td id=\"" . $row["ID"] . "G\" style=\"width: 24px; background-color: #494a69; font-weight: normal; text-align: center; padding-top: 7px;\"><img src=\"/icons/" . $staticon . "\" title=\"" . $row["CSTATE"] . "\"></td><td id=\"" . $row["ID"] . "H\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["LASTSEEN"] . "</td></tr>\n";
 					}
 				}
 			?>
@@ -67,9 +67,9 @@ $wincount = 0;
 	</p>
 	<table style="margin-bottom: 20px;">
 	<tr><td style="width: 15px;"></td><td>Platform</td><td style="text-align: center;">Percentage</td><td style="text-align: center;">Count</td></tr>
-	<tr><td class="lfilter" style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filterlinux" onclick="filterHighlight('filterlinux')" <?php if ($clientscount == 0) { print "disabled=\"disabled\""; } ?>></td><td class="lfilter" style="background-color: #494a69;">Linux</td><td class="lfilter" style="background-color: #494a69; text-align: center;"><?php if ($clientscount > 0) { $pct = ($lincount / $clientscount) * 100; print "$pct"; } else { print "0"; } ?>%</td><td class="lfilter" style="background-color: #494a69; text-align: center;"><?php print "$lincount"; ?></td></tr>
-	<tr><td class="mfilter" style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filtermac" onclick="filterHighlight('filtermac')" <?php if ($clientscount == 0) { print "disabled=\"disabled\""; } ?>></td><td class="mfilter" style="background-color: #494a69;">macOS</td><td class="mfilter" style="background-color: #494a69; text-align: center;"><?php if ($clientscount > 0) { $pct = ($maccount / $clientscount) * 100; print "$pct"; } else { print "0"; } ?>%</td><td class="mfilter" style="background-color: #494a69; text-align: center;"><?php print "$maccount"; ?></td></tr>
-	<tr><td class="wfilter" style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filterwin" onclick="filterHighlight('filterwin')" <?php if ($clientscount == 0) { print "disabled=\"disabled\""; } ?>></td><td class="wfilter" style="background-color: #494a69;">Windows</td><td class="wfilter" style="background-color: #494a69; text-align: center;"><?php if ($clientscount > 0) { $pct = ($wincount / $clientscount) * 100; print "$pct"; } else { print "0"; } ?>%</td><td class="wfilter" style="background-color: #494a69; text-align: center;"><?php print "$wincount"; ?></td></tr>
+	<tr><td class="lfilter" style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filterlinux" onclick="filterHighlight('filterlinux')" <?php if ($clientscount == 0) { print "disabled=\"disabled\""; } ?>></td><td class="lfilter" style="background-color: #494a69;">Linux</td><td class="lfilter" style="background-color: #494a69; text-align: center;"><?php if ($clientscount > 0) { $pct = ($lincount / $clientscount) * 100; print round($pct,2); } else { print "0"; } ?>%</td><td class="lfilter" style="background-color: #494a69; text-align: center;"><?php print "$lincount"; ?></td></tr>
+	<tr><td class="mfilter" style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filtermac" onclick="filterHighlight('filtermac')" <?php if ($clientscount == 0) { print "disabled=\"disabled\""; } ?>></td><td class="mfilter" style="background-color: #494a69;">macOS</td><td class="mfilter" style="background-color: #494a69; text-align: center;"><?php if ($clientscount > 0) { $pct = ($maccount / $clientscount) * 100; print round($pct,2); } else { print "0"; } ?>%</td><td class="mfilter" style="background-color: #494a69; text-align: center;"><?php print "$maccount"; ?></td></tr>
+	<tr><td class="wfilter" style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filterwin" onclick="filterHighlight('filterwin')" <?php if ($clientscount == 0) { print "disabled=\"disabled\""; } ?>></td><td class="wfilter" style="background-color: #494a69;">Windows</td><td class="wfilter" style="background-color: #494a69; text-align: center;"><?php if ($clientscount > 0) { $pct = ($wincount / $clientscount) * 100; print round($pct,2); } else { print "0"; } ?>%</td><td class="wfilter" style="background-color: #494a69; text-align: center;"><?php print "$wincount"; ?></td></tr>
 	</table>
 
 	<?php if ($clientscount > 0) {
@@ -87,7 +87,6 @@ const itElement = document.getElementById('intnum');
 
 itElement.addEventListener('input', function(event) {
 	document.getElementById('intnum').value = numbersOnly(document.getElementById('intnum').value);
-	//formCheck();
 	});
 
 function numbersOnly(str) { return str.replace(/[^0-9]/g, ''); }
@@ -127,6 +126,21 @@ function checkinform() {
 	}
 
 function rowHighlight(idnum) {
+	document.getElementById("selcount").style.transitionProperty = "none";
+	document.getElementById("totcount").style.transitionProperty = "none";
+
+	document.getElementById("selcount").style.color = "white";
+	document.getElementById("totcount").style.color = "white";
+
+	setTimeout(function (){
+		document.getElementById("selcount").style.transitionProperty = "color";
+		document.getElementById("selcount").style.transitionDuration = "0.5s";
+		document.getElementById("totcount").style.transitionProperty = "color";
+		document.getElementById("totcount").style.transitionDuration = "0.5s";
+		document.getElementById("selcount").style.color = "#bbb";
+		document.getElementById("totcount").style.color = "#bbb";
+		}, 10);
+
 	var checkBox = document.getElementById("ID" + idnum);
 	//const checkboxes = document.querySelectorAll('input[type="checkbox"]');
 	const checkboxes = document.querySelectorAll('input[class="client"]');
@@ -149,10 +163,22 @@ function rowHighlight(idnum) {
 	document.getElementById("getinfo").disabled = buttontoggle;
 	document.getElementById("deploy").disabled = buttontoggle;
 
-	if (checkTrigger > 1) {
-		document.getElementById("investigate").disabled = "disabled";
+	console.log(checkTrigger);
+
+	if (checkTrigger >= 2) {
+		document.getElementById("investigate").disabled = false;
 		document.getElementById("getinfo").disabled = "disabled";
 		document.getElementById("deploy").disabled = false;
+		}
+	else if (checkTrigger == 1) {
+		document.getElementById("investigate").disabled = false;
+		document.getElementById("getinfo").disabled = false;
+		document.getElementById("deploy").disabled = false;
+		}
+	else {
+		document.getElementById("investigate").disabled = true;
+		document.getElementById("getinfo").disabled = true;
+		document.getElementById("deploy").disabled = true;
 		}
 
 	document.getElementById(idnum + "A").style.backgroundColor = bgcolor;
@@ -163,6 +189,8 @@ function rowHighlight(idnum) {
 	document.getElementById(idnum + "F").style.backgroundColor = bgcolor;
 	document.getElementById(idnum + "G").style.backgroundColor = bgcolor;
 	document.getElementById(idnum + "H").style.backgroundColor = bgcolor;
+
+	document.getElementById("selcount").innerHTML = checkTrigger;
 	}
 
 function wait(ms){
@@ -183,7 +211,7 @@ function reloadTable() {
 
 function allToggle() {
 	const allCheckbox = document.getElementById("selectall");
-	const checkboxes = document.querySelectorAll('input[class="contentset"]');
+	const checkboxes = document.querySelectorAll('input[class="client"]');
 
 	checkboxes.forEach(checkbox => {
 		checkbox.checked = allCheckbox.checked;
@@ -193,7 +221,7 @@ function allToggle() {
 	}
 
 function allCheck() {
-	const checkboxes = document.querySelectorAll('input[class="contentset"]');
+	const checkboxes = document.querySelectorAll('input[class="client"]');
 	var checkTrigger = 0;
 
 	checkboxes.forEach(checkbox => {
