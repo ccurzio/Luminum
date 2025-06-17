@@ -55,7 +55,7 @@
 					if ($tfua == "False") {
 						print "<select id=\"2FA\" style=\"height: 28px; width: 200px; margin-top: 3px; margin-left: 3px;\" tabindex=\"8\" onchange=\"tfdisablereset(); formCheck();\"><option value=\"enabled\">Enabled</option><option value=\"disabled\" selected=\"selected\">Disabled</option></select><br>\n";
 						print "<div style=\"margin-top: 15px;\">";
-						if ($tfapp == "True") { print "<input type=\"checkbox\"> <span id=\"applabel\" style=\"style=\"color: #444; cursor: pointer; user-select: none;\" onclick=\"appToggle();\">Authenticator</span><br>\n"; }
+						if ($tfapp == "True") { print "<input type=\"checkbox\" onclick=\"tfmcheck();\"> <span id=\"applabel\" style=\"style=\"color: #444; cursor: pointer; user-select: none;\" onclick=\"appToggle();\">Authenticator</span><br>\n"; }
 						else { print "<input id=\"app2fa\" type=\"checkbox\" disabled=\"disabled\"> <span id=\"applabel\" style=\"color: #777; cursor: normal; user-select: none;\" onclick=\"appToggle();\">Authenticator</span><br>\n"; }
 						if ($tfsms == "True") { print "<input type=\"checkbox\"> <span id=\"smslabel\" style=\"style=\"color: #444; cursor: pointer; user-select: none;\" onclick=\"smsToggle();\">SMS Text Message</span><br>\n"; }
 						else { print "<input id=\"sms2fa\" type=\"checkbox\" disabled=\"disabled\"> <span id=\"smslabel\" style=\"color: #777; cursor: normal; user-select: none;\" onclick=\"smsToggle();\">SMS Text Message</span><br>\n"; }
@@ -89,6 +89,10 @@ window.onload = function() {
 	app2fainit = document.getElementById("app2fa").checked;
 	sms2fainit = document.getElementById("sms2fa").checked;
 	eml2fainit = document.getElementById("eml2fa").checked;
+
+	document.getElementById("app2fa").addEventListener('change', (event) => { tfmcheck(); })
+	document.getElementById("sms2fa").addEventListener('change', (event) => { tfmcheck(); })
+	document.getElementById("eml2fa").addEventListener('change', (event) => { tfmcheck(); })
 	}
 
 function resetForm() {
@@ -108,7 +112,6 @@ function tfdisablereset() {
 	}
 
 function formCheck() {
-	console.log("FOO");
 	if (document.getElementById("2FA").value == "enabled") {
 		document.getElementById("app2fa").disabled = false;
 		document.getElementById("sms2fa").disabled = false;
@@ -134,26 +137,71 @@ function formCheck() {
 			else { document.getElementById("save").disabled = true; }
 			}
 		}
+	tfmcheck();
+	}
+
+function tfmcheck() {
+	if (document.getElementById("2FA").value == "enabled") {
+		if (document.getElementById("app2fa").checked == false && document.getElementById("sms2fa").checked == false && document.getElementById("eml2fa").checked == false) {
+			document.getElementById("app2fa").classList.add('checkError');
+			document.getElementById("sms2fa").classList.add('checkError');
+			document.getElementById("eml2fa").classList.add('checkError');
+			}
+		else {
+			document.getElementById("app2fa").classList.remove('checkError');
+			document.getElementById("sms2fa").classList.remove('checkError');
+			document.getElementById("eml2fa").classList.remove('checkError');
+			}
+		}
+	else {
+		document.getElementById("app2fa").classList.remove('checkError');
+		document.getElementById("sms2fa").classList.remove('checkError');
+		document.getElementById("eml2fa").classList.remove('checkError');
+		}
 	}
 
 function appToggle() {
 	if (document.getElementById("2FA").value == "enabled") {
-		if (document.getElementById("app2fa").checked == false) { document.getElementById("app2fa").checked = true; }
-		else { document.getElementById("app2fa").checked = false; }
+		if (document.getElementById("app2fa").checked == false) {
+			document.getElementById("app2fa").checked = true;
+			document.getElementById("app2fa").classList.remove('checkError');
+			document.getElementById("sms2fa").classList.remove('checkError');
+			document.getElementById("eml2fa").classList.remove('checkError');
+			}
+		else {
+			document.getElementById("app2fa").checked = false;
+			tfmcheck();
+			}
 		}
 	}
 
 function smsToggle() {
 	if (document.getElementById("2FA").value == "enabled") {
-		if (document.getElementById("sms2fa").checked == false) { document.getElementById("sms2fa").checked = true; }
-		else { document.getElementById("sms2fa").checked = false; }
+		if (document.getElementById("sms2fa").checked == false) {
+			document.getElementById("sms2fa").checked = true;
+			document.getElementById("app2fa").classList.remove('checkError');
+			document.getElementById("sms2fa").classList.remove('checkError');
+			document.getElementById("eml2fa").classList.remove('checkError');
+			}
+		else {
+			document.getElementById("sms2fa").checked = false;
+			tfmcheck();
+			}
 		}
 	}
 
 function emlToggle() {
 	if (document.getElementById("2FA").value == "enabled") {
-		if (document.getElementById("eml2fa").checked == false) { document.getElementById("eml2fa").checked = true; }
-		else { document.getElementById("eml2fa").checked = false; }
+		if (document.getElementById("eml2fa").checked == false) {
+			document.getElementById("eml2fa").checked = true;
+			document.getElementById("app2fa").classList.remove('checkError');
+			document.getElementById("sms2fa").classList.remove('checkError');
+			document.getElementById("eml2fa").classList.remove('checkError');
+			}
+		else {
+			document.getElementById("eml2fa").checked = false;
+			tfmcheck();
+			}
 		}
 	}
 
