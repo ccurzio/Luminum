@@ -12,6 +12,8 @@ body {
 body h1 {
 	font-family: LuminumHeader;
 	color: black;
+	pointer-events: none;
+	user-select: none;
 	}
 
 .header {
@@ -63,6 +65,8 @@ body h1 {
 	font-family: "Arial";
 	font-style: normal;
 	padding-bottom: 0;
+	pointer-events: none;
+	user-select: none;
 	}
 
 .main-content {
@@ -139,6 +143,8 @@ body h1 {
 	width: auto;
 	margin-top: 5px;
 	margin-left: 5px;
+	pointer-events: none;
+	user-select: none;
 	}
 
 .user-menu {
@@ -169,7 +175,7 @@ body h1 {
 	z-index: 1;
 	box-shadow: 0px 8px 16px rgba(0,0,0,0.2);
 	border-radius: 6px;
-        }
+	}
 
 .user-dropdown a {
 	color: white;
@@ -363,10 +369,12 @@ body h1 {
 
 /* MenuBar Icons */
 .icon {
-	display: block; /* Ensures the image is displayed as a block element */
-	margin-bottom: 8px; /* Adds spacing between icon and label */
-	width: 24px; /* Adjust icon size */
-	height: 24px; /* Adjust icon size */
+	display: block;
+	margin-bottom: 8px;
+	width: 24px;
+	height: 24px;
+	pointer-events: none;
+	user-select: none;
 	}
 
 /* Container for submenu */
@@ -516,6 +524,8 @@ th, td {
 h2 {
 	overflow: hidden;
 	text-align: center;
+	pointer-events: none;
+	user-select: none;
 	}
 
 h2::before,
