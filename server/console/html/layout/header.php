@@ -147,7 +147,6 @@ $ienabled = $invinfo["CVAL"];
 				</div>
 				<a href="/index.php?view=savedqueries">Saved Queries</a>
 				<a href="/index.php?view=cgroups">Computer Groups</a>
-				<a href="/index.php?view=ugroups">User Groups</a>
 			</div>
 		</div>
 
@@ -185,6 +184,7 @@ $ienabled = $invinfo["CVAL"];
 					print "</div>\n";
 					print "</div>\n";
 					print "<a href=\"/config.php?view=clients\">Client Management</a>\n";
+					print "<a href=\"/index.php?view=ugroups\">User Groups</a>\n";
 					print "<a href=\"/index.php?view=users\">User Accounts</a>\n";
 					}
 				?>
