@@ -6,10 +6,11 @@ if ($acctrole > 1) {
 	}
 else {
 	mysqli_select_db($db, "SYSTEM") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
-	$confquery = mysqli_query($db, "select CKEY,CVAL from CONFIG where CKEY = 'SID' or CKEY = 'INSTALLDATE'");
+	$confquery = mysqli_query($db, "select CKEY,CVAL from CONFIG where CKEY = 'SID' or CKEY = 'INSTALLDATE' or CKEY = 'OWNEREMAIL'");
 	while($row = mysqli_fetch_assoc($confquery)) {
 		if ($row["CKEY"] == "SID") { $serverid = $row["CVAL"]; }
 		else if ($row["CKEY"] == "INSTALLDATE") { $installdate = $row["CVAL"]; }
+		else if ($row["CKEY"] == "OWNEREMAIL") { $adminemail = $row["CVAL"]; }
 		}
 	//$cpuhistquery = mysqli_query($db, "select TIMESTAMP,PCT from CPUHIST order by TIMESTAMP limit 8");
 	$cpuhistquery = mysqli_query($db, "select * from (select TIMESTAMP,PCT from CPUHIST order by TIMESTAMP desc limit 9) as sub order by TIMESTAMP asc");
@@ -47,6 +48,7 @@ else {
 						<?php print "<tr><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\">Server ID:</td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal;\">$serverid</td></tr>\n"; ?>
 						<tr><td style="color: #444; background-color: transparent; border: 0;">License:</td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;">Community</td></tr>
 						<tr><td style="color: #444; background-color: transparent; border: 0;">Original Install Date:</td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><?php print $installdate; ?></td></tr>
+						<tr><td style="color: #444; background-color: transparent; border: 0;">Admin Contact:</td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><?php print "<a href=\"mailto:$adminemail\">$adminemail</a>"; ?></td></tr>
 					</table>
 				</div>
 			</div>
