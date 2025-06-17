@@ -152,7 +152,7 @@ else {
 			?>
 			</select> <div class="tooltip"><img src="/icons/help.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Sets the 2FA policy for all user accounts<br><br>Default: Optional</span></td></tr>
 			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Minimum Password Length: </td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><input id="passlen" type="text" style="width: 25px; font-size: 15px; padding: 3px; margin-top: 0;" maxlength="2" value="<?php print $minpass; ?>" onchange="formCheck();"> Characters</td></tr>
-			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Password Complexity Enforcement: </td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><select id="complexpass" style="width: 175px; height: 28px;" onchange="formCheck()">
+			<tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Password Complexity Enforcement: </td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><select id="complexpass" style="width: 175px; height: 28px;" onchange="formCheck();">
 			<?php if ($complexpass == "Enabled") {
 				print "<option value=\"enabled\" selected=\"selected\">Enabled</option><option value=\"disabled\">Disabled</option>\n\n";
 				}
