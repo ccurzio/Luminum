@@ -336,7 +336,6 @@ In order to be accountable to the community - but more importantly to myself - I
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9654; |*In Progress*  |Base UI Framework           |Create the consistent foundational elements for the web user interface                  |
 |&#9654; |*In Progress*  |Include Architecture        |Rebuild include system for user interface code block elements                           |
-| --     |Not Started    |Stylesheet Consolidation    |Consolidate style definitions and eliminate redundancies                                |
 | --     |Not Started    |Table Generation Functions  |Functions to automatically generate HTML tables on-demand                               |
 | --     |Not Started    |Form Generation Functions   |Functions to automatically generate HTML forms on-demand                                |
 | --     |Not Started    |Element Generation Functions|Functions to automatically generate HTML elements on-demand                             |
@@ -344,8 +343,9 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9654; |*In Progress*  |Overlay Message             |Display a forced-focus message window above a full-screen overlay                       |
 |&#10003;|**Completed**  |Lumy Menus                  |Dynamically inject UI navigation options for enabled Lumy modules                       |
 | --     |Not Started    |Asynchronous Content Updates|Routines to update page content without refreshing                                      |
-| --     |Not Started    |Dark Mode                   |Create a stylesheet for dark mode                                                       |
-| --     |Not Started    |Timezone Support            |Implement system-wide routines to display the time in the user's timezone               |
+| --     |Not Started    |Stylesheet Consolidation    |Consolidate style definitions and eliminate redundancies                                |
+| --     |Not Started    |Per-User Stylesheets        |Support for user-defined stylesheets                                                    |
+| --     |Not Started    |Dark Mode                   |Create a standard stylesheet for dark mode                                              |
 
 
 ### Session Management
@@ -369,6 +369,15 @@ In order to be accountable to the community - but more importantly to myself - I
 | --     |Not Started    |PassKey 2FA Setup           |PassKey setup process for users                                                         |
 | --     |Not Started    |Password Change             |Implement functions for user-initiated change of password                               |
 | --     |Not Started    |Timezone Select             |Implement functions for per-user timezone configuration                                 |
+
+
+### User Preferences
+|        |Status         |Task                        |Description                                                                             |
+|--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+| --     |Not Started    |Preferences Interface       |Present a user interface to view/modify account preferences                             |
+| --     |Not Started    |Dark Mode                   |Routines allowing users to switch the UI appearance to a dark version                   |
+| --     |Not Started    |Date Format Support         |Routines to display date/time stamps in the user's preferred format                     |
+| --     |Not Started    |Timezone Support            |Implement system-wide routines to display the time in the user's timezone               |
 
 
 ### Administration
