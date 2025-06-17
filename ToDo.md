@@ -373,7 +373,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#10003;|**Completed**  |Console Login Processing    |Present a login screen and start a session or reject based on credentials               |
 |&#10003;|**Completed**  |Session Timeout             |Automatically terminate a user session if left inactive                                 |
 |&#9654; |*In Progress*  |Timeout Warning             |Display a timeout warning 2 minutes before automatic inactivity logout                  |
-| --     |Not Started    |Two-Factor Authentication   |Capture user sessions and shunt to 2FA validation on login                              |
+|&#9654; |*In Progress*  |Two-Factor Authentication   |Capture user sessions and shunt to 2FA validation on login                              |
 | --     |Not Started    |Mandatory Password Change   |Capture user sessions and shunt to a change password interface on login                 |
 |&#9654; |*In Progress*  |Permissions Adjustments     |Show or hide UI elements/options based on the user's access level                       |
 
@@ -382,9 +382,9 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9654; |*In Progress*  |Settings Interface          |Present a user interface to view/modify account details                                 |
-| --     |Not Started    |Authenticator 2FA Setup     |Authenticator-based two-factor Authentication setup process for users                   |
-| --     |Not Started    |SMS 2FA Setup               |SMS-based two-factor Authentication setup process for users                             |
-| --     |Not Started    |Email 2FA Setup             |Email-based two-factor Authentication setup process for users                           |
+|&#9654; |*In Progress*  |Authenticator 2FA Setup     |Authenticator-based two-factor Authentication setup process for users                   |
+|&#9654; |*In Progress*  |SMS 2FA Setup               |SMS-based two-factor Authentication setup process for users                             |
+|&#9654; |*In Progress*  |Email 2FA Setup             |Email-based two-factor Authentication setup process for users                           |
 | --     |Not Started    |PassKey 2FA Setup           |PassKey setup process for users                                                         |
 | --     |Not Started    |Password Change             |Implement functions for user-initiated change of password                               |
 | --     |Not Started    |Timezone Select             |Implement functions for per-user timezone configuration                                 |
