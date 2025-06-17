@@ -100,7 +100,7 @@ $ienabled = $invinfo["CVAL"];
 			<div class="dropdown-content">
 				<?php
 				if (isset($acctrole) && $acctrole == "1") {
-					print "<a href=\"/modules.php\">Management</a>\n";
+					print "<a href=\"/modules.php\">Lumy Management</a>\n";
 					print "<div class=\"dropdown-divider\" style=\"width: 200px;\"></div>\n";
 					}
 				print "<a href=\"/modules.php?view=summary\">Summary</a>\n";
