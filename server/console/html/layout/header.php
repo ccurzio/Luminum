@@ -198,7 +198,7 @@ $ienabled = $invinfo["CVAL"];
 			<div class="dropdown-content">
 				<a href="/docs.php">Documentation</a>
 				<div class="dropdown-divider" style="width: 200px;"></div>
-				<a href="/tickets.php">Reported Issues</a>
+				<a href="/tickets.php">Problem Reports</a>
 				<a href="/support.php">Contact Luminum Support</a>
 			</div>
 		</div>
