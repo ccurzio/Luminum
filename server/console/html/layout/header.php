@@ -195,6 +195,12 @@ $ienabled = $invinfo["CVAL"];
 				<img src="icons/help.png" class="icon">
 				Help
 			</button>
+			<div class="dropdown-content">
+				<a href="/docs.php">Documentation</a>
+				<div class="dropdown-divider" style="width: 200px;"></div>
+				<a href="/tickets.php">Reported Issues</a>
+				<a href="/support.php">Contact Luminum Support</a>
+			</div>
 		</div>
 	</div>
 	<div class="user-menu" style="height: 100%;">
