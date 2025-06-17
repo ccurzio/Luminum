@@ -727,6 +727,7 @@ In order to be accountable to the community - but more importantly to myself - I
 | --     |Not Started    |Message Queueing            |Development of the queue structure for pending messages                                 |
 | --     |Not Started    |Message Compression         |Compress message contents before sending                                                |
 | --     |Not Started    |Message Encryption          |Encrypt message contents before sending                                                 |
+| --     |Not Started    |Client Update               |Create functions to download, install, and self-update the Luminum client               |
 
 </li>
 </ul>
@@ -750,6 +751,8 @@ In order to be accountable to the community - but more importantly to myself - I
 | --     |Not Started    |Package Processing          |Routines to store packages and execute embedded commands                                |
 | --     |Not Started    |Message Queueing            |Development of the queue structure for pending messages                                 |
 | --     |Not Started    |Message Compression         |Compress message contents before sending                                                |
+| --     |Not Started    |Message Encryption          |Encrypt message contents before sending                                                 |
+| --     |Not Started    |Client Update               |Create functions to download, install, and self-update the Luminum client               |
 
 </li>
 </ul>
@@ -773,6 +776,8 @@ In order to be accountable to the community - but more importantly to myself - I
 | --     |Not Started    |Package Processing          |Routines to store packages and execute embedded commands                                |
 | --     |Not Started    |Message Queueing            |Development of the queue structure for pending messages                                 |
 | --     |Not Started    |Message Compression         |Compress message contents before sending                                                |
+| --     |Not Started    |Message Encryption          |Encrypt message contents before sending                                                 |
+| --     |Not Started    |Client Update               |Create functions to download, install, and self-update the Luminum client               |
 
 </li>
 </ul>
