@@ -716,6 +716,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9654; |*In Progress*  |Main Client Process         |The primary client application process                                                  |
+| --     |Not Started    |Computer ID                 |Create a method to generate a reproduceable computer ID                                 |
 | --     |Not Started    |Parameter Functions         |Create functions to set client configuration parameters                                 |
 | --     |Not Started    |Config Save/Import          |Routines to save configuration and import an existing config on first setup             |
 | --     |Not Started    |Service Management          |Routines to register the client as a service with the host operating system             |
@@ -741,6 +742,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9654; |*In Progress*  |Main Client Process         |The primary client application process                                                  |
+| --     |Not Started    |Computer ID                 |Create a method to generate a reproduceable computer ID                                 |
 | --     |Not Started    |Parameter Functions         |Create functions to set client configuration parameters                                 |
 | --     |Not Started    |Config Save/Import          |Routines to save configuration and import an existing config on first setup             |
 | --     |Not Started    |Service Management          |Routines to register the client as a service with the host operating system             |
@@ -766,6 +768,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9654; |*In Progress*  |Main Client Process         |The primary client application process                                                  |
+| --     |Not Started    |Computer ID                 |Create a method to generate a reproduceable computer ID                                 |
 | --     |Not Started    |Parameter Functions         |Create functions to set client configuration parameters                                 |
 | --     |Not Started    |Config Save/Import          |Routines to save configuration and import an existing config on first setup             |
 | --     |Not Started    |Service Management          |Routines to register the client as a service with the host operating system             |
