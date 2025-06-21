@@ -362,7 +362,7 @@ In order to be accountable to the community - but more importantly to myself - I
 ### Core
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#9654; |*In Progress*  |Base UI Framework           |Create the consistent foundational elements for the web user interface                  |
+|&#10003;|**Completed**  |Base UI Framework           |Create the consistent foundational elements for the web user interface                  |
 |&#9654; |*In Progress*  |Include Architecture        |Rebuild include system for user interface code block elements                           |
 |&#10003;|**Completed**  |Console Header              |Dynamic UI header with logo and dropdown menus                                          |
 |&#10003;|**Completed**  |Console Footer              |Dynamic UI footer with session and system information                                   |
