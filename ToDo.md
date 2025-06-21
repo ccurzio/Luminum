@@ -392,7 +392,7 @@ In order to be accountable to the community - but more importantly to myself - I
 ### User Account Settings
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#9654; |*In Progress*  |Settings Interface          |Present a user interface to view/modify account details                                 |
+|&#10003;|**Completed**  |Settings Interface          |Present a user interface to view/modify account details                                 |
 |&#9654; |*In Progress*  |Authenticator 2FA Setup     |Authenticator-based two-factor Authentication setup process for users                   |
 |&#9654; |*In Progress*  |SMS 2FA Setup               |SMS-based two-factor Authentication setup process for users                             |
 |&#9654; |*In Progress*  |Email 2FA Setup             |Email-based two-factor Authentication setup process for users                           |
@@ -469,9 +469,9 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#10003;|**Completed**  |CPU Information             |User interface to display server CPU information                                        |
 |&#10003;|**Completed**  |CPU Utilization             |Rolling line graph showing server CPU usage over the last 4 hours                       |
 |&#10003;|**Completed**  |Storage Information         |User interface to display server disk information                                       |
-| --     |Not Started    |Memory Information          |User interface to display server memory information                                     |
-| --     |Not Started    |Device Information          |User interface to display server connected device information                           |
-| --     |Not Started    |Network Information         |User interface to display server network interface information                          |
+|&#9654; |*In Progress*  |Memory Information          |User interface to display server memory information                                     |
+|&#9654; |*In Progress*  |Device Information          |User interface to display server connected device information                           |
+|&#9654; |*In Progress*  |Network Information         |User interface to display server network interface information                          |
 |&#10003;|**Completed**  |User Accounts               |Presents a table displaying information about all user accounts                         |
 </li>
 
@@ -488,7 +488,7 @@ In order to be accountable to the community - but more importantly to myself - I
 | --     |Not Started    |Log Settings                |User interface for administrators to configure system logging                           |
 | --     |Not Started    |SMTP Settings               |User interface for administrators to configure SMTP servers and settings                |
 | --     |Not Started    |Encryption Settings         |User interface for administrators to configure encryption settings                      |
-|&#9654; |*In Progress*  |User Login Settings         |User interface for administrators to view/modify user login settings                    |
+|&#10003;|**Completed**  |User Login Settings         |User interface for administrators to view/modify user login settings                    |
 |&#10003;|**Completed**  |Networking Settings         |User interface for administrators to view/modify server network settings                |
 |&#10003;|**Completed**  |Connectivity Status         |Display user interface elements to reflect network connectivity status                  |
 | --     |Not Started    |Certificate Settings        |User interface for administrators to view/modify server certificate settings            |
@@ -902,7 +902,7 @@ In order to be accountable to the community - but more importantly to myself - I
 
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-| --     |Not Started    |Local Storage               |Client-side storage for filesystem information                                          |
+|&#9654; |*In Progress*  |Local Storage               |Client-side storage for filesystem information                                          |
 |&#9654; |*In Progress*  |Alert Messaging             |Message format for filesystem modification alerts                                       |
 | --     |Not Started    |Bulk Alert Transmission     |Message format for sending stored/queued alerts                                         |
 
