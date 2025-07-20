@@ -631,7 +631,6 @@ In order to be accountable to the community - but more importantly to myself - I
 ### macOS Support
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#9654; |*In Progress*  |Setup Utility (Text)        |Create plaintext interface for a step-by-step setup wizard                              |
 | --     |Not Started    |Setup Utility (GUI)         |Create grapical step-by-step setup wizard                                               |
 | --     |Not Started    |Unattended Install          |Create automated process for unattended installation                                    |
 | --     |Not Started    |Key Management              |Routines to create a new public/private key pair                                        |
