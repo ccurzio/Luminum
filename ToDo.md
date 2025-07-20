@@ -73,20 +73,18 @@ In order to be accountable to the community - but more importantly to myself - I
 | --     |Not Started    |Create Server Package       |Create .txz installation package for Luminum Server                                     |
 | --     |Not Started    |Core Content Package        |Create .txz installation package for Luminum Core Content                               |
 
-
-### Docker
-|        |Status         |Task                        |Description                                                                             |
-|--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-| --     |Not Started    |Create Image                |Create Luminum Server Docker image                                                      |
-| --     |Not Started    |Setup Scripts               |Create scripts supporting the installation of a Luminum Server Docker image             |
-
-
 ### Virtual Appliances
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 | --     |Not Started    |Proxmox                     |Luminum Server virtual machine for Proxmox                                              |
 | --     |Not Started    |VirtualBox                  |Luminum Server virtual machine for VirtualBox                                           |
 | --     |Not Started    |VMWare                      |Luminum Server virtual machine for VMWare                                               |
+
+### Docker
+|        |Status         |Task                        |Description                                                                             |
+|--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+| --     |Not Started    |Create Image                |Create Luminum Server Docker image                                                      |
+| --     |Not Started    |Setup Scripts               |Create scripts supporting the installation of a Luminum Server Docker image             |
 
 <br>
 <br>
