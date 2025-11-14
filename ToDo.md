@@ -166,7 +166,7 @@ In order to be accountable to the community - but more importantly to myself - I
 </li>
 </ul>
 
-### Health
+### Server Health
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 | --     |Not Started    |Luminum Protection          |Periodic scanning to detect changes to critical Luminum Server files                    |
