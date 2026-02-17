@@ -131,6 +131,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#10003;|**Completed**  |SENREVS        |5                |Maximum revision history for sensors                                                    |
 |&#10003;|**Completed**  |PKGREVS        |5                |Maximum revision history for packages                                                   |
 |&#10003;|**Completed**  |INVESTIGATE    |Enabled          |Enable or Disable Luminum Investigate                                                   |
+| --     |Not Started    |INSECURE       |Disabled         |Allow Unsigned Lumys                                                                    | 
 </li>
 
 <li>
@@ -161,7 +162,6 @@ In order to be accountable to the community - but more importantly to myself - I
 | --     |Not Started    |Expiration Processing       |Routines to lock/downgrade Luminum Server when license expires                          |
 | --     |Not Started    |Draft Community EULA        |End-user license agreement for Luminum Server Community Edition (CE)                    |
 | --     |Not Started    |Draft Commercial EULA       |End-user license agreement for Luminum Server Enterprise                                |
-
 
 </li>
 </ul>
