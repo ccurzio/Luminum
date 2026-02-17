@@ -23,6 +23,7 @@ Keep in mind that Luminum is still in the initial development stages, so it does
 - **Integrity:** Provides file integrity monitoring on endpoints
 - **Inventory:** Allows administrators to compile a full inventory of both network-connected devices as well as software installed on those devices
 - **Policy:** Enforcement of endpoint security and system management policies including firewall configuration, IDS/IPS, and IoCs
+- **Notify:** Provides pop-up alerts to users with customizable notifications
 
 <sub>* Indicates a core module that is always installed</sub>
 <br>
