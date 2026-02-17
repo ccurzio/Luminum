@@ -203,7 +203,8 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9654; |*In Progress*  |Check-In Processing         |Handle server-side updates on regular client check-ins                                  |
 | --     |Not Started    |Action Queueing             |Development of the queue structure for pending queries and actions                      |
 | --     |Not Started    |Action Polling              |Development of routines that watch for and then send new queries or actions             |
-
+| --     |Not Started    |Update Management           |Routines to manage Luminun core patching and updates                                    |
+| --     |Not Started    |Lumy Update Management      |Routines to manage Lumy patching and updates                                            |
 
 ### Logging
 |        |Status         |Task                        |Description                                                                             |
