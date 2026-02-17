@@ -595,6 +595,14 @@ In order to be accountable to the community - but more importantly to myself - I
 | --     |Not Started    |Overview Interface          |Present overview information of the current status of Policy in the environment         |
 | --     |Not Started    |Profile Configuration       |User interface for administrators to create/modify Policy profiles                      |
 </li>
+
+<li>
+
+#### Notify
+|        |Status         |Task                        |Description                                                                             |
+|--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+| --     |Not Started    |Overview Interface          |Present overview information of the current status of Notify in the environment         |
+| --     |Not Started    |Profile Configuration       |User interface for administrators to create/modify Notify profiles                      |
 </ul>
 
 
@@ -992,6 +1000,32 @@ In order to be accountable to the community - but more importantly to myself - I
 | --     |Not Started    |Network Hooking             |OS/Kernel interface for network monitoring/management                                   |
 | --     |Not Started    |IDS/IPS Integration         |Create or integrate intrusion detection/prevention systems                              |
 | --     |Not Started    |Firewall Management         |Modify on-device firewall rules according to stored configuration                       |
+</li>
+</ul>
+
+
+### Notify
+
+<ul>
+<li>
+
+#### Linux
+|        |Status         |Task                        |Description                                                                             |
+|--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+</li>
+
+<li>
+
+#### macOS
+|        |Status         |Task                        |Description                                                                             |
+|--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+</li>
+
+<li>
+
+#### Windows
+|        |Status         |Task                        |Description                                                                             |
+|--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 </li>
 </ul>
 
