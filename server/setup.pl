@@ -191,7 +191,7 @@ if ($text == 0) {
 		-fg		=> "black",
 		-buttonalignment=> "right",
 		-ipadright	=> 3,
-		-ipadtop	=> 28
+		-ipadtop	=> 28,
 		-width		=> 20,
 		-selected	=> 1,
 		);
