@@ -182,11 +182,13 @@ if ($text == 0) {
 			-label		=> $exitbutton,
 			-value		=> "exit",
 			-shortcut	=> $exitbsc,
+			-onpress	=> sub { print "\e[?25h"; exit(0); },
 			},
 		{
 			-label		=> $nextbutton,
 			-value		=> "next",
 			-shortcut	=> $nextbsc,
+			-onpress	=> sub { },
 			} ],
 		-fg		=> "black",
 		-buttonalignment=> "right",
@@ -196,7 +198,6 @@ if ($text == 0) {
 		-selected	=> 1,
 		);
 
-	my $wizaction = $wizbuttons->get();
 	$wizbuttons->focus();
 
 	$cui->mainloop();
