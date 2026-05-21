@@ -216,8 +216,8 @@ else {
 	print "$introlabel\n\n";
 	print "$breaklabel\n\n";
 	print "[$nextbutton]";
-	my $wiznext = <STDIN>;
 	ReadMode ('noecho');
+	my $wiznext = <STDIN>;
 
 	print "\e[?25h";
 	ReadMode ('normal');
