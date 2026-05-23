@@ -42,6 +42,12 @@ my $newconfsc;
 my $reconfbutton;
 my $newconfbutton;
 my $nocurseslabel;
+my $changed = 0;
+my $cancelwarnlabel;
+my $yesbutton;
+my $nobutton;
+my $yesbsc;
+my $nobsc;
 
 if ($ENV{LANG} =~ /en_/ || $ENV{LANG} eq "") {
 	$lang = "EN";
@@ -65,6 +71,11 @@ if ($ENV{LANG} =~ /en_/ || $ENV{LANG} eq "") {
 	$reconfbutton = " Reconfigure ";
 	$newconfbutton = " New Config ";
 	$nocurseslabel = "Curses::UI is not available. Run setup with --textonly for a text-based interface.";
+	$cancelwarnlabel = "Unsaved changes will be lost. Are you sure you want to cancel?";
+	$yesbutton = " Yes ";
+	$nobutton = " No ";
+	$yesbsc = "Y";
+	$nobsc = "N";
 	}
 elsif ($ENV{LANG} =~ /de_/) {
 	$lang = "DE";
@@ -88,6 +99,11 @@ elsif ($ENV{LANG} =~ /de_/) {
 	$reconfbutton = " Neukonfigurieren ";
 	$newconfbutton = " Neue Konfig. ";
 	$nocurseslabel = "Curses::UI ist nicht verfügbar. Führen Sie das Setup mit --textonly für eine textbasierte Oberfläche aus.";
+	$cancelwarnlabel = "Nicht gespeicherte Änderungen gehen verloren. Möchten Sie den Vorgang wirklich abbrechen?";
+	$yesbutton = " Ja ";
+	$nobutton = " Nein ";
+	$yesbsc = "J";
+	$nobsc = "N";
 	}
 elsif ($ENV{LANG} =~ /it_/) {
 	$lang = "IT";
@@ -111,6 +127,11 @@ elsif ($ENV{LANG} =~ /it_/) {
 	$reconfbutton = " Riconfigura ";
 	$newconfbutton = " Nuova Conf. ";
 	$nocurseslabel = "Curses::UI non è disponibile. Eseguire il setup con --textonly per un'interfaccia testuale.";
+	$cancelwarnlabel = "Le modifiche non salvate andranno perse. Sei sicuro di voler annullare?";
+	$yesbutton = " Sì ";
+	$nobutton = " No ";
+	$yesbsc = "S";
+	$nobsc = "N";
 	}
 elsif ($ENV{LANG} =~ /fr_/) {
 	$lang = "FR";
@@ -134,6 +155,11 @@ elsif ($ENV{LANG} =~ /fr_/) {
 	$reconfbutton = " Reconfigurer ";
 	$newconfbutton = " Nouvelle Conf. ";
 	$nocurseslabel = "Curses::UI n'est pas disponible. Lancez l'installation avec --textonly pour une interface en mode texte.";
+	$cancelwarnlabel = "Les modifications non enregistrées seront perdues. Voulez-vous vraiment annuler?";
+	$yesbutton = " Oui ";
+	$nobutton = " Non ";
+	$yesbsc = "O";
+	$nobsc = "N";
 	}
 elsif ($ENV{LANG} =~ /es_/) {
 	$lang = "ES";
@@ -157,6 +183,11 @@ elsif ($ENV{LANG} =~ /es_/) {
 	$reconfbutton = " Reconfigurar ";
 	$newconfbutton = " Nueva Conf. ";
 	$nocurseslabel = "Curses::UI no está disponible. Ejecute la configuración con --textonly para una interfaz de texto.";
+	$cancelwarnlabel = "Los cambios no guardados se perderán. ¿Está seguro de que desea cancelar?";
+	$yesbutton = " Sí ";
+	$nobutton = " No ";
+	$yesbsc = "S";
+	$nobsc = "N";
 	}
 
 foreach (@ARGV) {
@@ -186,6 +217,54 @@ if ($text == 0) {
 		);
 	$label->draw;
 
+	my $cancelAction = sub {
+		if ($changed == 1) {
+			my $warnwin = $win->add('warndialog', 'Window',
+				-centered	=> 1,
+				-width		=> 68,
+				-height		=> 12,
+				-bg		=> 'white',
+				-fg		=> 'black',
+				-border		=> 1,
+				-bfg		=> 'black',
+				-bbg		=> 'white',
+				);
+			$warnwin->add('warnlabel', 'Label',
+				-width		=> -1,
+				-height		=> -1,
+				-fg		=> 'black',
+				-padleft	=> 2,
+				-padright	=> 2,
+				-padtop		=> 1,
+				-text		=> wrap('', '', $cancelwarnlabel),
+				);
+			my $warnbuttons = $warnwin->add('warnbuttons', 'Buttonbox',
+				-buttons => [ {
+					-label		=> $nobutton,
+					-value		=> "no",
+					-shortcut	=> $nobsc,
+					-onpress	=> sub { $win->delete('warndialog'); $win->draw(); },
+					},
+				{
+					-label		=> $yesbutton,
+					-value		=> "yes",
+					-shortcut	=> $yesbsc,
+					-onpress	=> sub { print "\e[?25h"; exit(0); },
+					} ],
+				-fg		=> "black",
+				-buttonalignment=> "right",
+				-x		=> 2,
+				-ipadright	=> 3,
+				-ipadtop	=> 8,
+				-selected	=> 0,
+				);
+			$warnbuttons->focus();
+			}
+		else {
+			print "\e[?25h"; exit(0);
+			}
+		};
+
 	$wizard = $win->add('welcdialog','Window',
 		-centered	=> 1,
 		-width		=> 76,
@@ -212,7 +291,7 @@ if ($text == 0) {
 			-label		=> $exitbutton,
 			-value		=> "exit",
 			-shortcut	=> $exitbsc,
-			-onpress	=> sub { print "\e[?25h"; exit(0); },
+			-onpress	=> $cancelAction,
 			},
 		{
 			-label		=> $nextbutton,
@@ -244,7 +323,7 @@ if ($text == 0) {
 							-label		=> $exitbutton,
 							-value		=> "exit",
 							-shortcut	=> $exitbsc,
-							-onpress	=> sub { print "\e[?25h"; exit(0); },
+							-onpress	=> $cancelAction,
 							},
 						{
 							-label		=> $newconfbutton,
