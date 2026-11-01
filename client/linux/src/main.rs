@@ -1,13 +1,30 @@
 // Luminum Client for Linux
 // by Christopher R. Curzio <ccurzio@luminum.net>
 
+// Base client process: configuration, registration, check-ins, Lumy
+// discovery/launch, and the local IPC channel (port 10461) used by
+// Lumy modules to talk to the client.
+//
+// Protocol notes (docs/protocol.md v1.0-draft):
+//  - All direct channels use length-prefixed frames: 4-byte big-endian
+//    length followed by a JSON envelope (§8.2).
+//  - The envelope format is §5.1. MQTT transport is not yet available
+//    (Mosquitto + broker integration pending), so registration,
+//    check-ins, and Lumy traffic currently ride the bootstrap/direct
+//    channel to the server listener (LPORT 10465).
+//  - Every outgoing envelope is signed with the client's Ed25519 key
+//    over the canonical JSON (§5.3); server responses are verified
+//    against the server signing public key (SRVPUB) and Lumy IPC
+//    messages are verified against the client's own public key
+//    (§3.3, §8.2).
+
 use clap::{Arg, App};
 use colored::Colorize;
 use chrono::Local;
 use chrono::format::strftime::StrftimeItems;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::process;
-use std::process::{Command, Stdio, Child};
+use std::process::{Command, Stdio};
 use std::thread;
 use tokio::task::spawn;
 use tokio::time;
@@ -16,611 +33,631 @@ use etc_os_release::OsRelease;
 use local_ip_address::local_ip;
 use std::net::{TcpListener, SocketAddr, ToSocketAddrs, TcpStream};
 use native_tls::{TlsConnector, TlsStream};
-use std::str;
 use std::error::Error;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use std::fs::{self, File};
-use std::io::{self, Read, Write, BufWriter, BufReader, BufRead};
+use std::sync::Arc;
+use std::fs;
+use std::io::{self, Read, Write};
 use std::time::Duration;
-use regex::Regex;
-use rusqlite::{params, Connection, Result};
+use rusqlite::{params, Connection};
 use serde::{Serialize, Deserialize};
-use rmp_serde::{from_read, Deserializer, Serializer, to_vec_named};
-use rmp_serde::decode::from_slice;
+use std::path::Path;
+
+use base64ct::Encoding;
+use ed25519_dalek::{Signer, Verifier, SigningKey, VerifyingKey, Signature};
+use sha2::{Digest, Sha256};
 
 const VER: &str = "0.0.1";
-const CFGPATH: &str = "/opt/Luminum/LuminumClient/config/client.conf.db";
-const CRTPATH: &str = "/opt/Luminum/LuminumClient/config/server.crt";
-const MODPATH: &str = "/opt/Luminum/LuminumClient/modules";
 const IPORT: u16 = 10704;
 const DPORT: u16 = 10465;
 const LPORT: u16 = 10461;
+const CHECKIN_SECS: u64 = 300;
 
-struct Config {
-	key: String,
-	value: String
-	}
+// Install root; overridable via LUMINUM_HOME for testing.
+fn base_path() -> String {
+	std::env::var("LUMINUM_HOME").unwrap_or_else(|_| String::from("/opt/Luminum/LuminumClient"))
+}
 
-#[derive(Serialize, Deserialize, Debug)]
-struct ServerMessage {
-	version: String,
-	content: MessageContent
-	}
+fn cfg_path() -> String { format!("{}/config/client.conf.db", base_path()) }
+fn crt_path() -> String { format!("{}/config/server.crt", base_path()) }
+fn mod_path() -> String { format!("{}/modules", base_path()) }
+fn outq_path() -> String { format!("{}/config/outqueue.db", base_path()) }
 
-#[derive(Serialize, Deserialize, Debug)]
-struct ClientMessage {
+// ---------------------------------------------------------------------------
+// Envelope (protocol §5.1)
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct Envelope {
+	v: String,
+	id: String,
+	ts: i64,
+	src: String,
 	uid: String,
-	product: String,
-	version: String,
-	content: MessageContent
-	}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct MessageContent {
 	lumy: String,
+	action: String,
 	status: String,
-	action: String,
-	data: Option<MessageData>
-	}
+	#[serde(skip_serializing_if = "Option::is_none")]
+	err: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	data: Option<serde_json::Value>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	sig: Option<String>,
+}
 
-#[derive(Serialize, Deserialize, Debug)]
-struct MessageData {
-	serverkey: Option<String>,
-	hostname: Option<String>,
-	uid: Option<String>,
-	osplat: Option<String>,
-	osver: Option<String>,
-	ipv4: Option<String>,
-	ipv6: Option<String>,
-	info: Option<Vec<String>>
-	}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct LumyMessage {
-	lumy: String,
-	version: String,
-	content: LumyContent
-	}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct LumyContent {
-	action: String,
-	data: Option<Vec<String>>
-	}
-
-#[tokio::main]
-async fn main() {
-	let endpointname = gethostname().to_string_lossy().into_owned();
-	let matches = App::new("Luminum Client (Linux)")
-		.version(VER)
-		.author("Christopher R. Curzio <ccurzio@luminum.net>")
-	 .arg(Arg::with_name("setup")
-		.short('s')
-		.long("setup")
-		.value_name("setup")
-		.help("Set client configuration parameters")
-		.takes_value(false))
-	 .arg(Arg::with_name("debug")
-		.short('d')
-		.long("debug")
-		.value_name("debug")
-		.help("Enables debug mode")
-		.takes_value(false))
-	.get_matches();
-
-	let setup = matches.is_present("setup");
-	let debug = matches.is_present("debug");
-
-	let mut clientconfig: HashMap<String, String> = HashMap::new();
-	let mut lumys: HashMap<String, String> = HashMap::new();
-
-        // Set up break handler
-	let running = Arc::new(AtomicBool::new(true));
-	let r = running.clone();
-	ctrlc::set_handler(move || {
-		r.store(false, Ordering::SeqCst);
-		print!("\r\x1B[K");
-		io::stdout().flush().unwrap_or(());
-		dbout(debug,0,"Received BREAK signal.");
-		dbout(debug,0,"Luminum Client Terminated.");
-		process::exit(1);
-		}).expect("Error creating break handler");
-
-	// Check if setup routine needs to run
-	if setup {
-		dbout(debug,4,format!("Starting client setup...").as_str());
-		if fs::metadata(CFGPATH).is_err() { clientsetup(); }
-		else {
-			dbout(debug,1,format!("Client configuration already exists. Aborting.").as_str());
-			process::exit(1);
-			}
-		}
-
-	// Client Startup
-	dbout(debug,0,format!("Starting Luminum Client v{}...", VER).as_str());
-
-	// Get machine IP address information
-	let ip_address = local_ip().unwrap().to_string();
-	let ipv4_regex = Regex::new(r"^(\d{1,3}\.){3}\d{1,3}$").unwrap();
-	let ipv6_regex = Regex::new(r"^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$").unwrap();
-	let mut ipv4_address = String::new();
-	let mut ipv6_address = String::new();
-	if ipv4_regex.is_match(&ip_address) { ipv4_address = ip_address.clone(); }
-	if ipv6_regex.is_match(&ip_address) { ipv6_address = ip_address.clone(); }
-
-	dbout(debug,4,format!("Endpoint IP address: {}", ip_address).as_str());
-
-	dbout(debug,3,format!("Using configuration: {}",CFGPATH).as_str());
-	let clientconfig = parse_clientconfig(debug);
-	let clientconfig_clone = clientconfig.clone();
-
-	// Set up local IPC listener
-	let addr_str = format!("127.0.0.1:{}", LPORT);
-	let addr: SocketAddr = addr_str.parse().expect("Invalid socket address for IPC");
-
-	let ipclistener = match TcpListener::bind(addr) {
-		Ok(ipclistener) => { 
-			dbout(debug,3,format!("Local IPC configured on port {}", LPORT).as_str());
-			ipclistener
-			},
-		Err(err) => {
-			dbout(debug,1,format!("Unable to configure local IPC: {}", err).as_str());
-			process::exit(1);
-			}
-		};
-
-	// Set up local data connection
-	let sladdr_str = format!("{}:{}",ip_address,IPORT);
-	let sladdr: SocketAddr = sladdr_str.parse().expect("Invalid socket address for server data connection");
-
-	let serverlistener = match TcpListener::bind(sladdr) {
-		Ok(serverlistener) => {
-			dbout(debug,3,format!("Incoming data connection configured on port {}", IPORT).as_str());
-			serverlistener
-			},
-		Err(err) => {
-			dbout(debug,1,format!("Unable to configure incoming data connection: {}", err).as_str());
-			process::exit(1);
-			}
-		};
-
-	// Conncet to Luminum Server
-	let server_host = clientconfig.get("SHOST").unwrap();
-	let server_port = clientconfig.get("SPORT").unwrap();
-	let server_addr_str = format!("{}:{}", server_host, server_port);
-	let server_addr: SocketAddr = match server_addr_str.to_socket_addrs() {
-		Ok(mut addrs) => {
-			if let Some(addr) = addrs.next() { addr }
-			else {
-				eprintln!("No addresses found for hostname");
-				return;
-				}
-			},
-		Err(e) => {
-			eprintln!("Unable to resolve hostname: {}", e);
-			return;
-			}
-		};
-
-	// Check client registration status and register with server if necessary
-	let mut uid = String::new();
-	if clientconfig.get("UID").is_none() {
-		dbout(debug,4,format!("Endpoint is not registered with the Luminum server. Sending registration request...").as_str());
-		let msgdata = MessageData {
-			hostname: Some(String::from(endpointname.clone())),
-			serverkey: Some(String::from(clientconfig.get("SVRKEY").unwrap())),
-			uid: Some(String::from("NONE")),
-			osplat: Some(String::from("Linux")),
-			osver: Some(String::from(get_os_release())),
-			ipv4: Some(String::from(ip_address)),
-			ipv6: None,
-			info: None
-			};
-		let msgcontent = MessageContent {
-			lumy: String::from("Client Core"),
-			status: String::from("noreg"),
-			action: String::from("register"),
-			data: Some(msgdata)
-			};
-			let clientmsg = ClientMessage {
-			product: String::from("Luminum Client"),
-			version: String::from(VER),
-			uid: String::from("NONE"),
-			content: msgcontent
-			};
-		let servermsg: Option<ServerMessage> = match server_send(server_host, server_port, CRTPATH, clientmsg, debug) {
-			Ok(response) => { Some(response) },
-			Err(err) => {
-				dbout(debug,2,format!("Unable to send message to server: {}", err).as_str());
-				None
-				}
-			};
-
-		let response = servermsg.unwrap();
-		if response.content.action == "register" {
-			if response.content.status == "OK" {
-				let response_data: MessageData = response.content.data.expect("Error: Unable to parse response data");
-				let new_uid = response_data.uid.expect("Error: Unable to parse UID in response data");
-				let confconn = Connection::open(CFGPATH).expect("Error: Could not open configuration database.");
-				confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)",&[&"UID",new_uid.to_string().as_str()]).expect("Error: Could not insert UID into CONFIG table.");
-				confconn.close().unwrap();
-				dbout(debug,3,format!("Registration successful. (UID: {})", new_uid).as_str());
-				let dbg = debug;
-				tokio::spawn(async move {
-					let mut interval = time::interval(Duration::from_secs(300));
-					loop {
-						interval.tick().await;
-						heartbeat(dbg).await;
-						}
-					});
-				}
-			}		
-		}
-	else {
-		let uid = clientconfig.get("UID").unwrap();
-		dbout(debug,3,format!("Endpoint is registered with UID {}", uid).as_str());
-		let dbg = debug;
-		tokio::spawn(async move {
-			let mut interval = time::interval(Duration::from_secs(300));
-			loop {
-				interval.tick().await;
-				heartbeat(dbg).await;
-				}
-			});
-		}
-
-	// Review installed Lumys
-	if file_exists(MODPATH) {
-		let mut integrity_path = String::from(MODPATH);
-		integrity_path.push_str("/integrity/Lumy_Integrity");
-
-		if file_exists(&integrity_path) {
-			dbout(debug,4,format!("Found Lumy: Integrity").as_str());
-			lumys.insert(String::from("Integrity"),String::from(integrity_path));
-			}
-		}
-
-	for (lumy, lpath) in &lumys {
-		start_lumy(&lumy, &lpath, debug);
-		if lumys.len() > 1 { thread::sleep(Duration::from_secs(2)); }
-		}
-
-	// Start IPC listener
-	let dbc = debug.clone();
-	for stream in ipclistener.incoming() {
-		match stream {
-			Ok(stream) => {
-				thread::spawn(move || {
-					if let Err(err) = handle_ipc(stream,dbc) {
-						dbout(debug,2,format!("Error in IPC stream data: {}", err).as_str());
-						}
-					});
-				}
-			Err(err) => {
-				dbout(debug,2,format!("Error establishing IPC connection: {}", err).as_str());
-				}
-			}
-		}
-
-
-
-
-/*
-		let msgdata = MessageData {
-			hostname: Some(String::from(endpointname.clone())),
-			serverkey: Some(String::from(clientconfig.get("SVRKEY").unwrap())),
-			uid: Some(String::from("NONW")),
-			osplat: Some(String::from("Linux")),
-			osver: Some(String::from(get_os_release())),
-			ipv4: Some(String::from(ipv4_address.clone())),
-			ipv6: Some(String::from(ipv6_address.clone()))
-			};
-		let msgcontent = MessageContent {
-			module: String::from("Client Core"),
-			status: String::from("noreg"),
-			action: String::from("register"),
-			data: Some(msgdata)
-			};
-		let clientmsg = ClientMessage {
-			product: String::from("Luminum Client"),
-			version: String::from(VER),
-			uid: String::from("NONE"),
-			content: msgcontent
-			};
-		let servermsg: Option<ServerMessage> = match server_send(server_host, server_port, server_cert_path, clientmsg, debug) {
-			Ok(response) => { Some(response) },
-			Err(err) => {
-				dbout(debug,2,format!("Failed to send message to server: {}", err).as_str());
-				None
-				}
-			};
-
-	let ipcstream = Arc::new(Mutex::new(None));
-
-	for incoming in ipclistener.incoming() {
-		match incoming {
-			Ok(mut stream) => {
-				let shared_stream = Arc::clone(&ipcstream);
-				let ccfg = clientconfig_clone.clone();
-				thread::spawn(move || {
-					let mut shared_stream = shared_stream.lock().unwrap();
-					*shared_stream = Some(stream);
-					});
-				},
-			Err(e) => {
-				eprintln!("Error: {}", e);
-				}
-			}
-		}
-*/
-	}
-
-async fn heartbeat(debug: bool) {
-	let ccfg = parse_clientconfig(debug);
-	let uid = ccfg.get("UID").unwrap();
-	let endpointname = gethostname().to_string_lossy().into_owned();
-	let server_host = ccfg.get("SHOST").unwrap();
-	let server_port = ccfg.get("SPORT").unwrap();
-
-	let msgdata = MessageData {
-		hostname: None,
-		serverkey: None,
-		uid: None,
-		osplat: None,
-		osver: None,
-		ipv4: None,
-		ipv6: None,
-		info: None
-		};
-	let msgcontent = MessageContent {
-		lumy: String::from("Client Core"),
-		status: String::from("online"),
-		action: String::from("heartbeat"),
-		data: Some(msgdata)
-		};
-	let clientmsg = ClientMessage {
-		product: String::from("Luminum Client"),
-		version: String::from(VER),
+fn new_envelope(src: &str, uid: &str, lumy: &str, action: &str, status: &str, data: Option<serde_json::Value>) -> Envelope {
+	Envelope {
+		v: String::from("1.0"),
+		id: uuid4(),
+		ts: Local::now().timestamp(),
+		src: String::from(src),
 		uid: String::from(uid),
-		content: msgcontent
-		};
-
-	dbout(debug,4,format!("Sending heartbeat to Luminum server").as_str());
-	let _ = server_send(server_host, server_port, CRTPATH, clientmsg, debug);
-	thread::sleep(Duration::from_secs(5));
+		lumy: String::from(lumy),
+		action: String::from(action),
+		status: String::from(status),
+		err: None,
+		data,
+		// Signed in place before transmission (sign_envelope, §3.3).
+		sig: None,
 	}
+}
 
+fn uuid4() -> String {
+	let mut b = [0u8; 16];
+	getrandom::getrandom(&mut b).expect("Error: unable to obtain randomness for UUID");
+	b[6] = (b[6] & 0x0f) | 0x40;
+	b[8] = (b[8] & 0x3f) | 0x80;
+	format!("{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+		b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15])
+}
+
+// ---------------------------------------------------------------------------
+// Framing (protocol §8.2): 4-byte big-endian length + JSON payload
+// ---------------------------------------------------------------------------
+
+const MAX_FRAME: usize = 16 * 1024 * 1024; // 16 MiB data channel cap
+
+fn frame_write<W: Write>(w: &mut W, env: &Envelope) -> Result<(), Box<dyn Error>> {
+	let payload = serde_json::to_vec(env)?;
+	if payload.len() > MAX_FRAME {
+		return Err(Box::from("Frame payload exceeds maximum size"));
+	}
+	let len = (payload.len() as u32).to_be_bytes();
+	w.write_all(&len)?;
+	w.write_all(&payload)?;
+	w.flush()?;
+	Ok(())
+}
+
+fn frame_read<R: Read>(r: &mut R) -> Result<Envelope, Box<dyn Error>> {
+	let mut lenbuf = [0u8; 4];
+	r.read_exact(&mut lenbuf)?;
+	let len = u32::from_be_bytes(lenbuf) as usize;
+	if len == 0 || len > MAX_FRAME {
+		return Err(Box::from("Invalid frame length"));
+	}
+	let mut payload = vec![0u8; len];
+	r.read_exact(&mut payload)?;
+	let env: Envelope = serde_json::from_slice(&payload)?;
+	Ok(env)
+}
+
+// ---------------------------------------------------------------------------
+// Ed25519 signatures (protocol §3.3, §5.3)
+// ---------------------------------------------------------------------------
+
+// SPKI/DER encoding of an Ed25519 public key (RFC 8410): a fixed
+// 12-byte header followed by the raw 32-byte key.
+const SPKI_ED25519_PREFIX: [u8; 12] = [0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00];
+
+fn spki_der(pub_bytes: &[u8; 32]) -> Vec<u8> {
+	let mut der = SPKI_ED25519_PREFIX.to_vec();
+	der.extend_from_slice(pub_bytes);
+	der
+}
+
+// Extract the raw 32-byte public key from an SPKI/DER encoding.
+fn spki_to_raw(der: &[u8]) -> Option<[u8; 32]> {
+	if der.len() != 44 || der[..12] != SPKI_ED25519_PREFIX[..] {
+		return None;
+	}
+	let mut raw = [0u8; 32];
+	raw.copy_from_slice(&der[12..]);
+	Some(raw)
+}
+
+// Fingerprint: lowercase hex SHA-256 of the SPKI/DER public key (§3.1).
+fn fingerprint(pub_bytes: &[u8; 32]) -> String {
+	let digest = Sha256::digest(spki_der(pub_bytes));
+	let mut hex = String::with_capacity(64);
+	for b in digest { hex.push_str(&format!("{:02x}", b)); }
+	hex
+}
+
+// Canonical JSON for signing (§5.3): keys sorted lexicographically at
+// every level, no whitespace, RFC 8259 escaping, minimal number form.
+// serde_json's Value uses a BTreeMap (byte-ordered keys) and its
+// serializer emits exactly this form, so building the Value with the
+// `sig` field omitted is sufficient.
+fn canonical_json(env: &Envelope) -> String {
+	let mut v = serde_json::json!({
+		"v": env.v,
+		"id": env.id,
+		"ts": env.ts,
+		"src": env.src,
+		"uid": env.uid,
+		"lumy": env.lumy,
+		"action": env.action,
+		"status": env.status,
+	});
+	if let Some(err) = &env.err { v["err"] = serde_json::json!(err); }
+	if let Some(data) = &env.data { v["data"] = data.clone(); }
+	serde_json::to_string(&v).expect("Error: unable to serialize canonical envelope")
+}
+
+fn sign_envelope(env: &mut Envelope, seed: &[u8; 32]) {
+	let key = SigningKey::from_bytes(seed);
+	let sig = key.sign(canonical_json(env).as_bytes());
+	env.sig = Some(base64ct::Base64::encode_string(sig.to_bytes().as_slice()));
+}
+
+fn verify_envelope(env: &Envelope, pub_bytes: &[u8; 32]) -> bool {
+	let Some(sig_b64) = env.sig.as_deref() else { return false; };
+	let Ok(sig_raw) = base64ct::Base64::decode_vec(sig_b64) else { return false; };
+	let Ok(signature) = Signature::from_slice(&sig_raw) else { return false; };
+	let Ok(key) = VerifyingKey::from_bytes(pub_bytes) else { return false; };
+	key.verify(canonical_json(env).as_bytes(), &signature).is_ok()
+}
+
+// ---------------------------------------------------------------------------
+// Configuration
+// ---------------------------------------------------------------------------
 
 fn parse_clientconfig(debug: bool) -> HashMap<String, String> {
 	let mut clientconfig: HashMap<String, String> = HashMap::new();
 
-	if fs::metadata(CFGPATH).is_ok() {
-		let confconn = match Connection::open(CFGPATH) {
-			Ok(confconn) => { confconn }
+	if fs::metadata(cfg_path()).is_ok() {
+		let confconn = match Connection::open(cfg_path()) {
+			Ok(confconn) => confconn,
 			Err(err) => {
-				dbout(debug,1,format!("Could not open client configuration database: {}",err).as_str());
+				dbout(debug, 1, &format!("Could not open client configuration database: {}", err));
 				process::exit(1);
-				}
-			};
-		let mut stmt = confconn.prepare("select KEY,VALUE from CONFIG").unwrap();
+			}
+		};
+		let mut stmt = confconn.prepare("select KEY,VALUE from CONFIG").expect("Error: Could not prepare CONFIG query");
 		let cfg_iter = stmt.query_map(params![], |row| {
-			Ok(Config {
-				key: row.get(0)?,
-				value: row.get(1)?
-				})
-			}).expect("Error: Unable to parse configuration values");
+			Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+		}).expect("Error: Unable to parse configuration values");
 		for cfg_result in cfg_iter {
-			if let Ok(cfg) = cfg_result {
-				clientconfig.insert(cfg.key.to_string(),cfg.value.to_string());
-				}
+			if let Ok((key, value)) = cfg_result {
+				clientconfig.insert(key, value);
 			}
 		}
-	else {
-		dbout(debug,1,format!("Configuration database not found.").as_str());
+	} else {
+		dbout(debug, 1, "Configuration database not found. Run with --setup first.");
 		process::exit(1);
-		}
-	return clientconfig
 	}
+	clientconfig
+}
 
-fn handle_ipc(stream: TcpStream, debug: bool) -> Result<(), Box<dyn std::error::Error>> {
-	let mut reader = BufReader::new(&stream);
-	let mut writer = BufWriter::new(&stream);
+fn config_set(key: &str, value: &str) {
+	let confconn = Connection::open(cfg_path()).expect("Error: Could not open configuration database.");
+	confconn.execute("insert or replace into CONFIG (KEY,VALUE) values (?1, ?2)", params![key, value])
+		.expect("Error: Could not save configuration value.");
+	confconn.close().unwrap();
+}
 
-	let ccfg = parse_clientconfig(debug);
-	let uid = ccfg.get("UID").unwrap();
-	let endpointname = gethostname().to_string_lossy().into_owned();
-	let server_host = ccfg.get("SHOST").unwrap();
-	let server_port = ccfg.get("SPORT").unwrap();
+// ---------------------------------------------------------------------------
+// Client keypair (protocol §3.1)
+// ---------------------------------------------------------------------------
 
-	let mut buffer = [0; 1024];
-	let bytes_read = reader.read(&mut buffer)?;
-	let mut deserializer = Deserializer::new(&buffer[..]);
-	let lumymsg: LumyMessage = Deserialize::deserialize(&mut deserializer)?;
-
-	if lumymsg.lumy == "Integrity" {
-		if lumymsg.content.action == "newconfig" {
-			dbout(debug,4,format!("Received new configuration request from Integrity Lumy").as_str());
-			let msgdata = MessageData {
-				hostname: Some(String::from(endpointname)),
-				serverkey: None,
-				uid: Some(String::from(uid)),
-				osplat: Some(String::from("Linux")),
-				osver: None,
-				ipv4: None,
-				ipv6: None,
-				info: None
-				};
-			let msgcontent = MessageContent {
-				lumy: String::from("Integrity"),
-				status: String::from("new"),
-				action: String::from("newconfig"),
-				data: Some(msgdata)
-				};
-			let clientmsg = ClientMessage {
-				product: String::from("Luminum Client"),
-				version: String::from(VER),
-				uid: String::from(uid),
-				content: msgcontent
-				};
-			let servermsg: Option<ServerMessage> = match server_send(server_host, server_port, CRTPATH, clientmsg, debug) {
-				Ok(response) => {
-					dbout(debug,4,format!("Sent Integrity configuration request to Luminum server").as_str());
-					Some(response)
-					},
-				Err(err) => {
-					dbout(debug,2,format!("Failed to send Integrity configuration request to server: {}", err).as_str());
-					None
-					}
-				};
-
-			if let serverdata = servermsg.unwrap().content.data.unwrap().info {
-				let tolumycontent = LumyContent {
-					action: String::from("setconfig"),
-					data: serverdata
-					};
-				let tolumymsg = LumyMessage {
-					lumy: String::from("Luminum Client"),
-					version: String::from(VER),
-					content: tolumycontent
-					};
-				let serialized_data = to_vec_named(&tolumymsg).expect("Error: Unable to serialize IPC response");
-				writer.write_all(&serialized_data).expect("Error: Unable to send message to Luminum Client process");
-				dbout(debug,3,format!("New configuration sent to Integrity Lumy").as_str());
-				}
+/// Load the client's Ed25519 keypair from the config DB, generating and
+/// persisting a new one if absent or corrupt (CLPPRV = base64 32-byte
+/// seed, CLPPUB = base64 raw public key, FPNT = fingerprint).
+fn client_keypair(debug: bool, ccfg: &HashMap<String, String>) -> ([u8; 32], [u8; 32]) {
+	if let (Some(prv), Some(pubk)) = (ccfg.get("CLPPRV"), ccfg.get("CLPPUB")) {
+		match (base64ct::Base64::decode_vec(prv), base64ct::Base64::decode_vec(pubk)) {
+			(Ok(prv_raw), Ok(pub_raw)) if prv_raw.len() == 32 && pub_raw.len() == 32 => {
+				let mut seed = [0u8; 32];
+				let mut pubb = [0u8; 32];
+				seed.copy_from_slice(&prv_raw);
+				pubb.copy_from_slice(&pub_raw);
+				return (seed, pubb);
 			}
+			_ => dbout(debug, 1, "Stored client keypair is invalid. Regenerating..."),
 		}
-	Ok(())
 	}
+	let mut seed = [0u8; 32];
+	getrandom::getrandom(&mut seed).expect("Error: unable to obtain randomness for key generation");
+	let key = SigningKey::from_bytes(&seed);
+	let pubb = *key.verifying_key().as_bytes();
+	config_set("CLPPRV", &base64ct::Base64::encode_string(&seed));
+	config_set("CLPPUB", &base64ct::Base64::encode_string(&pubb));
+	config_set("FPNT", &fingerprint(&pubb));
+	dbout(debug, 3, "Generated new client signing keypair.");
+	(seed, pubb)
+}
 
-fn server_send(server_host: &str, server_port: &str, cert_path: &str, message: ClientMessage, debug: bool) -> Result<ServerMessage, Box<dyn Error>> {
-	let server_addr_str = format!("{}:{}", server_host, server_port); 
-	let server_addr = server_addr_str.to_socket_addrs()?.next().ok_or("No addresses found for hostname")?; 
-	let mut server_cert = File::open(cert_path)?;
-	let mut cert_buffer = Vec::new();
-	server_cert.read_to_end(&mut cert_buffer)?;
+/// The server's signing public key (raw 32 bytes), if stored in config.
+fn server_pubkey(ccfg: &HashMap<String, String>) -> Option<[u8; 32]> {
+	let raw = base64ct::Base64::decode_vec(ccfg.get("SRVPUB")?).ok()?;
+	if raw.len() != 32 { return None; }
+	let mut out = [0u8; 32];
+	out.copy_from_slice(&raw);
+	Some(out)
+}
+
+// ---------------------------------------------------------------------------
+// Server channel (bootstrap/direct, TLS + framed JSON)
+// ---------------------------------------------------------------------------
+
+fn server_connect(server_host: &str, server_port: &str, cert_path: &str, debug: bool) -> Result<TlsStream<TcpStream>, Box<dyn Error>> {
+	let server_addr_str = format!("{}:{}", server_host, server_port);
+	let server_addr = server_addr_str.to_socket_addrs()?.next().ok_or("No addresses found for hostname")?;
 
 	let sconn = loop {
 		match TcpStream::connect(server_addr) {
 			Ok(sconn) => break sconn,
 			Err(err) => {
-				dbout(debug,2,format!("Connection to Luminum server failed: {}", err).as_str());
-				dbout(debug,4,format!("Retrying connection in 30 seconds...",).as_str());
+				dbout(debug, 2, &format!("Connection to Luminum server failed: {}", err));
+				dbout(debug, 4, "Retrying connection in 30 seconds...");
 				thread::sleep(Duration::from_secs(30));
-				}
 			}
-		};
+		}
+	};
 
+	let cert_buffer = fs::read(cert_path)?;
 	let mut builder = TlsConnector::builder();
 	builder.add_root_certificate(native_tls::Certificate::from_pem(&cert_buffer)?);
 	let connector = builder.build()?;
-	let mut server_stream = connector.connect(server_host, sconn)?;
+	let server_stream = connector.connect(server_host, sconn)?;
+	Ok(server_stream)
+}
 
-	let mut stream = Arc::new(Mutex::new(server_stream));
-	let stream_clone = Arc::clone(&stream);
-
-	let serialized_data = to_vec_named(&message)?;
-	let mut stream = stream.lock().unwrap();
-	stream.write_all(&serialized_data)?;
-	stream.flush()?;
-
-	let mut buffer = Vec::new();
-	stream.read_to_end(&mut buffer)?;
-
-	let mut deserializer = Deserializer::new(&buffer[..]);
-	let response: ServerMessage = Deserialize::deserialize(&mut deserializer)?;
+fn server_send(server_host: &str, server_port: &str, cert_path: &str, message: &Envelope, debug: bool) -> Result<Envelope, Box<dyn Error>> {
+	let mut stream = server_connect(server_host, server_port, cert_path, debug)?;
+	frame_write(&mut stream, message)?;
+	let response = frame_read(&mut stream)?;
 	Ok(response)
+}
+
+// ---------------------------------------------------------------------------
+// Registration / check-in
+// ---------------------------------------------------------------------------
+
+fn register_with_server(debug: bool, ccfg: &HashMap<String, String>) {
+	let endpointname = gethostname().to_string_lossy().into_owned();
+	let ip_address = local_ip().map(|a| a.to_string()).unwrap_or_default();
+	let (seed, pubb) = client_keypair(debug, ccfg);
+
+	let data = serde_json::json!({
+		"hostname": endpointname,
+		"serverkey": ccfg.get("SVRKEY").cloned().unwrap_or_default(),
+		"uid": "0",
+		"pubkey": base64ct::Base64::encode_string(spki_der(&pubb).as_slice()),
+		"fingerprint": fingerprint(&pubb),
+		"osplat": "Linux",
+		"osrel": get_os_release(),
+		"clientver": VER,
+		"ipv4": ip_address
+	});
+
+	let mut msg = new_envelope("client", "0", "core", "register", "noreg", Some(data));
+	sign_envelope(&mut msg, &seed);
+	let server_host = ccfg.get("SHOST").unwrap();
+	let server_port = ccfg.get("SPORT").unwrap();
+
+	match server_send(server_host, server_port, &crt_path(), &msg, debug) {
+		Ok(response) => {
+			if response.action == "register" && response.status == "OK" {
+				// Verify the response against the server signing public key
+				// carried in the response (§7.1). The TLS-bound signing
+				// certificate is the full trust anchor; the convenience
+				// field is cross-checked against it once certificate
+				// validation lands.
+				let srvpub = response.data.as_ref()
+					.and_then(|d| d.get("serverpubkey"))
+					.and_then(|v| v.as_str())
+					.and_then(|b64| base64ct::Base64::decode_vec(b64).ok().map(|b| b.to_vec()))
+					.and_then(|der| spki_to_raw(&der));
+				match srvpub {
+					Some(raw) if verify_envelope(&response, &raw) => {
+						config_set("SRVPUB", &base64ct::Base64::encode_string(&raw));
+					}
+					_ => {
+						dbout(debug, 1, "MSG_AUTH_FAIL: registration response signature verification failed.");
+						return;
+					}
+				}
+				if let Some(uid) = response.data.as_ref().and_then(|d| d.get("uid")).and_then(|v| v.as_str()) {
+					config_set("UID", uid);
+					dbout(debug, 3, &format!("Registration successful. (UID: {})", uid));
+				} else {
+					dbout(debug, 1, "Registration response did not include a UID.");
+				}
+			} else {
+				dbout(debug, 1, &format!("Registration failed: {} {}", response.status, response.err.unwrap_or_default()));
+			}
+		}
+		Err(err) => dbout(debug, 2, &format!("Unable to send registration to server: {}", err)),
+	}
+}
+
+fn checkin(debug: bool) {
+	let ccfg = parse_clientconfig(debug);
+	if let Some(uid) = ccfg.get("UID") {
+		let endpointname = gethostname().to_string_lossy().into_owned();
+		let ip_address = local_ip().map(|a| a.to_string()).unwrap_or_default();
+
+		let data = serde_json::json!({
+			"hostname": endpointname,
+			"osplat": "Linux",
+			"osrel": get_os_release(),
+			"clientver": VER,
+			"ipv4": ip_address
+		});
+		let mut msg = new_envelope("client", uid, "core", "checkin", "OK", Some(data));
+		let (seed, _) = client_keypair(debug, &ccfg);
+		sign_envelope(&mut msg, &seed);
+		let server_host = ccfg.get("SHOST").unwrap();
+		let server_port = ccfg.get("SPORT").unwrap();
+		dbout(debug, 4, "Sending check-in to Luminum server");
+		match server_send(server_host, server_port, &crt_path(), &msg, debug) {
+			Ok(response) => match server_pubkey(&ccfg) {
+				Some(srvpub) if verify_envelope(&response, &srvpub) => dbout(debug, 4, "Check-in acknowledged"),
+				Some(_) => dbout(debug, 1, "MSG_AUTH_FAIL: check-in response signature verification failed."),
+				None => dbout(debug, 2, "No server signing public key on file; check-in response not verified."),
+			},
+			Err(err) => dbout(debug, 2, &format!("Check-in failed: {}", err)),
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Local IPC (Lumy channel, port 10461)
+// ---------------------------------------------------------------------------
+
+fn handle_ipc(stream: TcpStream, debug: bool) -> Result<(), Box<dyn Error>> {
+	let mut stream = stream;
+	let ccfg = parse_clientconfig(debug);
+	let uid = ccfg.get("UID").cloned().unwrap_or_default();
+	let (seed, clpub) = client_keypair(debug, &ccfg);
+
+	let env = frame_read(&mut stream)?;
+	dbout(debug, 4, &format!("IPC message from {}: action={}", env.lumy, env.action));
+
+	// Lumy traffic is signed with the client's key (§8.2); reject
+	// anything that does not verify.
+	if env.src != "lumy" || !verify_envelope(&env, &clpub) {
+		dbout(debug, 1, &format!("MSG_AUTH_FAIL: IPC message from {} rejected (src={}, signature={})",
+			env.lumy, env.src, if verify_envelope(&env, &clpub) { "valid" } else { "invalid" }));
+		let mut resp = new_envelope("client", &uid, &env.lumy, &env.action, "ERR", None);
+		resp.err = Some(if env.src != "lumy" { String::from("INVALID_SRC") } else { String::from("BAD_SIGNATURE") });
+		sign_envelope(&mut resp, &seed);
+		frame_write(&mut stream, &resp)?;
+		return Ok(());
 	}
 
-fn start_lumy(lumy: &str, cmd: &str, debug: bool) {
-	dbout(debug,0,format!("Starting \"{}\" Lumy", lumy).as_str());
-	let mut child = Command::new(cmd)
-	.stdout(Stdio::null())
-	.stderr(Stdio::null())
-	.spawn();
+	match (env.lumy.to_lowercase().as_str(), env.action.as_str()) {
+		// Lumy has no local configuration and is requesting its
+		// configuration set from the server.
+		(_, "newconfig") => {
+			dbout(debug, 4, &format!("Received newconfig request from {} Lumy", env.lumy));
+			let data = serde_json::json!({
+				"hostname": gethostname().to_string_lossy().into_owned(),
+				"uid": uid
+			});
+			let mut req = new_envelope("client", &uid, &env.lumy.to_lowercase(), "newconfig", "new", Some(data));
+			sign_envelope(&mut req, &seed);
+			let server_host = ccfg.get("SHOST").cloned().unwrap_or_default();
+			let server_port = ccfg.get("SPORT").cloned().unwrap_or_default();
 
-	match child {
-		Ok(mut _child) => {
-			dbout(debug,3,format!("Successfully started \"{}\" Lumy", lumy).as_str());
-			},
+			match server_send(&server_host, &server_port, &crt_path(), &req, debug) {
+				Ok(response) => {
+					// The server's configuration payload must verify
+					// before it is handed to the Lumy.
+					match server_pubkey(&ccfg) {
+						Some(srvpub) if verify_envelope(&response, &srvpub) => {}
+						Some(_) => {
+							dbout(debug, 1, "MSG_AUTH_FAIL: server configuration response failed signature verification.");
+							let mut resp = new_envelope("client", &uid, &env.lumy.to_lowercase(), "setconfig", "ERR", None);
+							resp.err = Some(String::from("MSG_AUTH_FAIL"));
+							sign_envelope(&mut resp, &seed);
+							frame_write(&mut stream, &resp)?;
+							return Ok(());
+						}
+						None => dbout(debug, 2, "No server signing public key on file; configuration response not verified."),
+					}
+					if response.status == "OK" {
+						dbout(debug, 4, &format!("Configuration received from server for {} Lumy", env.lumy));
+						let mut resp = new_envelope("client", &uid, &env.lumy.to_lowercase(), "setconfig", "OK", response.data);
+						sign_envelope(&mut resp, &seed);
+						frame_write(&mut stream, &resp)?;
+						dbout(debug, 3, &format!("New configuration sent to {} Lumy", env.lumy));
+					} else {
+						let mut resp = new_envelope("client", &uid, &env.lumy.to_lowercase(), "setconfig", "ERR", None);
+						resp.err = Some(response.err.unwrap_or_else(|| String::from("CONFIG_ERROR")));
+						sign_envelope(&mut resp, &seed);
+						frame_write(&mut stream, &resp)?;
+					}
+				}
+				Err(err) => {
+					dbout(debug, 2, &format!("Failed to send {} configuration request to server: {}", env.lumy, err));
+					let mut resp = new_envelope("client", &uid, &env.lumy.to_lowercase(), "setconfig", "ERR", None);
+					resp.err = Some(String::from("SERVER_UNREACHABLE"));
+					sign_envelope(&mut resp, &seed);
+					frame_write(&mut stream, &resp)?;
+				}
+			}
+		}
+		// Lumy alert (e.g., Integrity filesystem change). Events are
+		// destined for the server events channel; until MQTT is in
+		// place, alerts are persisted to the local out-queue for
+		// bulk transmission and logged.
+		(_, "alert") => {
+			dbout(debug, 3, &format!("Alert received from {} Lumy", env.lumy));
+			queue_alert(&env, debug);
+			let mut resp = new_envelope("client", &uid, &env.lumy.to_lowercase(), "alert", "OK", None);
+			sign_envelope(&mut resp, &seed);
+			frame_write(&mut stream, &resp)?;
+		}
+		// Unknown action for a known Lumy (§6.3)
+		(_, action) => {
+			let mut resp = new_envelope("client", &uid, &env.lumy.to_lowercase(), action, "ERR", None);
+			resp.err = Some(String::from("UNKNOWN_ACTION"));
+			sign_envelope(&mut resp, &seed);
+			frame_write(&mut stream, &resp)?;
+		}
+	}
+	Ok(())
+}
+
+fn queue_alert(env: &Envelope, debug: bool) {
+	if let Some(parent) = Path::new(&outq_path()).parent() {
+		fs::create_dir_all(parent).ok();
+	}
+	let conn = match Connection::open(outq_path()) {
+		Ok(conn) => conn,
 		Err(err) => {
-			dbout(debug,1,format!("Unable to start \"{}\" Lumy: {}", lumy, err).as_str());
+			dbout(debug, 1, &format!("Could not open out-queue database: {}", err));
+			return;
+		}
+	};
+	conn.execute(
+		"create table if not exists OUTQUEUE ( ID integer primary key autoincrement, TS integer not null, LUMY text not null, ACTION text not null, PAYLOAD text not null, SENT integer not null default 0 )",
+		[],
+	).expect("Error: Could not create OUTQUEUE table");
+	let payload = serde_json::to_string(&env.data).unwrap_or_default();
+	conn.execute(
+		"insert into OUTQUEUE (TS, LUMY, ACTION, PAYLOAD) values (?1, ?2, ?3, ?4)",
+		params![env.ts, env.lumy.to_lowercase(), env.action, payload],
+	).expect("Error: Could not queue alert");
+	conn.close().unwrap();
+}
+
+// ---------------------------------------------------------------------------
+// Lumy discovery and launch
+// ---------------------------------------------------------------------------
+
+fn discover_lumys(debug: bool) -> HashMap<String, String> {
+	let mut lumys: HashMap<String, String> = HashMap::new();
+	let modpath = mod_path();
+	if !Path::new(&modpath).is_dir() {
+		dbout(debug, 4, &format!("No modules directory at {}", modpath));
+		return lumys;
+	}
+	if let Ok(entries) = fs::read_dir(&modpath) {
+		for entry in entries.flatten() {
+			let dir = entry.path();
+			if !dir.is_dir() { continue; }
+			let name = entry.file_name().to_string_lossy().to_string();
+			// Find the Lumy_<Name> binary in the module directory, matching
+			// case-insensitively since module dir names are lowercase but
+			// binary names may be capitalized (e.g. integrity/Lumy_Integrity).
+			if let Ok(bin_entries) = fs::read_dir(&dir) {
+				for bin in bin_entries.flatten() {
+					let bin_name = bin.file_name().to_string_lossy().to_string();
+					if bin.path().is_file()
+					&& bin_name.to_lowercase() == format!("lumy_{}", name).to_lowercase() {
+						dbout(debug, 4, &format!("Found Lumy: {}", name));
+						lumys.insert(name, bin.path().to_string_lossy().into_owned());
+						break;
+					}
+				}
 			}
 		}
 	}
+	lumys
+}
+
+fn start_lumy(lumy: &str, cmd: &str, debug: bool) {
+	dbout(debug, 0, &format!("Starting \"{}\" Lumy", lumy));
+	match Command::new(cmd).stdout(Stdio::null()).stderr(Stdio::null()).spawn() {
+		Ok(_child) => dbout(debug, 3, &format!("Successfully started \"{}\" Lumy", lumy)),
+		Err(err) => dbout(debug, 1, &format!("Unable to start \"{}\" Lumy: {}", lumy, err)),
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Setup (text wizard)
+// ---------------------------------------------------------------------------
 
 fn clientsetup() {
 	println!("Luminum Client (Linux)\nby Christopher R. Curzio <ccurzio@luminum.net>\n");
 	println!("Client Configuration\n--------------------");
 
-	let mut server = String::new();
 	let mut ui_server = String::new();
-	let mut ui_server_key = String::new();
-	let mut port: u16 = 10465;
-
 	print!("Enter Luminum server hostname or IP address: ");
 	io::stdout().flush().unwrap();
-	io::stdin()
-		.read_line(&mut ui_server)
-		.expect("Error reading user input");
-	let ui_server = ui_server.trim();
-	server = ui_server.to_string();
+	io::stdin().read_line(&mut ui_server).expect("Error reading user input");
+	let server = ui_server.trim().to_string();
 
+	let mut port: u16 = DPORT;
 	loop {
 		let mut ui_port = String::new();
 		print!("Enter server port [{}]: ", DPORT);
 		io::stdout().flush().unwrap();
-
 		io::stdin().read_line(&mut ui_port).unwrap();
 		let ui_port = ui_port.trim();
-		let num = if ui_port.is_empty() { DPORT }
-		else {
-			match ui_port.parse::<u16>() {
-				Ok(num) if num >= 1 => num,
-				_ => {
-					println!("Invalid port: {}\n", ui_port);
-					continue;
-					}
-				}
-			};
-		port = num;
-		break;
+		match ui_port.parse::<u16>() {
+			Ok(num) if num >= 1 => { port = num; break; }
+			_ => {
+				if ui_port.is_empty() { break; }
+				println!("Invalid port: {}\n", ui_port);
+			}
 		}
+	}
 
+	let mut ui_server_key = String::new();
 	print!("Enter Luminum server key: ");
 	io::stdout().flush().unwrap();
-	io::stdin()
-		.read_line(&mut ui_server_key)
-		.expect("Error reading user input");
-	let ui_server_key = ui_server_key.trim();
-	let server_key = ui_server_key.to_string();
+	io::stdin().read_line(&mut ui_server_key).expect("Error reading user input");
+	let server_key = ui_server_key.trim().to_string();
 
-	let confconn = Connection::open(CFGPATH).expect("Error: Could not initialize configuration database");
-	confconn.execute("create table if not exists CONFIG ( KEY text not null, VALUE text not null )",[]).expect("Error: Could not create CONFIG table in configuration database");
-	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)",&[&"SHOST",server.as_str()]).expect("Error: Could not insert SHOST into CONFIG table.");
-	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)",&[&"SPORT",port.to_string().as_str()]).expect("Error: Could not insert SPORT into CONFIG table.");
-	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)",&[&"SVRKEY",server_key.as_str()]).expect("Error: Could not insert SKEY into CONFIG table.");
+	if let Some(parent) = Path::new(&cfg_path()).parent() {
+		fs::create_dir_all(parent).expect("Error: Could not create configuration directory");
+	}
+	let confconn = Connection::open(cfg_path()).expect("Error: Could not initialize configuration database");
+	confconn.execute("create table if not exists CONFIG ( KEY text not null, VALUE text not null )", [])
+		.expect("Error: Could not create CONFIG table in configuration database");
+	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)", params!["SHOST", server.as_str()])
+		.expect("Error: Could not insert SHOST into CONFIG table.");
+	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)", params!["SPORT", port.to_string().as_str()])
+		.expect("Error: Could not insert SPORT into CONFIG table.");
+	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)", params!["SVRKEY", server_key.as_str()])
+		.expect("Error: Could not insert SVRKEY into CONFIG table.");
+
+	// Client signing keypair + fingerprint (protocol §3.1).
+	let mut seed = [0u8; 32];
+	getrandom::getrandom(&mut seed).expect("Error: unable to obtain randomness for key generation");
+	let key = SigningKey::from_bytes(&seed);
+	let pubb = *key.verifying_key().as_bytes();
+	let fpnt = fingerprint(&pubb);
+	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)", params!["CLPPRV", base64ct::Base64::encode_string(&seed)])
+		.expect("Error: Could not insert CLPPRV into CONFIG table.");
+	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)", params!["CLPPUB", base64ct::Base64::encode_string(&pubb)])
+		.expect("Error: Could not insert CLPPUB into CONFIG table.");
+	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)", params!["FPNT", fpnt.as_str()])
+		.expect("Error: Could not insert FPNT into CONFIG table.");
 	confconn.close().unwrap();
 
-	println!("\nLuminum Server: {}",server);
-	println!("Server port: {}\n",port);
+	println!("\nLuminum Server: {}", server);
+	println!("Server port: {}", port);
+	println!("Client fingerprint: {}\n", fpnt);
 	println!("Luminum Client configuration complete.");
-
 	process::exit(0);
-	}
+}
+
+// ---------------------------------------------------------------------------
+// Utilities
+// ---------------------------------------------------------------------------
 
 fn get_os_release() -> String {
-	let mut os_release = String::new();
 	match OsRelease::open() {
-		Ok(result) => { os_release = result.pretty_name().to_string(); }
-		Err(_) => { os_release = "Unknown".to_string(); }
-		}
-	return os_release;
+		Ok(result) => result.pretty_name().to_string(),
+		Err(_) => String::from("Unknown"),
 	}
-
-fn file_exists(path: &str) -> bool {
-	fs::metadata(path).is_ok()
-	}
+}
 
 fn dbout(debug: bool, outlvl: i32, output: &str) {
 	let dateformat = StrftimeItems::new("%Y-%m-%d %H:%M:%S");
@@ -634,9 +671,137 @@ fn dbout(debug: bool, outlvl: i32, output: &str) {
 		else if outlvl == 2 { etype = "WARN".yellow().to_string(); }
 		else if outlvl == 3 { etype = " OK ".green().to_string(); }
 		else if outlvl == 4 { etype = "INFO".to_string(); }
-		println!("{} [{}] {}",formatted_datetime,etype,output);
-		}
-	else {
-		if outlvl == 1 { println!("{}",output); }
+		println!("{} [{}] {}", formatted_datetime, etype, output);
+	} else {
+		if outlvl == 1 { println!("{}", output); }
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+
+#[tokio::main]
+async fn main() {
+	let matches = App::new("Luminum Client (Linux)")
+		.version(VER)
+		.author("Christopher R. Curzio <ccurzio@luminum.net>")
+		.arg(Arg::with_name("setup")
+			.short('s')
+			.long("setup")
+			.help("Set client configuration parameters")
+			.takes_value(false))
+		.arg(Arg::with_name("debug")
+			.short('d')
+			.long("debug")
+			.help("Enables debug mode")
+			.takes_value(false))
+		.get_matches();
+
+	let setup = matches.is_present("setup");
+	let debug = matches.is_present("debug");
+
+	// Break handler
+	let running = Arc::new(AtomicBool::new(true));
+	let r = running.clone();
+	ctrlc::set_handler(move || {
+		r.store(false, Ordering::SeqCst);
+		print!("\r\x1B[K");
+		io::stdout().flush().unwrap_or(());
+		dbout(false, 0, "Received BREAK signal.");
+		dbout(false, 0, "Luminum Client Terminated.");
+		process::exit(1);
+	}).expect("Error creating break handler");
+
+	// Setup routine
+	if setup {
+		dbout(debug, 4, "Starting client setup...");
+		if fs::metadata(cfg_path()).is_err() {
+			clientsetup();
+		} else {
+			dbout(debug, 1, "Client configuration already exists. Aborting.");
+			process::exit(1);
 		}
 	}
+
+	// Client startup
+	dbout(debug, 0, &format!("Starting Luminum Client v{}...", VER));
+
+	let ccfg = parse_clientconfig(debug);
+
+	// Register with the server if not yet registered
+	if ccfg.get("UID").is_none() {
+		dbout(debug, 4, "Endpoint is not registered with the Luminum server. Sending registration request...");
+		register_with_server(debug, &ccfg);
+	} else {
+		dbout(debug, 3, &format!("Endpoint is registered with UID {}", ccfg.get("UID").unwrap()));
+	}
+
+	// Periodic check-ins
+	let dbg = debug;
+	spawn(async move {
+		let mut interval = time::interval(Duration::from_secs(CHECKIN_SECS));
+		loop {
+			interval.tick().await;
+			checkin(dbg);
+		}
+	});
+
+	// Local IPC listener (Lumy channel)
+	let ipc_addr: SocketAddr = format!("127.0.0.1:{}", LPORT).parse().expect("Invalid IPC socket address");
+	let ipclistener = match TcpListener::bind(ipc_addr) {
+		Ok(l) => {
+			dbout(debug, 3, &format!("Local IPC configured on port {}", LPORT));
+			l
+		}
+		Err(err) => {
+			dbout(debug, 1, &format!("Unable to configure local IPC: {}", err));
+			process::exit(1);
+		}
+	};
+
+	// Inbound data listener (server -> client bulk data, protocol §2)
+	let ip_address = local_ip().map(|a| a.to_string()).unwrap_or_default();
+	let data_addr: SocketAddr = format!("{}:{}", ip_address, IPORT).parse().expect("Invalid data socket address");
+	// TODO: data channel handler (server -> client bulk transfer, protocol §8.3)
+	let _datalistener = match TcpListener::bind(data_addr) {
+		Ok(l) => {
+			dbout(debug, 3, &format!("Incoming data connection configured on port {}", IPORT));
+			l
+		}
+		Err(err) => {
+			dbout(debug, 1, &format!("Unable to configure incoming data connection: {}", err));
+			process::exit(1);
+		}
+	};
+
+	// Discover and launch Lumys
+	let lumys = discover_lumys(debug);
+	for (lumy, lpath) in &lumys {
+		start_lumy(lumy, lpath, debug);
+		if lumys.len() > 1 { thread::sleep(Duration::from_secs(2)); }
+	}
+
+	// IPC accept loop. Runs on its own thread so the main task can keep
+	// the tokio runtime alive (worker threads run the check-in task).
+	let dbc = debug;
+	thread::spawn(move || {
+		for stream in ipclistener.incoming() {
+			match stream {
+				Ok(stream) => {
+					thread::spawn(move || {
+						if let Err(err) = handle_ipc(stream, dbc) {
+							dbout(dbc, 2, &format!("Error handling IPC connection: {}", err));
+						}
+					});
+				}
+				Err(err) => {
+					dbout(dbc, 2, &format!("Error establishing IPC connection: {}", err));
+				}
+			}
+		}
+	});
+
+	// Keep the client process (and runtime) alive.
+	time::sleep(std::time::Duration::MAX).await;
+}
