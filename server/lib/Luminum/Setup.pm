@@ -420,10 +420,9 @@ sub setup_dbuser {
 	my $rc = eval {
 		$dbh->do("CREATE USER IF NOT EXISTS $ref IDENTIFIED BY $qpass");
 		$dbh->do("ALTER USER $ref IDENTIFIED BY $qpass");
-		$dbh->do("GRANT ALL PRIVILEGES ON SYSTEM.* TO $ref");
-		$dbh->do("GRANT ALL PRIVILEGES ON CLIENTS.* TO $ref");
-		$dbh->do("GRANT ALL PRIVILEGES ON AUTH.* TO $ref");
-		$dbh->do("GRANT ALL PRIVILEGES ON CONTENT.* TO $ref");
+		foreach my $db (qw(AUTH CLIENTS CONTENT DISCOVERY INTEGRITY INVENTORY LOGS POLICY QUERY SUMMARY SYSTEM)) {
+			$dbh->do("GRANT ALL PRIVILEGES ON $db.* TO $ref");
+			}
 		$dbh->do("FLUSH PRIVILEGES");
 		1;
 		};
@@ -456,11 +455,30 @@ sub seed_admin_user {
 	my $rc = eval {
 		if ($exists) {
 			my $sth = $dbh->prepare("update AUTH.USERS set PASSWORD = ?, ROLE = 1, ENABLED = 1 where USERNAME = ?");
-			$sth->execute($hash, $username);
+			$sth->execute($hash, $username) or die "AUTH.USERS update failed: " . ($sth->errstr || "unknown error");
 			}
 		else {
-			my $sth = $dbh->prepare("insert into AUTH.USERS (USERNAME, FULLNAME, PASSWORD, ROLE, ENABLED) values (?, ?, ?, 1, 1)");
-			$sth->execute($username, "Administrator", $hash);
+			# The current schema's AUTH.USERS has NOT NULL columns without
+			# defaults (PHONE, TYPE, REGDATE); older installations may still
+			# have the narrower table. Introspect the table so the insert
+			# works on both layouts.
+			my %have = map { $_->[0] => 1 }
+				@{ $dbh->selectall_arrayref(qq{select COLUMN_NAME from information_schema.COLUMNS where TABLE_SCHEMA = 'AUTH' and TABLE_NAME = 'USERS'}) || [] };
+			my @cols = ("USERNAME", "FULLNAME", "PASSWORD");
+			my @vals = ($username, "Administrator", $hash);
+			if ($have{PHONE}) { push(@cols, "PHONE"); push(@vals, ""); }
+			if ($have{TYPE})  { push(@cols, "TYPE");  push(@vals, "local"); }
+			push(@cols, "ROLE");
+			push(@vals, 1);
+			if ($have{REGDATE}) {
+				my @t = localtime();
+				push(@cols, "REGDATE");
+				push(@vals, sprintf("%04d-%02d-%02d %02d:%02d:%02d", $t[5] + 1900, $t[4] + 1, $t[3], $t[2], $t[1], $t[0]));
+				}
+			push(@cols, "ENABLED");
+			push(@vals, 1);
+			my $sth = $dbh->prepare("insert into AUTH.USERS (" . join(",", @cols) . ") values (" . join(",", map { "?" } 1 .. scalar(@cols)) . ")");
+			$sth->execute(@vals) or die "AUTH.USERS insert failed: " . ($sth->errstr || "unknown error");
 			}
 		1;
 		};
