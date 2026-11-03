@@ -18,8 +18,8 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9654; |*In Progress*  |Configuration Import        |Routines to import an existing config on first setup                                    |
 |&#9654; |*In Progress*  |Certificate Setup           |Routines to create or import server certificates                                        |
 |&#9654; |*In Progress*  |Key Setup                   |Routines to create or import public/private keys                                        |
-| --     |Not Started    |Database Setup              |Automatically configure the database software and set root password                     |
-| --     |Not Started    |Database Structure          |Automatically create Luminum Server databases and tables                                |
+|&#9654; |*In Progress*  |Database Setup              |Automatically configure the database software and set root password                     |
+|&#9654; |*In Progress*  |Database Structure          |Automatically create Luminum Server databases and tables                                |
 | --     |Not Started    |Database User Accounts      |Automatically create database user accounts with permissions                            |
 | --     |Not Started    |nginx Configuration         |Routines to automatically configure the nginx webserver software for Luminum            |
 | --     |Not Started    |PHP Configuration           |Routines to automatically configure PHP and associated nginx support                    |
