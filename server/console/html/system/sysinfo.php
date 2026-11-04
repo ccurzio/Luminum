@@ -120,12 +120,19 @@ else {
 					foreach ($dparts as $part) {
 						$dpstats = array_filter(preg_split('/\s/',$part));
 						if (isset($dpstats[3]) && $dpstats[2] != "swap") {
-							$partused = substr(shell_exec("/usr/bin/df -h | /usr/bin/grep '\/dev\/" . $dpstats[0] . "' | /usr/bin/sed -E 's/^.*(1?[0-9][0-9])\%.*$/\\1/'"), 0, -1);
+							$partused = trim((string) shell_exec("/usr/bin/df -h | /usr/bin/grep -m 1 '\/dev\/" . $dpstats[0] . "' | /usr/bin/sed -E 's/^.*(1?[0-9][0-9])\%.*$/\\1/'"));
+							if (!is_numeric($partused)) {
+								// df -h only lists mounted filesystems; a partition
+								// with no df entry has no usage to display.
+								print "<tr><td style=\"width: 200px; height: 30px; text-align: left; color: #777; background-color: transparent; border: 0; padding-bottom: 20px;\"><b>/dev/" . $dpstats[0] . ":</b></td><td style=\"text-align: left; background-color: transparent; width: 70%; border: 0; color: #777; font-weight: normal;\">Not mounted</td></tr>\n";
+								}
+							else {
 							if ($partused < 50) { $pctbg = "#2d7d3c"; }
 							else if ($partused >= 50 && $dcap < 75) { $pctbg = "#d4bc08"; }
 							else if ($partused > 75) { $pctbg = "#91110a"; }
 							print "<tr><td style=\"width: 200px; height: 30px; text-align: left; color: #777; background-color: transparent; border: 0; padding-bottom: 20px;\"><b>/dev/" . $dpstats[0] . ":</b></td><td style=\"text-align: left; background-color: transparent; width: 70%; border: 0;\"><div style=\"border: 1px solid #aaa; border-radius: 5px; width: 100%; height: 25px; background-color: #ccc; text-align: left; margin-bottom: -20px;\"><div style=\"height: 100%; width: " . $partused . "%; background-color: " . $pctbg . "; border-radius: 5px; margin-bottom: 0;\"><div style=\"width: 100%; padding-top: 3px; text-align: center; color: #fff;\">" . $partused . "%</div></div></div><br><span style=\"color: #777; font-size: 12px; font-weight: normal;\">" . preg_replace('/(K|M|G|T)B/',"",$dpstats[1]) * ($partused / 100) . preg_replace('/\d+\.?\d+?/',"",$dpstats[1]) . " used of " . $dpstats[1] . "</span></td></tr>\n";
 							//print "<tr><td style=\"width: 200px; text-align: left; color: #777; background-color: transparent; border: 0;\"></td><td style=\"width: 200px; font-size: 12px; text-align: left; color: #777; background-color: transparent; border: 0;\">Used: " . preg_replace('/(K|M|G|T)B/',"",$dpstats[1]) * ($partused / 100) . preg_replace('/\d+\.?\d+?/',"",$dpstats[1]) . " of " . $dpstats[1] . "</td></tr>\n";
+							}
 							}
 						elseif ($dpstats[2] == "swap") {
 							print "<tr><td style=\"width: 200px; height: 30px; text-align: left; color: #777; background-color: transparent; border: 0;\"><b>/dev/" . $dpstats[0] . ":</b></td><td style=\"background-color: transparent; width: 70%; border: 0; color: #777; font-weight: normal; text-align: left;\">Swap (" . $dpstats[1] . ")</td></tr>\n";
