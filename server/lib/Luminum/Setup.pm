@@ -65,6 +65,11 @@ our $VERSION = "0.0.1";
 #   adminpass     console admin password (default: generated)
 #   adminemail    email for the admin account (set at creation)
 #   perl5lib      PERL5LIB path to export in the broker start script
+#   ssl           certificate handling (see prepare_ssl):
+#                   { mode => 'generate'|'import',
+#                     keymode => 'new'|'existing',
+#                     cert => path, key => path, keypass => passphrase }
+#                   Default: generate a new self-signed certificate/key.
 #   start         start services after install (default 1; 0 to skip)
 #   quiet         suppress progress output
 #
@@ -187,14 +192,21 @@ sub run {
 		}
 
 	# --- Step 3: server certificate ------------------------------------------
-	$log->("Generating server certificate for $shost ...");
-	my ($cert, $key, $pub) = ("$dir{ssl}/server.crt", "$dir{ssl}/server.key", "$dir{ssl}/server.pub");
-	unless (generate_ssl($shost, $cert, $key, $pub)) {
-		return $fail->("certificate generation failed");
+	my $sslspec = $o{ssl} || {};
+	my $sslwhat = $sslspec->{mode} eq "import"
+		? "Importing server certificate"
+		: ($sslspec->{keymode} eq "existing"
+			? "Generating server certificate from existing key"
+			: "Generating server certificate");
+	$log->("$sslwhat for $shost ...");
+	my ($slok, $cert, $key, $pub, $sslerr) = prepare_ssl($shost, $dir{ssl}, $sslspec, $log);
+	unless ($slok) {
+		return $fail->("certificate setup failed: $sslerr");
 		}
 
 	# --- Step 4: server identity ---------------------------------------------
-	my $sid = randomtoken(16);
+	# 256-bit random server ID (32 bytes, 64 lowercase hex chars).
+	my $sid = randomhex(32);
 	my $skey = randomtoken(24);
 
 	# --- Step 5: configuration files ------------------------------------------
@@ -355,6 +367,17 @@ sub randomtoken {
 	my @alphabet = ('0'..'9', 'a'..'z');
 	my $out = join("", map { $alphabet[ord($_) % 36] } unpack("C*", $bytes));
 	return substr($out, 0, $n);
+	}
+
+# Random lowercase hex string: $nbytes random bytes from /dev/urandom,
+# hex-encoded (2*$nbytes chars, n bytes of entropy).
+#
+sub randomhex {
+	my $n = shift;
+	my $bytes;
+	if (open(my $ur, "<:raw", "/dev/urandom")) { read($ur, $bytes, $n); close($ur); }
+	else { $bytes = join("", map { chr(int(rand(256))) } 1 .. $n); }
+	return unpack("H*", $bytes);
 	}
 
 sub writefile {
@@ -538,23 +561,203 @@ sub bcrypt_hash {
 	return ($hash =~ /^\$2y\$13\$.{53}$/) ? $hash : undef;
 	}
 
-# Self-signed server certificate (CN + SAN = $shost).
+# Write $pass to a 0600 temp file for use with "openssl -passin file:...".
+# Returns the path, or undef on failure. The caller must unlink it.
 #
-sub generate_ssl {
-	my ($shost, $cert, $key, $pub) = @_;
+sub passtofile {
+	my ($pass) = @_;
+	my $f = "/tmp/luminum-setup-pass.$$";
+	open(my $fh, ">", $f) or return undef;
+	print $fh $pass;
+	close($fh);
+	chmod(0600, $f);
+	return $f;
+	}
+
+# Check a private key file. Returns (status, message):
+#   ok        key loads without a passphrase
+#   encrypted key loads with $pass
+#   needpass  key is encrypted and no passphrase was supplied
+#   badpass   a passphrase was supplied but the key does not load
+#   error     file is not a usable private key (message explains)
+#
+sub key_check {
+	my ($file, $pass) = @_;
+	my $pem = "";
+	if (open(my $fh, "<", $file)) { $pem = do { local $/; <$fh> }; close($fh); }
+	unless ($pem =~ /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/) {
+		return ("error", "no private key found in $file");
+		}
+	my $encrypted = ($pem =~ /ENCRYPTED/) ? 1 : 0;
+	# An encrypted key with no passphrase would make openssl prompt on the
+	# terminal; answer from the PEM marker instead.
+	return ("needpass", "") if $encrypted && !(defined $pass && $pass ne "");
+	my $pf = (defined $pass && $pass ne "") ? passtofile($pass) : undef;
+	my $passarg = $pf ? "-passin file:$pf" : "";
+	my $out = `openssl pkey -in "$file" $passarg -noout 2>&1`;
+	my $rc = ($? >> 8);
+	unlink($pf) if $pf;
+	if ($rc == 0) {
+		return ($encrypted ? "encrypted" : "ok", "");
+		}
+	if ($encrypted || $out =~ /bad decrypt|passphrase|encrypted|STORE routine/i) {
+		return ((defined $pass && $pass ne "") ? "badpass" : "needpass", "");
+		}
+	$out =~ s/\s+/ /g;
+	return ("error", "cannot read private key $file: $out");
+	}
+
+# Public key (PEM) of a private key file, or "" if it cannot be read.
+#
+sub key_pubkey {
+	my ($file, $pass) = @_;
+	my $pf = (defined $pass && $pass ne "") ? passtofile($pass) : undef;
+	my $passarg = $pf ? "-passin file:$pf" : "";
+	# Note: no -noout here; with "pkey -pubout" it suppresses the key itself.
+	my $out = `openssl pkey -in "$file" $passarg -pubout 2>/dev/null`;
+	unlink($pf) if $pf;
+	return ($? == 0) ? $out : "";
+	}
+
+# Place the private key at $dst. Encrypted keys are decrypted: the broker
+# (IO::Socket::SSL) and nginx cannot supply a key passphrase at runtime, so
+# the installed key must be unencrypted (0600).
+#
+sub install_key {
+	my ($src, $dst, $pass) = @_;
+	my $rc;
+	if (defined $pass && $pass ne "") {
+		my $pf = passtofile($pass) or return 0;
+		$rc = system("openssl pkey -in \"$src\" -passin file:$pf -out \"$dst\" 2>/dev/null");
+		unlink($pf);
+		}
+	else {
+		$rc = system("cp", "-f", $src, $dst);
+		}
+	return 0 unless $rc == 0;
+	chmod(0600, $dst);
+	return 1;
+	}
+
+# Public key (PEM) of a certificate written to $pub.
+#
+sub derive_pub {
+	my ($cert, $pub) = @_;
+	my $pk = `openssl x509 -in "$cert" -pubkey -noout 2>/dev/null`;
+	return 0 if $? != 0 || $pk eq "";
+	open(my $fh, ">", $pub) or return 0;
+	print $fh $pk;
+	close($fh);
+	chmod(0644, $pub);
+	return 1;
+	}
+
+# Does the certificate cover $shost (SAN or subject CN)? Used for a
+# warning only - an operator may intentionally use a broader certificate.
+#
+sub cert_covers {
+	my ($cert, $shost) = @_;
+	my $txt = `openssl x509 -in "$cert" -noout -subject -ext subjectAltName 2>/dev/null`;
+	return 1 if $txt =~ /DNS:\Q$shost\E\b/i;
+	# OpenSSL renders IP SANs as "IP Address:..." in this output.
+	return 1 if $txt =~ /IP(?: Address)?:\Q$shost\E\b/i;
+	return 1 if $txt =~ /CN\s*=\s*\Q$shost\E\s*(?:$|,)/i;
+	return 0;
+	}
+
+# Prepare the server certificate, private key, and public key in $ssldir
+# (server.crt / server.key / server.pub).
+#
+# $spec:
+#   mode    => 'generate' (default) | 'import'
+#   keymode => 'new' (default) | 'existing'   (generate only)
+#   cert    => existing certificate path      (import)
+#   key     => existing private key path      (import, generate/existing)
+#   keypass => passphrase for an encrypted key (optional)
+#
+# Returns (1, $cert, $key, $pub) on success,
+# (0, undef, undef, undef, $err) on failure.
+#
+sub prepare_ssl {
+	my ($shost, $ssldir, $spec, $log) = @_;
+	$spec ||= {};
+	$log ||= sub {};
+	my $mode = $spec->{mode} || "generate";
+	my $keymode = $spec->{keymode} || "new";
+	my $cert = "$ssldir/server.crt";
+	my $key  = "$ssldir/server.key";
+	my $pub  = "$ssldir/server.pub";
+	my $fail = sub { return (0, undef, undef, undef, $_[0]) };
+
 	my $san = $shost =~ /^\d+\.\d+\.\d+\.\d+$/ ? "IP:$shost" : "DNS:$shost";
+
+	if ($mode eq "import") {
+		return $fail->("certificate path is required for import")
+			unless defined $spec->{cert} && $spec->{cert} ne "";
+		return $fail->("private key path is required for import")
+			unless defined $spec->{key} && $spec->{key} ne "";
+		return $fail->("certificate not found: $spec->{cert}") unless -e $spec->{cert};
+		return $fail->("private key not found: $spec->{key}") unless -e $spec->{key};
+		my $cchk = `openssl x509 -in "$spec->{cert}" -noout 2>&1`;
+		return $fail->("invalid certificate: $cchk") if $? != 0;
+		return $fail->("certificate is expired")
+			unless system("openssl", "x509", "-in", $spec->{cert},
+				"-noout", "-checkend", "0") == 0;
+		my ($st, $msg) = key_check($spec->{key}, $spec->{keypass});
+		return $fail->("key passphrase is required (encrypted key)") if $st eq "needpass";
+		return $fail->("key passphrase is incorrect") if $st eq "badpass";
+		return $fail->($msg) if $st eq "error";
+		# The key must match the certificate.
+		my $cpub = `openssl x509 -in "$spec->{cert}" -pubkey -noout 2>/dev/null`;
+		my $kpub = key_pubkey($spec->{key}, $spec->{keypass});
+		(my $c = $cpub) =~ s/\s+//g;
+		(my $k = $kpub) =~ s/\s+//g;
+		return $fail->("private key does not match the certificate")
+			if $c eq "" || $k eq "" || $c ne $k;
+		unless (cert_covers($spec->{cert}, $shost)) {
+			$log->("  WARNING: certificate does not list $shost in its subject/SAN; clients verifying the hostname will reject it");
+			}
+		copy($spec->{cert}, $cert) or return $fail->("cannot copy certificate to $cert");
+		chmod(0644, $cert);
+		unless (install_key($spec->{key}, $key, $spec->{keypass})) {
+			return $fail->("cannot install private key");
+			}
+		unless (derive_pub($cert, $pub)) { return $fail->("cannot derive public key"); }
+		return (1, $cert, $key, $pub);
+		}
+
+	unless ($mode eq "generate") { return $fail->("unknown ssl mode: $mode"); }
+
+	if ($keymode eq "existing") {
+		return $fail->("private key path is required")
+			unless defined $spec->{key} && $spec->{key} ne "";
+		return $fail->("private key not found: $spec->{key}") unless -e $spec->{key};
+		my ($st, $msg) = key_check($spec->{key}, $spec->{keypass});
+		return $fail->("key passphrase is required (encrypted key)") if $st eq "needpass";
+		return $fail->("key passphrase is incorrect") if $st eq "badpass";
+		return $fail->($msg) if $st eq "error";
+		unless (install_key($spec->{key}, $key, $spec->{keypass})) {
+			return $fail->("cannot install private key");
+			}
+		my $cmd = "openssl req -new -x509 -key \"$key\" -days 3650 "
+			. "-out \"$cert\" -subj \"/CN=$shost\" -addext \"subjectAltName=$san\" 2>/dev/null";
+		return $fail->("certificate generation failed") unless system($cmd) == 0;
+		chmod(0644, $cert);
+		unless (derive_pub($cert, $pub)) { return $fail->("cannot derive public key"); }
+		return (1, $cert, $key, $pub);
+		}
+
+	unless ($keymode eq "new") { return $fail->("unknown key mode: $keymode"); }
+
+	# generate / new: fresh RSA key + self-signed certificate (CN + SAN = $shost).
 	my $cmd = "openssl req -x509 -newkey rsa:2048 -nodes -days 3650 "
 		. "-keyout \"$key\" -out \"$cert\" "
 		. "-subj \"/CN=$shost\" -addext \"subjectAltName=$san\" 2>/dev/null";
-	return 0 unless system($cmd) == 0;
-	my $pubkey = `openssl x509 -in "$cert" -pubkey -noout 2>/dev/null`;
-	return 0 if $? != 0 || $pubkey eq "";
-	open(my $pfh, ">", $pub) or return 0;
-	print $pfh $pubkey;
-	close($pfh);
+	return $fail->("certificate generation failed") unless system($cmd) == 0;
+	unless (derive_pub($cert, $pub)) { return $fail->("cannot derive public key"); }
 	chmod(0600, $key);
-	chmod(0644, $cert, $pub);
-	return 1;
+	chmod(0644, $cert);
+	return (1, $cert, $key, $pub);
 	}
 
 # Insert or update SYSTEM.CONFIG rows. Existing values are preserved unless
@@ -765,6 +968,24 @@ EOF
 		my $path = "$p->{bin}/$s->[1]";
 		writefile($path, $s->[0], 0700) or return 0;
 		}
+
+	# Verify the broker actually compiles under the PERL5LIB we just wrote
+	# into the start script. Without this, an incomplete PERL5LIB (e.g. the
+	# setup process's @INC missing a module dir) would let the install
+	# "succeed" and only fail at first broker start - after the old broker
+	# has already been stopped.
+	{
+		my $env = $p->{perl5lib} ? "PERL5LIB=\"$p->{perl5lib}\" " : "";
+		my $out = `$env perl -c "$broker" 2>&1`;
+		if ($? != 0) {
+			my $pl = (defined $p->{perl5lib} && $p->{perl5lib} ne "") ? $p->{perl5lib} : "(none)";
+			warn "[setup] broker compile check FAILED with the generated start script's environment\n";
+			warn "[setup]   PERL5LIB = $pl\n";
+			warn "[setup]   $out";
+			warn "[setup] The broker would not start. Make sure PERL5LIB includes the directories that provide IO::Socket::SSL, DBI and Crypt::Perl, then re-run setup.\n";
+			return 0;
+		}
+	}
 
 	# systemd units when available (used on production hosts).
 	if (systemd_available()) {
