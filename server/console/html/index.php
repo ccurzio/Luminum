@@ -6,16 +6,14 @@ ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
-$instdir = exec("/usr/bin/grep instdir /opt/Luminum/LuminumServer/config/console.conf | /usr/bin/sed -e 's/^instdir.*\= //'");
-$dbuser = exec("/usr/bin/grep dbuser /opt/Luminum/LuminumServer/config/console.conf | /usr/bin/sed -e 's/^dbuser.*\= //'");
-$dbpass = exec("/usr/bin/grep dbpass /opt/Luminum/LuminumServer/config/console.conf | /usr/bin/sed -e 's/^dbpass.*\= //'");
-$db = new mysqli("localhost", $dbuser, $dbpass, '', 0, "/var/run/mysqld/mysqld.sock");
+require_once __DIR__ . '/layout/db.php';
+$instdir = luminum_console_conf('instdir');
+$db = luminum_db();
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 	if (isset($_GET['logout']) && $_GET['logout'] == "1" && isset($_SESSION['SID'])) {
 		mysqli_select_db($db, "AUTH") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
 		mysqli_query($db, "delete from SESSION where ID = (select ID from USERS where USERNAME = '" . $_SESSION['USER'] . "')");
-		mysqli_close($db);
 		session_unset();
 		session_destroy();
 		}
@@ -57,7 +55,6 @@ else {
 				$_SESSION['START'] = date("Y-m-d H:i:s");
 				$_SESSION['NAME'] = $storedhash["FULLNAME"];
 				}
-			mysqli_close($db);
 			}
 		}
 	}
