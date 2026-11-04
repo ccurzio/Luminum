@@ -61,8 +61,9 @@ our $VERSION = "0.0.1";
 #   dbsocket      database socket path (default /var/run/mysqld/mysqld.sock)
 #   dbadmin       admin user for schema setup (default root)
 #   dbadminpass   admin password (default: empty)
-#   adminuser     console admin username (default admin)
+#   adminuser     console admin username (default lumadmin)
 #   adminpass     console admin password (default: generated)
+#   adminemail    email for the admin account (set at creation)
 #   perl5lib      PERL5LIB path to export in the broker start script
 #   start         start services after install (default 1; 0 to skip)
 #   quiet         suppress progress output
@@ -93,8 +94,9 @@ sub run {
 	my $dbsocket = $o{dbsocket} || "/var/run/mysqld/mysqld.sock";
 	my $dbadmin = $o{dbadmin} || "root";
 	my $dbadminpass = defined $o{dbadminpass} ? $o{dbadminpass} : "";
-	my $adminuser = $o{adminuser} || "admin";
+	my $adminuser = $o{adminuser} || "lumadmin";
 	my $adminpass = $o{adminpass};
+	my $adminemail = $o{adminemail};
 	my $perl5lib = $o{perl5lib};
 	my $startsvc = exists $o{start} ? $o{start} : 1;
 
@@ -177,7 +179,7 @@ sub run {
 		return $fail->("database user setup failed");
 		}
 	my $adminnote;
-	unless (seed_admin_user($dbh, $adminuser, \$adminpass, \$adminnote)) {
+	unless (seed_admin_user($dbh, $adminuser, \$adminpass, \$adminnote, $adminemail)) {
 		return $fail->("console admin user setup failed");
 		}
 
@@ -434,7 +436,7 @@ sub setup_dbuser {
 # case the existing password is left in place and a note is recorded).
 #
 sub seed_admin_user {
-	my ($dbh, $username, $passref, $noteref) = @_;
+	my ($dbh, $username, $passref, $noteref, $email) = @_;
 	my $exists = eval {
 		my $sth = $dbh->prepare("select ID from AUTH.USERS where USERNAME = ?");
 		$sth->execute($username);
@@ -443,7 +445,7 @@ sub seed_admin_user {
 		};
 	if ($@) { warn "[setup] AUTH.USERS lookup failed: $@"; return 0; }
 
-	if ($exists && !defined $$passref && $$passref eq "") {
+	if ($exists && (!defined $$passref || $$passref eq "")) {
 		$$noteref = "existing account preserved (password unchanged)";
 		return 1;
 		}
@@ -453,19 +455,24 @@ sub seed_admin_user {
 	unless ($hash) { warn "[setup] unable to generate bcrypt hash (php CLI required)"; return 0; }
 
 	my $rc = eval {
+		# The current schema's AUTH.USERS has NOT NULL columns without
+		# defaults (PHONE, TYPE, REGDATE); older installations may still
+		# have the narrower table. Introspect the table so both layouts
+		# work.
+		my %have = map { $_->[0] => 1 }
+			@{ $dbh->selectall_arrayref(qq{select COLUMN_NAME from information_schema.COLUMNS where TABLE_SCHEMA = 'AUTH' and TABLE_NAME = 'USERS'}) || [] };
 		if ($exists) {
-			my $sth = $dbh->prepare("update AUTH.USERS set PASSWORD = ?, ROLE = 1, ENABLED = 1 where USERNAME = ?");
+			my $set = "PASSWORD = ?, ROLE = 1, ENABLED = 1";
+			# Backfill REGDATE on accounts created before it was tracked;
+			# never overwrite a value that is already set.
+			$set .= ", REGDATE = COALESCE(NULLIF(REGDATE, '0000-00-00 00:00:00'), NOW())" if $have{REGDATE};
+			my $sth = $dbh->prepare("update AUTH.USERS set $set where USERNAME = ?");
 			$sth->execute($hash, $username) or die "AUTH.USERS update failed: " . ($sth->errstr || "unknown error");
 			}
 		else {
-			# The current schema's AUTH.USERS has NOT NULL columns without
-			# defaults (PHONE, TYPE, REGDATE); older installations may still
-			# have the narrower table. Introspect the table so the insert
-			# works on both layouts.
-			my %have = map { $_->[0] => 1 }
-				@{ $dbh->selectall_arrayref(qq{select COLUMN_NAME from information_schema.COLUMNS where TABLE_SCHEMA = 'AUTH' and TABLE_NAME = 'USERS'}) || [] };
 			my @cols = ("USERNAME", "FULLNAME", "PASSWORD");
 			my @vals = ($username, "Administrator", $hash);
+			if ($have{EMAIL} && defined $email && $email ne "") { push(@cols, "EMAIL"); push(@vals, $email); }
 			if ($have{PHONE}) { push(@cols, "PHONE"); push(@vals, ""); }
 			if ($have{TYPE})  { push(@cols, "TYPE");  push(@vals, "local"); }
 			push(@cols, "ROLE");

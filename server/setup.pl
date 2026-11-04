@@ -233,7 +233,7 @@ my %opt = (
 	start          => 1,
 	install_root   => $path,
 	);
-my @valueopts = qw(shost laddr lport waddr wport dbpass dbsocket dbhost dbuser adminuser adminpass perl5lib srcdir);
+my @valueopts = qw(shost laddr lport waddr wport dbpass dbsocket dbhost dbuser adminuser adminpass adminemail perl5lib srcdir);
 
 my $i = 0;
 while ($i < scalar(@ARGV)) {
@@ -282,8 +282,9 @@ Options:
   --dbpass PASS      database password (default: generated)
   --dbhost HOST      database host (default: local socket)
   --dbsocket PATH    database socket (default /var/run/mysqld/mysqld.sock)
-  --adminuser NAME   console admin username (default admin)
+  --adminuser NAME   console admin username (default lumadmin)
   --adminpass PASS   console admin password (default: generated)
+  --adminemail ADDR  email for the admin account (set at creation)
   --perl5lib PATH    PERL5LIB for the broker start script
   --srcdir PATH      source tree to install from (default: this directory)
 EOF
@@ -343,12 +344,13 @@ sub buildparams {
 		dbsocket     => $v{dbsocket},
 		adminuser    => $v{adminuser},
 		adminpass    => $v{adminpass},
+		adminemail   => $v{adminemail},
 		perl5lib     => $v{perl5lib},
 		start        => $opt{start},
 		);
 	$p{srcdir} = $v{srcdir} if $v{srcdir};
 	# Drop empty optionals so Setup defaults apply.
-	for my $k (qw(waddr dbuser dbpass dbhost dbsocket adminuser adminpass perl5lib)) {
+	for my $k (qw(waddr dbuser dbpass dbhost dbsocket adminuser adminpass adminemail perl5lib)) {
 		delete $p{$k} unless defined $p{$k} && $p{$k} ne "";
 		}
 	# The broker needs non-core modules; if the operator didn't supply a
@@ -366,7 +368,7 @@ if ($opt{noninteractive}) {
 	unless (defined $opt{shost} && defined $opt{laddr}) {
 		die "Non-interactive setup requires --shost and --laddr (see --help)\n";
 		}
-	my %params = buildparams(map { $_ => $opt{$_} } qw(shost laddr lport waddr wport dbuser dbpass dbhost dbsocket adminuser adminpass perl5lib srcdir));
+	my %params = buildparams(map { $_ => $opt{$_} } qw(shost laddr lport waddr wport dbuser dbpass dbhost dbsocket adminuser adminpass adminemail perl5lib srcdir));
 	print "Luminum Server non-interactive setup\n";
 	my $waddr = $params{waddr} || "0.0.0.0";
 	print "  Install root:  $params{install_root}\n";
@@ -426,8 +428,9 @@ sub collect_params_text {
 	$v{dbsocket}     = textprompt("Database socket", $opt{dbsocket} || "/var/run/mysqld/mysqld.sock");
 	$v{dbuser}       = textprompt("Database user", $opt{dbuser} || "luminum");
 	$v{dbpass}       = textpromptpass("Database password", $opt{dbpass});
-	$v{adminuser}    = textprompt("Console admin username", $opt{adminuser} || "admin");
+	$v{adminuser}    = textprompt("Console admin username", $opt{adminuser} || "lumadmin");
 	$v{adminpass}    = textpromptpass("Console admin password", $opt{adminpass});
+	$v{adminemail}   = textprompt("Admin Email", $opt{adminemail});
 	return %v;
 	}
 
@@ -684,6 +687,7 @@ my $showParamDialog = sub {
 		['dbsocket',     "Database Socket",   $defaults->{dbsocket}     // $opt{dbsocket}],
 		['dbpass',       "Database Password", $defaults->{dbpass}       // ""],
 		['adminpass',    "Admin Password",    $defaults->{adminpass}    // ""],
+		['adminemail',   "Admin Email",       $defaults->{adminemail}   // $opt{adminemail}],
 	);
 	my $y = 3;
 	for my $f (@fields) {
