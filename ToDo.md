@@ -20,15 +20,15 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9654; |*In Progress*  |Key Setup                   |Routines to create or import public/private keys                                        |
 |&#9654; |*In Progress*  |Database Setup              |Automatically configure the database software and set root password                     |
 |&#9654; |*In Progress*  |Database Structure          |Automatically create Luminum Server databases and tables                                |
-| --     |Not Started    |Database User Accounts      |Automatically create database user accounts with permissions                            |
-| --     |Not Started    |nginx Configuration         |Routines to automatically configure the nginx webserver software for Luminum            |
-| --     |Not Started    |PHP Configuration           |Routines to automatically configure PHP and associated nginx support                    |
+|&#9654; |*In Progress*  |Database User Accounts      |Automatically create database user accounts with permissions                            |
+|&#9654; |*In Progress*  |nginx Configuration         |Routines to automatically configure the nginx webserver software for Luminum            |
+|&#9654; |*In Progress*  |PHP Configuration           |Routines to automatically configure PHP and associated nginx support                    |
 
 
 ### Debian Support
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-| --     |Not Started    |Dependency Checking         |Validate that the system has all required dependencies installed                        |
+|&#9654; |*In Progress*  |Dependency Checking         |Validate that the system has all required dependencies installed                        |
 |&#9654; |*In Progress*  |Pre-Install                 |Create package script to run on package installation prior to copying files into place  |
 |&#9654; |*In Progress*  |Post-Install                |Create package script to run on package installation after copying files into place     |
 | --     |Not Started    |Server Package              |Create .deb installation package for Luminum Server                                     |
@@ -183,7 +183,7 @@ In order to be accountable to the community - but more importantly to myself - I
 | --     |Not Started    |MQTT Comms                  |Setup and configuration of the MQTT messaging channel                                   |
 | --     |Not Started    |Direct Connect Comms        |Setup and configuration of the direct client<->server messaging channel                 |
 |&#9654; |*In Progress*  |Message Format              |Develop the specific formatting for client and server messages                          |
-| --     |Not Started    |Message Validation          |Validity checking of client/server messages based on signature verification             |
+|&#9654; |*In Progress*  |Message Validation          |Validity checking of client/server messages based on signature verification             |
 | --     |Not Started    |Message Decompression       |Expand received messages that arrive compressed                                         |
 |&#9654; |*In Progress*  |Message Decryption          |Decrypt received messages that arrive encrypted                                         |
 | --     |Not Started    |Query Format                |Develop the specific format of server-actionable user information queries               |
