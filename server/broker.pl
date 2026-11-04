@@ -1,7 +1,20 @@
 #!/usr/bin/perl -w
 #
-# Luminum Server Manager v0.0.1
+# Luminum Server Manager v0.0.2
 # by Christopher R. Curzio (ccurzio@luminum.net)
+#
+# Wire protocol: docs/protocol.md v1.0-draft
+#  - The network listener (LPORT) speaks the bootstrap channel:
+#    length-prefixed JSON frames carrying Ed25519-signed envelopes
+#    (protocol 5, 8.2). One request/response exchange per connection.
+#  - Registration (7.1): server key check, signature possession proof,
+#    UID assignment, MQTT secret issuance (SHA-256 hash stored), and a
+#    signed response carrying the server signing public key.
+#  - Check-in (7.2), deactivation, and Lumy configuration requests
+#    (newconfig) are handled on the same channel.
+#  - MQTT (MPORT) and bulk data channel transfers (8.3) are not yet
+#    implemented; the registration response carries the MQTT
+#    parameters so clients can connect once the broker is in place.
 
 use strict;
 use Cwd qw(abs_path);
@@ -9,43 +22,46 @@ use FindBin qw($Bin);
 use POSIX qw(strftime);
 use Time::HiRes ("usleep");
 use DBI;
-use Data::UUID;
+use JSON::PP;
 use MIME::Base64;
-#use threads;
-#use Socket;
-#use IO::Socket;
+use Digest::SHA qw(sha256_hex);
 use IO::Socket::SSL;
-#use IO::Select;
-use Crypt::OpenSSL::RSA;
-use Crypt::Mode::CBC;
-use JSON;
-use Data::Dumper;
+use Crypt::Perl::Ed25519::PrivateKey;
+use Crypt::Perl::Ed25519::PublicKey;
+use lib "$Bin/lib";
+use Luminum::Protocol;
 
-#$| = 1;
-
-my $debug = 0;
-my $writelog = 1;
+our $debug = 0;
+our $writelog = 1;
 my $suerror;
 my $logdir;
-my $brokerlog;
+our $brokerlog;
 my $SID;
 my $SHOST;
 my $LADDR;
 my $LPORT;
 my $SKEY;
+my $MADDR;
+my $MPORT = 8883;
+my $CMDTIMEOUT = 120;
+my $DEPLTIMEOUT = 3600;
 my $sslcert;
 my $sslprvkey;
 my $sslpubkey;
-my $privatekey;
+my $srvseed;
+my $srvpub;
+my $srvpubspki;
 my $sock;
 my @lumys;
+my %seenid;
 
 our $dbuser;
 our $dbpass;
+our $dbhost;
+our $dbsock;
 our %attr;
 
 my $listen = 1;
-my $client_data = "";
 
 $suerror = 0;
 
@@ -88,39 +104,64 @@ startlistener();
 # Luminum Server Initialization
 #
 sub startserver {
-	my $dbstat = `/usr/bin/systemctl status mysqld | /usr/bin/grep Active`;
-	if ($dbstat =~ /inactive/) {
-		Broker::debugout(0,"Initializing Database...");
-		system("/usr/bin/systemctl start mysqld");
-		if (`/usr/bin/systemctl status mysqld | /usr/bin/grep Active` =~ /inactive/) {
-			Broker::debugout(3,"Database initialization failed: Unable to start service.");
-			exit 1;
-			}
-		}
-	elsif ($dbstat =~ /running/) { Broker::debugout(0,"Database service is already running. Validating..."); }
-	else {
-		Broker::debugout(3,"Unable to determine database service state. Aborting.");
-		exit 1;
-		}
-
-	my $dbsock = `/usr/bin/grep socket /etc/mysql/my.cnf | /usr/bin/grep -v "#" | /usr/bin/sed -e 's/^socket.*= \\\//\\\//'`;
-	chomp($dbsock);
-	if (!-e $dbsock || $dbsock eq "") {
-		Broker::debugout(3,"Database initialization failed: Unable to validate local socket.");
-		exit 1;
-		}
-	else { Broker::debugout(0,"Validated local database socket: $dbsock"); }
-
 	%attr = (
 		PrintError=>0,
 		RaiseError=>1
 		);
 
-	my $dbpid = `/usr/bin/cat /var/run/mysqld/mysqld.pid`;
-	chomp ($dbpid);
-	Broker::debugout(1,"Database initialized successfully. (PID $dbpid)");
+	if ($dbsock && -e $dbsock) {
+		# An external database socket was provided in broker.conf; the
+		# database service is managed outside of the broker.
+		Broker::debugout(0,"Using external database at socket: $dbsock");
+		}
+	else {
+		my $dbstat = `/usr/bin/systemctl status mysqld | /usr/bin/grep Active`;
+		if ($dbstat =~ /inactive/) {
+			Broker::debugout(0,"Initializing Database...");
+			system("/usr/bin/systemctl start mysqld");
+			if (`/usr/bin/systemctl status mysqld | /usr/bin/grep Active` =~ /inactive/) {
+				Broker::debugout(3,"Database initialization failed: Unable to start service.");
+				exit 1;
+				}
+			}
+		elsif ($dbstat =~ /running/) { Broker::debugout(0,"Database service is already running. Validating..."); }
+		else {
+			Broker::debugout(3,"Unable to determine database service state. Aborting.");
+			exit 1;
+			}
+
+		my $mysock = `/usr/bin/grep socket /etc/mysql/my.cnf | /usr/bin/grep -v "#" | /usr/bin/sed -e 's/^socket.*= \\\//\\\//'`;
+		chomp($mysock);
+		if (!-e $mysock || $mysock eq "") {
+			Broker::debugout(3,"Database initialization failed: Unable to validate local socket.");
+			exit 1;
+			}
+		$dbsock = $mysock;
+		Broker::debugout(0,"Validated local database socket: $dbsock");
+		my $dbpid = `/usr/bin/cat /var/run/mysqld/mysqld.pid`;
+		chomp ($dbpid);
+		Broker::debugout(1,"Database service initialized. (PID $dbpid)");
+		}
+
+	$attr{mysql_socket} = $dbsock if $dbsock;
+	$attr{mysql_host} = $dbhost if $dbhost;
+
+	eval { my $dbh = dbconnect("SYSTEM"); $dbh->disconnect(); };
+	if ($@) {
+		Broker::debugout(3,"Database initialization failed: unable to connect: $@");
+		exit 1;
+		}
+	Broker::debugout(1,"Database initialized successfully.");
 	readconfig();
 	lumyload();
+	}
+
+# Open a connection to a Luminum database using the configured
+# credentials and (optional) socket/host from broker.conf.
+#
+sub dbconnect {
+	my $dbname = shift;
+	return DBI->connect("DBI:mysql:$dbname",$dbuser,$dbpass,\%attr);
 	}
 
 # Luminum Server Shutdown
@@ -137,9 +178,22 @@ sub stopserver {
 	else { Broker::debugout(2,"Server shutdown completed with errors."); }
 	}
 
+# True when a usable systemd is present to manage services.
+#
+sub systemd_available {
+	return 0 unless -x "/usr/bin/systemctl";
+	my $state = `/usr/bin/systemctl is-system-running 2>/dev/null`;
+	chomp($state);
+	return ($state =~ /^(running|degraded)$/) ? 1 : 0;
+	}
+
 # Start Web Console
 #
 sub startweb {
+	unless (systemd_available()) {
+		Broker::debugout(0,"Web console is managed externally (no systemd); skipping nginx management.");
+		return;
+		}
 	if (`/usr/bin/systemctl status nginx | /usr/bin/grep Active` =~ /inactive/) {
 		Broker::debugout(0,"Initializing Web Console...");
 		system("/usr/bin/systemctl start nginx");
@@ -157,6 +211,7 @@ sub startweb {
 # Stop Web Console
 #
 sub stopweb {
+	unless (systemd_available()) { return; }
 	Broker::debugout(0,"Stopping Web Console...");
 	system("/usr/bin/systemctl stop nginx");
 	if (`/usr/bin/systemctl status nginx | /usr/bin/grep Active` =~ /inactive/) { Broker::debugout(1,"Web console stopped successfully."); }
@@ -197,15 +252,12 @@ sub setuplistener {
 #
 sub startlistener {
 	$listen = 1;
-	my $buf = "";
-	my $rc;
 	while($listen == 1) {
-		my $client_socket = $sock->accept() or do { Broker::debugout(2,"Client connection failed: $!"); };
+		my $client_socket = $sock->accept() or do { Broker::debugout(2,"Client connection failed: $!"); next; };
 		my $client_address = $client_socket->peerhost();
 		my $client_port = $client_socket->peerport();
 		Broker::debugout(0,"Inbound connection from $client_address:$client_port");
-		do { $rc = sysread($client_socket, $client_data, 65*1024, length($client_data)); } while ($rc);
-		parsedata($client_address,$client_data);
+		handleconnection($client_socket,$client_address);
 		Broker::debugout(0,"Connection with $client_address closed.");
 		}
 	}
@@ -242,6 +294,8 @@ sub getbrokerconf {
 					}
 				elsif ($_ =~ /^DBUSER[\s|\t]?+\=[\s|\t]?+(\S+)$/) { $dbuser = $1; }
 				elsif ($_ =~ /^DBPASS[\s|\t]?+\=[\s|\t]?+(.*)$/) { $dbpass = $1; }
+				elsif ($_ =~ /^DBHOST[\s|\t]?+\=[\s|\t]?+(\S+)$/) { $dbhost = $1; }
+				elsif ($_ =~ /^DBSOCKET[\s|\t]?+\=[\s|\t]?+(\S+)$/) { $dbsock = $1; }
 				}
 			close (BCONF);
 			}
@@ -256,7 +310,7 @@ sub getbrokerconf {
 #
 sub readconfig {
 	Broker::debugout(0,"Reading Server Configuration...");
-	my $dbh = DBI->connect("DBI:mysql:SYSTEM",$dbuser,$dbpass,\%attr);
+	my $dbh = dbconnect("SYSTEM");
 	my $sth = $dbh->prepare("select table_name from information_schema.tables where table_schema = 'SYSTEM' and table_name = 'CONFIG'");
 	$sth->execute();
 	if ($sth->rows == 0) {
@@ -274,6 +328,10 @@ sub readconfig {
 			elsif ($row[0] eq "SHOST") { $SHOST = $row[1]; }
 			elsif ($row[0] eq "LADDR") { $LADDR = $row[1]; }
 			elsif ($row[0] eq "LPORT") { $LPORT = $row[1]; }
+			elsif ($row[0] eq "MADDR") { $MADDR = $row[1]; }
+			elsif ($row[0] eq "MPORT") { $MPORT = $row[1]; }
+			elsif ($row[0] eq "CMDTIMEOUT") { $CMDTIMEOUT = $row[1]; }
+			elsif ($row[0] eq "DEPLTIMEOUT") { $DEPLTIMEOUT = $row[1]; }
 			elsif ($row[0] eq "SSLCERT") { $sslcert = $row[1]; }
 			elsif ($row[0] eq "SSLPRVKEY") { $sslprvkey = $row[1]; }
 			elsif ($row[0] eq "SSLPUBKEY") { $sslpubkey = $row[1]; }
@@ -287,12 +345,6 @@ sub readconfig {
 		exit 1;
 		}
 	if (!$SKEY || $SKEY eq "") {
-		Broker::debugout(3,"Undefined Server Key! (Run with --setup)");
-		$suerror = 1;
-		stopserver();
-		exit 1;
-		}
-	if (!$SID || $SID eq "") {
 		Broker::debugout(3,"Undefined Server Key! (Run with --setup)");
 		$suerror = 1;
 		stopserver();
@@ -322,6 +374,11 @@ sub readconfig {
 		stopserver();
 		exit 1;
 		}
+	# MQTT listener (protocol 4.1, 11). Defaults: LADDR / 8883.
+	if (!$MADDR || $MADDR eq "") { $MADDR = $LADDR; }
+	if (!$MPORT || $MPORT !~ /^([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$/) { $MPORT = 8883; }
+	if (!$CMDTIMEOUT || $CMDTIMEOUT !~ /^[0-9]+$/) { $CMDTIMEOUT = 120; }
+	if (!$DEPLTIMEOUT || $DEPLTIMEOUT !~ /^[0-9]+$/) { $DEPLTIMEOUT = 3600; }
 	if (!$sslprvkey || $sslprvkey eq "") {
 		Broker::debugout(3,"Server private key file is not configured! (Run with --setup)");
 		$suerror = 1;
@@ -333,18 +390,6 @@ sub readconfig {
 		$suerror = 1;
 		stopserver();
 		exit 1;
-		}
-	else {
-		my $readkey;
-		open(PK, $sslprvkey) or do {
-			Broker::debugout(3,"Failure reading private key from: $sslprvkey");
-			$suerror = 1;
-			stopserver();
-			exit 1;
-			};
-		while(<PK>) { $readkey .= $_; }
-		close(PK);
-		$privatekey = Crypt::OpenSSL::RSA->new_private_key($readkey);
 		}
 	if (!$sslpubkey || $sslpubkey eq "") {
 		Broker::debugout(3,"Server public key file is not configured! (Run with --setup)");
@@ -371,10 +416,50 @@ sub readconfig {
 		exit 1;
 		}
 
+	loadserverkey();
+
 	Broker::debugout(1,"Configuration Successfully Imported.");
 	Broker::debugout(0,"- SSL Certificate: $sslcert");
 	Broker::debugout(0,"- SSL Private Key File: $sslprvkey");
 	Broker::debugout(0,"- SSL Public Key File: $sslpubkey");
+	Broker::debugout(0,"- MQTT Listener: $MADDR:$MPORT (not yet in service)");
+	}
+
+# Load (or generate on first run) the server Ed25519 signing keypair
+# (protocol 3.1, 7.1). Stored in SYSTEM.CONFIG as SRVPRV (base64
+# 32-byte seed) and SRVPUB (base64 raw public key).
+#
+sub loadserverkey {
+	my $dbh = dbconnect("SYSTEM");
+	my $sth = $dbh->prepare("select CVAL from CONFIG where CKEY = 'SRVPRV'");
+	$sth->execute();
+	my @row = $sth->fetchrow_array();
+	my $prvb64 = $row[0];
+	$sth = $dbh->prepare("select CVAL from CONFIG where CKEY = 'SRVPUB'");
+	$sth->execute();
+	@row = $sth->fetchrow_array();
+	my $pubb64 = $row[0];
+
+	if ($prvb64 && $pubb64) {
+		my $seed = eval { decode_base64($prvb64) };
+		my $pub = eval { decode_base64($pubb64) };
+		if (defined $seed && length($seed) == 32 && defined $pub && length($pub) == 32) {
+			$srvseed = $seed;
+			$srvpub = $pub;
+			$srvpubspki = encode_base64(Luminum::Protocol::raw_to_spki($pub), "");
+			Broker::debugout(1,"Server signing key loaded.");
+			return;
+			}
+		Broker::debugout(2,"Stored server signing key is invalid. Regenerating...");
+		}
+
+	my $priv = Crypt::Perl::Ed25519::PrivateKey->new();
+	$srvseed = $priv->get_private();
+	$srvpub = $priv->get_public_key()->get_public();
+	$srvpubspki = encode_base64(Luminum::Protocol::raw_to_spki($srvpub), "");
+	setconfig("SRVPRV",encode_base64($srvseed,""));
+	setconfig("SRVPUB",encode_base64($srvpub,""));
+	Broker::debugout(0,"Generated new server signing keypair.");
 	}
 
 # Set Server Configuration Options
@@ -388,13 +473,13 @@ sub setconfig {
 	my $cval = $_[1];
 	my $scstat;
 
-	if ($ckey =~ /^[A-Z]+$/ && $cval =~ /^[A-Za-z0-9_\.\,\/]+$/) {
+	if ($ckey =~ /^[A-Z]+$/ && $cval =~ /^[A-Za-z0-9_\.\,\/+=]+$/) {
 		if ($ckey eq "LPORT" && $cval !~ /^([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$/) {
 			Broker::debugout(2,"Invalid value specified for configuration change to LPORT: \"$cval\"");
 			$scstat = 2;
 			}
 		else {
-			my $dbh = DBI->connect("DBI:mysql:SYSTEM",$dbuser,$dbpass,\%attr);
+			my $dbh = dbconnect("SYSTEM");
 			my $sth = $dbh->prepare("update CONFIG set CVAL = '$cval' where CKEY = '$ckey'");
 			$sth->execute();
 			}
@@ -438,162 +523,360 @@ sub lumyload {
 		}
 	}
 
-# Endpoint Fingerprint Validation
-# iafis("451","cfd346d21ef5690deb109beef");
+# Handle a single bootstrap channel connection: one framed request,
+# one framed response, then close (protocol 8.2).
 #
-# 1 = Match
-# 2 = Mismatch
-# 3 = Error
-#
-sub iafis {
-	my $EPID = $_[0];
-	my $EPFPNT = $_[1];
-	my $fvstat;
+sub handleconnection {
+	my $cs = shift;
+	my $EPADDR = shift;
+	my $authfails = 0;
 
-	if ($EPID =~ /^[0-9]+$/) {
-		if ($EPFPNT =~ /^[a-f0-9]+$/) {
-			my $dbh = DBI->connect("DBI:mysql:CLIENTS",$dbuser,$dbpass,\%attr);
-			my $sth = $dbh->prepare("select FINGERPRINT from AUTH where ID = '$EPID'");
-			$sth->execute();
-			if ($sth->rows > 0) {
-				my @result = $sth->fetchrow_array();
-				if ($EPFPNT eq $result[0]) { $fvstat = 1; }
-				else { $fvstat = 2; }
-				}
-			else { $fvstat = 2; }
-			}
-		else { $fvstat = 3; }
+	my $env = readframe($cs,64*1024);
+	if (!defined $env) {
+		Broker::debugout(2,"Malformed frame received from $EPADDR");
+		close($cs);
+		return;
 		}
-	else { $fvstat = 3; }
 
-	return $fvstat;
+	my ($vok,$verr) = Luminum::Protocol::validate_envelope($env);
+	if (!$vok) {
+		if ($verr eq "PROTO_VERSION_MISMATCH") {
+			# Protocol 6.3: drop, log, no response.
+			Broker::debugout(2,"PROTO_VERSION_MISMATCH: dropping message from $EPADDR");
+			close($cs);
+			return;
+			}
+		Broker::debugout(2,"$verr: message from $EPADDR rejected");
+		sendresponse($cs,$env,"ERR",$verr,undef);
+		close($cs);
+		return;
+		}
+
+	if ($env->{src} ne "client") {
+		Broker::debugout(2,"INVALID_SRC: message from $EPADDR rejected (src=$env->{src})");
+		sendresponse($cs,$env,"ERR","INVALID_SRC",undef);
+		close($cs);
+		return;
+		}
+
+	# Deduplication (protocol 9.2).
+	if (exists $seenid{$env->{id}}) {
+		if ($seenid{$env->{id}} ne $env->{sig}) {
+			Broker::debugout(2,"ID_SPOOF_ATTEMPT: duplicate id with different signature from $EPADDR");
+			$authfails++;
+			}
+		else { Broker::debugout(1,"Duplicate message id from $EPADDR dropped"); }
+		sendresponse($cs,$env,"ERR","DUPLICATE_ID",undef);
+		close($cs);
+		return;
+		}
+	$seenid{$env->{id}} = $env->{sig};
+	if (scalar(keys(%seenid)) > 4096) { %seenid = (); }
+
+	# Per-message signature verification (protocol 3.3).
+	my $pubraw;
+	if ($env->{uid} eq "0") {
+		# Registration: the public key is carried in the message and
+		# the signature against it is the possession proof (7.1).
+		my $pubder = eval { decode_base64($env->{data}{pubkey} // "") };
+		$pubraw = defined $pubder ? Luminum::Protocol::spki_to_raw($pubder) : undef;
+		}
+	else {
+		my $pubder = getpubkey($env->{uid});
+		$pubraw = defined $pubder && $pubder ne "" ? Luminum::Protocol::spki_to_raw(decode_base64($pubder)) : undef;
+		}
+	if (!defined $pubraw || !Luminum::Protocol::verify_envelope($env,$pubraw)) {
+		$authfails++;
+		if ($authfails >= 3) {
+			Broker::debugout(2,"MSG_AUTH_FAIL: terminating connection from $EPADDR (3 failures)");
+			close($cs);
+			return;
+			}
+		Broker::debugout(2,"MSG_AUTH_FAIL: signature verification failed for message from $EPADDR");
+		sendresponse($cs,$env,"ERR","BAD_SIGNATURE",undef);
+		close($cs);
+		return;
+		}
+
+	# Deactivated clients are rejected on every channel (protocol 4.1).
+	if ($env->{uid} ne "0" && getcstate($env->{uid}) eq "DEACT") {
+		Broker::debugout(2,"Message from deactivated client ID $env->{uid} on $EPADDR rejected");
+		sendresponse($cs,$env,"ERR","DEACTIVATED",undef);
+		close($cs);
+		return;
+		}
+
+	routemessage($cs,$env,$EPADDR);
+	close($cs);
 	}
 
-# Client Data Handling
+# Route a verified message to its handler (protocol 6).
 #
-sub parsedata {
-	my $EPADDR = $_[0];
-	my $input = $_[1];
-	my $message;
-	my $EPID;
-	my $EPNAME;
-	my $EPFPNT;
-	my $action;
-	my $lumy;
-	my $data;
-	my $osplat;
-	my $osrel;
-	my $EPPKEY;
-	my $clientver;
+sub routemessage {
+	my $cs = shift;
+	my $env = shift;
+	my $EPADDR = shift;
+	my $lumy = $env->{lumy};
+	my $action = $env->{action};
+	my $uid = $env->{uid};
+	my $data = $env->{data};
 
-	eval { decode_json($input) };
-	if ($@) { Broker::debugout(2,"Malformed message received from $EPADDR"); }
-	#else { $message = decode_json(decode_base64($input)); }
-	else {
-		my $decpkg = decode_json($input);
-		my $aeskey = $privatekey->decrypt(decode_base64($decpkg->{'key'}));
-		my $iv = $decpkg->{'spins'};
-		my $c = Crypt::Mode::CBC->new('AES');
-		my $dcmessage = $c->decrypt(decode_base64($decpkg->{'contents'}),$aeskey,$iv);
-		$message = decode_json(decode_base64($dcmessage));
-		}
-
-	$client_data = "";
-
-	for my $mkey (keys %$message) {
-		if ($mkey eq "info") {
-			if ($message->{$mkey}{'ID'} == 0) { $EPID = 0; }
-			elsif ($message->{$mkey}{'ID'} =~ /^[1-9]([0-9]+)?$/) { $EPID = $message->{$mkey}{'ID'}; }
-			if ($message->{$mkey}{'name'} =~ /^[A-Za-z0-9_\.]+$/) { $EPNAME = $message->{$mkey}{'name'}; }
-			if ($message->{$mkey}{'fingerprint'} =~ /^[a-f0-9]+$/) { $EPFPNT = $message->{$mkey}{'fingerprint'}; }
-			}
-		elsif ($mkey eq "lumy") {
-			if ($message->{$mkey} =~ /^[A-Za-z]+$/) { $lumy = lc($message->{$mkey}); }
-			}
-		elsif ($mkey eq "action") {
-			if ($message->{$mkey} =~ /^[A-Za-z]+$/) { $action = $message->{$mkey}; }
-			}
-		elsif ($mkey eq "data") {
-			##############################################
-			####### REPLACE WITH BASE64 VALIDATION #######
-			if (1 == 1) { $data = $message->{'data'}; }
-			##############################################
-			}
-		}
-
-	if ($EPFPNT && $EPFPNT ne "") {
-		if ($EPID == 0) {
-			if ($action eq "register") {
-				my $svrkey;
-				if ($message->{'info'}{'serverkey'} =~ /^[A-Za-z0-9]+$/) { $svrkey = $message->{'info'}{'serverkey'}; }
-				if ($message->{'info'}{'osplat'} =~ /^[A-Za-z]+$/) { $osplat = $message->{'info'}{'osplat'}; }
-				if ($message->{'info'}{'osrel'} =~ /^[A-Za-z0-9\s\.]+$/) { $osrel = $message->{'info'}{'osrel'}; }
-				if ($message->{'info'}{'clientver'} =~ /^[0-9][0-9]?\.[0-9][0-9]?\.[0-9][0-9]?[ab]?$/) { $clientver = $message->{'info'}{'clientver'}; }
-				else { $clientver = "Unknown"; }
-				if ($message->{'info'}{'pubkey'} =~ /^[A-Za-z0-9\-\/\+\s\n]+$/) { $EPPKEY = $message->{'info'}{'pubkey'}; }
-
-				if (serverkey($svrkey) == 1) {
-					if ($EPFPNT && $EPPKEY && $EPADDR && $EPNAME && $osplat && $osrel && $clientver) {
-						newreg($EPNAME,$EPFPNT,$EPPKEY,$EPADDR,$osplat,$osrel,$clientver);
-						}
-					else { Broker::debugout(2,"Attempted registration with missing data from $EPADDR\."); }
-					}
-				else { Broker::debugout(2,"Attempted registration with invalid server key from $EPADDR\."); }
+	if ($lumy eq "core") {
+		if ($action eq "register") {
+			if ($uid ne "0") {
+				Broker::debugout(2,"Attempted registration from client with nonzero ID on $EPADDR");
+				sendresponse($cs,$env,"ERR","INVALID_UID",undef);
+				return;
 				}
-			else { Broker::debugout(2,"Message from unregistered client at $EPADDR\."); }
+			# Data field validation (protocol 6.1).
+			my $EPNAME = validstr($data->{hostname},'^[A-Za-z0-9_\.\-]+$');
+			my $svrkey = validstr($data->{serverkey},'^[A-Za-z0-9]+$');
+			my $EPFPNT = validstr($data->{fingerprint},'^[a-f0-9]{64}$');
+			my $osplat = validstr($data->{osplat},'^[A-Za-z]+$');
+			my $osrel = validstr($data->{osrel},'^[A-Za-z0-9\s\.\-]+$');
+			my $clientver = validstr($data->{clientver},'^[0-9]+\.[0-9]+\.[0-9]+[ab]?$');
+			$clientver = "Unknown" unless defined $clientver;
+			my $ipv4 = validstr($data->{ipv4},'^[0-9]{1,3}(\.[0-9]{1,3}){3}$');
+			my $pubder = defined $data->{pubkey} ? eval { decode_base64($data->{pubkey}) } : undef;
+			my $pubraw = defined $pubder ? Luminum::Protocol::spki_to_raw($pubder) : undef;
+
+			if (!$EPNAME || !$svrkey || !$EPFPNT || !$osplat || !$osrel || !$ipv4 || !defined $pubraw) {
+				Broker::debugout(2,"Attempted registration with missing data from $EPADDR");
+				sendresponse($cs,$env,"ERR","MISSING_DATA",undef);
+				return;
+				}
+			if (serverkey($svrkey) != 1) {
+				Broker::debugout(2,"Attempted registration with invalid server key from $EPADDR");
+				sendresponse($cs,$env,"ERR","INVALID_SERVER_KEY",undef);
+				return;
+				}
+			# The fingerprint must match the presented public key (3.1).
+			if (Luminum::Protocol::fingerprint($pubraw) ne $EPFPNT) {
+				Broker::debugout(2,"FINGERPRINT_MISMATCH: registration from $EPADDR rejected");
+				sendresponse($cs,$env,"ERR","FINGERPRINT_MISMATCH",undef);
+				return;
+				}
+			my $reg = isreg($EPFPNT);
+			if ($reg > 0) {
+				Broker::debugout(2,"Attempted registration from existing client on $EPADDR (ID $reg)");
+				sendresponse($cs,$env,"ERR","ALREADY_REGISTERED",undef);
+				return;
+				}
+			# Store the base64 SPKI/DER as sent (schema: PUBKEY is base64;
+			# getpubkey() decodes it on read).
+			newreg($cs,$env,$EPNAME,$EPFPNT,$data->{pubkey},$ipv4,$osplat,$osrel,$clientver,$EPADDR);
+			return;
+			}
+		elsif ($action eq "checkin") {
+			my $EPNAME = validstr($data->{hostname},'^[A-Za-z0-9_\.\-]+$');
+			my $osplat = validstr($data->{osplat},'^[A-Za-z]+$');
+			my $osrel = validstr($data->{osrel},'^[A-Za-z0-9\s\.\-]+$');
+			my $clientver = validstr($data->{clientver},'^[0-9]+\.[0-9]+\.[0-9]+[ab]?$');
+			$clientver = "Unknown" unless defined $clientver;
+			my $ipv4 = validstr($data->{ipv4},'^[0-9]{1,3}(\.[0-9]{1,3}){3}$');
+			if (!$EPNAME || !$osplat || !$osrel) {
+				Broker::debugout(2,"Attempted check-in with missing data from $EPADDR");
+				sendresponse($cs,$env,"ERR","MISSING_DATA",undef);
+				return;
+				}
+			checkin($cs,$env,$uid,$ipv4,$EPNAME,$osplat,$osrel,$clientver,$EPADDR);
+			return;
+			}
+		elsif ($action eq "unregister") {
+			Broker::debugout(0,"Received deregistration request from client ID $uid on $EPADDR");
+			dereg($cs,$env,$uid,$EPADDR);
+			return;
+			}
+		elsif ($action eq "report") {
+			# Unsolicited client report; event routing arrives with the
+			# MQTT channel. Acknowledge for now.
+			Broker::debugout(0,"Received report from client ID $uid on $EPADDR");
+			sendresponse($cs,$env,"OK",undef,undef);
+			return;
+			}
+		elsif ($action eq "answer") {
+			# No action queue on the bootstrap channel yet (Phase 2).
+			Broker::debugout(0,"Received answer from client ID $uid on $EPADDR");
+			sendresponse($cs,$env,"OK",undef,undef);
+			return;
+			}
+		elsif ($action eq "query" || $action eq "deploy" || $action eq "config") {
+			# Server-to-client actions (protocol 6.1).
+			Broker::debugout(2,"Client-originated $action received from $EPADDR (server-to-client action)");
+			sendresponse($cs,$env,"ERR","INVALID_DIRECTION",undef);
+			return;
 			}
 		else {
-			my $fpval = iafis($EPID,$EPFPNT);
-			if ($fpval == 1) {
-				if (!$lumy || $lumy eq "") {
-					if ($action eq "register") { Broker::debugout(2,"Attempted registration from client with nonzero ID on $EPADDR\."); }
-					elsif ($action eq "unregister") {
-						Broker::debugout(0,"Received deregistration request from client ID $EPID\.");
-						dereg($EPFPNT);
-						}
-					elsif ($action eq "ping") {
-						if ($message->{'info'}{'osplat'} && $message->{'info'}{'osrel'} && $message->{'info'}{'clientver'}) {
-							my $osplat;
-							my $osrel;
-							my $clientver;
-							if ($message->{'info'}{'osplat'} =~ /^[A-Za-z]+$/) { $osplat = $message->{'info'}{'osplat'}; }
-							if ($message->{'info'}{'osrel'} =~ /^[A-Za-z0-9\s\.]+$/) { $osrel = $message->{'info'}{'osrel'}; }
-							if ($message->{'info'}{'clientver'} =~ /^[0-9][0-9]?\.[0-9][0-9]?\.[0-9][0-9]?[ab]?$/) { $clientver = $message->{'info'}{'clientver'}; }
-							else { $clientver = "Unknown"; }
-
-							if ($EPID && $EPFPNT && $EPADDR && $EPNAME && $osplat && $osrel && $clientver) {
-								checkin($EPID,$EPFPNT,$EPADDR,$EPNAME,$osplat,$osrel,$clientver);
-								}
-							else { Broker::debugout(2,"Malformed data in check-in from $EPADDR\."); }
-							}
-						else { Broker::debugout(2,"Attempted check-in with missing data from $EPADDR\."); }
-						}
-					else { Broker::debugout(2,"Malformed message received from $EPADDR\."); }
-					}
-				else {
-					if ($lumy eq "core") {
-						if ($action eq "answer") {
-							}
-						elsif ($action eq "report") {
-							}
-						else { Broker::debugout(2,"Invalid action specified for \"core\" Lumy in message from $EPADDR\."); }
-						}
-					elsif (grep(/^$lumy$/,@lumys) && $data) {
-						&{\&{"$lumy\::pass"}}($EPFPNT,$data);
-						}
-					else { Broker::debugout(2,"Invalid Lumy specified in message from $EPADDR\."); }
-					}
-				}
-			elsif ($fpval == 2) {
-				Broker::debugout(2,"Fingerprint validation failed for client on $EPADDR\: Mismatch");
-				}
-			elsif ($fpval == 3) {
-				Broker::debugout(2,"Fingerprint validation failed for client on $EPADDR\: Malformed Fingerprint");
-				}
-			else { Broker::debugout(2,"Unknown error during fingerprint validation for client on $EPADDR\."); }
+			Broker::debugout(2,"Invalid action \"$action\" specified for \"core\" Lumy in message from $EPADDR");
+			sendresponse($cs,$env,"ERR","UNKNOWN_ACTION",undef);
+			return;
 			}
 		}
-	else { Broker::debugout(2,"Fingerprint missing in message from $EPADDR\."); }
+	elsif ($action eq "newconfig") {
+		lumyconf($cs,$env,$lumy,$uid,$EPADDR);
+		return;
+		}
+	elsif (grep(/^$lumy$/,@lumys) && $data) {
+		&{\&{"$lumy\::pass"}}($uid,$data);
+		sendresponse($cs,$env,"OK",undef,undef);
+		return;
+		}
+	else {
+		Broker::debugout(2,"Invalid Lumy \"$lumy\" specified in message from $EPADDR");
+		sendresponse($cs,$env,"ERR","UNKNOWN_LUMY",undef);
+		return;
+		}
+	}
+
+# Read one length-prefixed frame from a socket (protocol 8.2).
+# Returns the decoded envelope hashref, or undef on failure.
+#
+sub readframe {
+	my $cs = shift;
+	my $max = shift;
+
+	my $lenbuf = "";
+	while (length($lenbuf) < 4) {
+		my $rc = sysread($cs,$lenbuf,4 - length($lenbuf),length($lenbuf));
+		if (!$rc) { return undef; }
+		}
+	my ($len) = unpack("N",$lenbuf);
+	if ($len == 0 || $len > $max) { return undef; }
+	my $payload = "";
+	while (length($payload) < $len) {
+		my $rc = sysread($cs,$payload,$len - length($payload),length($payload));
+		if (!$rc) { return undef; }
+		}
+	my ($ok,$env) = Luminum::Protocol::frame_decode($lenbuf.$payload,$max);
+	if (!$ok) { return undef; }
+	return $env;
+	}
+
+# Build, sign, and write a framed response envelope (protocol 3.3, 5.1).
+#
+sub sendresponse {
+	my $cs = shift;
+	my $req = shift;
+	my $status = shift;
+	my $err = shift;
+	my $data = shift;
+
+	my $resp = Luminum::Protocol::new_envelope(
+		src => "server",
+		uid => $req->{uid},
+		lumy => $req->{lumy},
+		action => $req->{action},
+		status => $status
+		);
+	$resp->{err} = $err if defined $err;
+	$resp->{data} = $data if defined $data;
+	Luminum::Protocol::sign_envelope($resp,$srvseed);
+	my $frame = Luminum::Protocol::frame_encode($resp,64*1024);
+	if (defined $frame) {
+		syswrite($cs,$frame);
+		}
+	else { Broker::debugout(3,"Response frame exceeds maximum size; not sent"); }
+	}
+
+# Lumy configuration request (protocol 6.1: configuration is the
+# server-side source of truth). Served from SYSTEM.LUMYCONFIG: an
+# exact (LUMY, UID) row wins, falling back to the UID '0' default row.
+#
+sub lumyconf {
+	my $cs = shift;
+	my $env = shift;
+	my $lumy = shift;
+	my $uid = shift;
+	my $EPADDR = shift;
+
+	my $conf = getlumyconfig($lumy,$uid);
+	if ($conf eq "") {
+		Broker::debugout(2,"No configuration on file for \"$lumy\" Lumy (UID $uid) from $EPADDR");
+		sendresponse($cs,$env,"ERR","NO_CONFIG",undef);
+		return;
+		}
+	my $data = eval { JSON::PP->new->decode($conf) };
+	if ($@ || !ref($data)) {
+		Broker::debugout(3,"Stored configuration for \"$lumy\" Lumy is not valid JSON");
+		sendresponse($cs,$env,"ERR","BAD_CONFIG",undef);
+		return;
+		}
+	Broker::debugout(0,"Sent \"$lumy\" Lumy configuration to $EPADDR (UID $uid)");
+	sendresponse($cs,$env,"OK",undef,$data);
+	}
+
+# Stored public key (base64 SPKI/DER) for a client UID.
+#
+sub getpubkey {
+	my $uid = shift;
+	my $pubkey;
+	if ($uid =~ /^[0-9]+$/) {
+		my $dbh = dbconnect("CLIENTS");
+		my $sth = $dbh->prepare("select PUBKEY from AUTH where ID = '$uid'");
+		$sth->execute();
+		my @row = $sth->fetchrow_array();
+		if (scalar(@row) > 0 && defined $row[0]) { $pubkey = $row[0]; }
+		}
+	return $pubkey;
+	}
+
+# Connection state for a client UID (OK, DEACT, ...).
+#
+sub getcstate {
+	my $uid = shift;
+	my $cstate;
+	if ($uid =~ /^[0-9]+$/) {
+		my $dbh = dbconnect("CLIENTS");
+		my $sth = $dbh->prepare("select CSTATE from STATUS where ID = '$uid'");
+		$sth->execute();
+		my @row = $sth->fetchrow_array();
+		if (scalar(@row) > 0 && defined $row[0]) { $cstate = $row[0]; }
+		}
+	return $cstate;
+	}
+
+# Lumy configuration row for (LUMY, UID), falling back to UID '0'.
+#
+sub getlumyconfig {
+	my $lumy = shift;
+	my $uid = shift;
+	my $conf;
+	if ($lumy =~ /^[a-z]+$/ && $uid =~ /^[0-9]+$/) {
+		my $dbh = dbconnect("SYSTEM");
+		my $sth = $dbh->prepare("select CONFIG from LUMYCONFIG where LUMY = '$lumy' and UID = '$uid'");
+		$sth->execute();
+		my @row = $sth->fetchrow_array();
+		if (scalar(@row) > 0 && defined $row[0]) { $conf = $row[0]; }
+		else {
+			$sth = $dbh->prepare("select CONFIG from LUMYCONFIG where LUMY = '$lumy' and UID = '0'");
+			$sth->execute();
+			@row = $sth->fetchrow_array();
+			if (scalar(@row) > 0 && defined $row[0]) { $conf = $row[0]; }
+			}
+		}
+	return defined $conf ? $conf : "";
+	}
+
+# Validate a string field against a pattern; returns the value or undef.
+#
+sub validstr {
+	my $val = shift;
+	my $pat = shift;
+	return undef unless defined $val && !ref($val) && $val =~ $pat;
+	return $val;
+	}
+
+# Random bytes from /dev/urandom.
+#
+sub randombytes {
+	my $n = shift;
+	my $bytes;
+	if (open(my $ur, "<", "/dev/urandom")) {
+		read($ur,$bytes,$n);
+		close($ur);
+		}
+	$bytes = join("",map { chr(int(rand(256))) } 1..$n) unless defined $bytes && length($bytes) == $n;
+	return $bytes;
 	}
 
 # Check Server Key
@@ -605,7 +888,7 @@ sub serverkey {
 	my $goodkey;
 
 	if ($check =~ /^[A-Za-z0-9]+$/) {
-		my $dbh = DBI->connect("DBI:mysql:SYSTEM",$dbuser,$dbpass,\%attr);
+		my $dbh = dbconnect("SYSTEM");
 		my $sth = $dbh->prepare("select CVAL from CONFIG where CKEY = 'SKEY'");
 		$sth->execute();
 		my @result = $sth->fetchrow_array();
@@ -615,72 +898,72 @@ sub serverkey {
 	return $goodkey;
 	}
 
-# New Client Registration
-#
-# newreg("tango","cfd346d21ef5690deb109beef",<KEYDATA>,"172.16.0.1","Linux","Debian 12.10","0.0.1");
+# New Client Registration (protocol 7.1)
 #
 # 1 = Success
 # 2 = Already Registered
 # 3 = Error
 #
 sub newreg {
-	my $EPNAME = $_[0];
-	my $EPFPNT = $_[1];
-	my $EPPKEY = $_[2];
-	my $EPADDR = $_[3];
-	my $osplat = $_[4];
-	my $osrel = $_[5];
-	my $clientver = $_[6];
+	my $cs = shift;
+	my $env = shift;
+	my $EPNAME = shift;
+	my $EPFPNT = shift;
+	my $EPPKEY = shift;
+	my $ipv4 = shift;
+	my $osplat = shift;
+	my $osrel = shift;
+	my $clientver = shift;
+	my $EPADDR = shift;
 	my $EPID;
-	my $reg = isreg($EPFPNT);
 
-	if ($reg == 0) {
-		my $dbh = DBI->connect("DBI:mysql:CLIENTS",$dbuser,$dbpass,\%attr);
-		my $sth = $dbh->prepare("insert into AUTH (NAME,FINGERPRINT,PUBKEY) values ('$EPNAME','$EPFPNT','$EPPKEY')");
-		$sth->execute();
-		$sth = $dbh->prepare("select ID from AUTH where FINGERPRINT = '$EPFPNT'");
-		$sth->execute();
-		while (my @regdata = $sth->fetchrow()) { $EPID = $regdata[0]; }
-		$sth = $dbh->prepare("insert into STATUS (ID,HOSTNAME,IPV4,OSPLATFORM,OSRELEASE,CLIENTVER,CSTATE,REGDATE,LASTSEEN) values ($EPID,'$EPNAME','$EPADDR','$osplat','$osrel','$clientver','OK',now(),now())");
-		$sth->execute();
-		Broker::debugout(0,"Registered Client ID $EPID\: $EPNAME ($EPADDR)");
-		}
-	else {
-		Broker::debugout(2,"Attempted registration from existing client on $EPADDR (ID $reg)");
-		}
+	# MQTT client secret (protocol 3.1): 32 random bytes, base64.
+	# Only the SHA-256 hash is stored server-side.
+	my $secret = encode_base64(randombytes(32), "");
+	my $sechash = sha256_hex($secret);
+
+	my $dbh = dbconnect("CLIENTS");
+	my $sth = $dbh->prepare("insert into AUTH (NAME,FINGERPRINT,PUBKEY,MQTTSECRET) values ('$EPNAME','$EPFPNT','$EPPKEY','$sechash')");
+	$sth->execute();
+	$sth = $dbh->prepare("select ID from AUTH where FINGERPRINT = '$EPFPNT'");
+	$sth->execute();
+	while (my @regdata = $sth->fetchrow()) { $EPID = $regdata[0]; }
+	$sth = $dbh->prepare("insert into STATUS (ID,HOSTNAME,IPV4,OSPLATFORM,OSRELEASE,CLIENTVER,CSTATE,REGDATE,LASTSEEN) values ($EPID,'$EPNAME','$ipv4','$osplat','$osrel','$clientver','OK',now(),now())");
+	$sth->execute();
+	Broker::debugout(0,"Registered Client ID $EPID\: $EPNAME ($EPADDR)");
+
+	sendresponse($cs,$env,"OK",undef,{
+		uid => "$EPID",
+		mqtthost => $MADDR,
+		mqttport => "$MPORT",
+		mqttsecret => $secret,
+		serverpubkey => $srvpubspki
+		});
 	}
 
-# Client De-Registration
-#
-# dereg("cfd346d21ef5690deb109beef");
+# Client De-Registration (protocol 3.1): the record is deactivated,
+# not deleted, so the fingerprint cannot be silently re-registered.
 #
 # 1 = Success
 # 2 = Failure
 # 3 = Error
 #
 sub dereg {
-	my $EPFPNT = shift;
-	my $deregistered;
+	my $cs = shift;
+	my $env = shift;
+	my $EPID = shift;
+	my $EPADDR = shift;
 
-	if ($EPFPNT =~ /^[a-f0-9]+$/) {
-		my $cid = isreg($EPFPNT);
-		if ($cid > 0) {
-			my $dbh = DBI->connect("DBI:mysql:CLIENTS",$dbuser,$dbpass,\%attr);
-			my $sth = $dbh->prepare("delete CA, CS from AUTH CA join STATUS CS on CS.ID = CA.ID where CS.ID = $cid");
-			$sth->execute();
-			if (isreg($EPFPNT) == 0) {
-				Broker::debugout(1,"Successfully unregistered client ID $cid\.");
-				$deregistered = 1;
-				}
-			else {
-				Broker::debugout(2,"Failure while attempting to unregister client ID $cid\.");
-				$deregistered = 2;
-				}
-			}
-		else {
-			Broker::debugout(2,"Request to delete unregistered client with fingerprint $EPFPNT");
-			$deregistered = 3;
-			}
+	if ($EPID =~ /^[0-9]+$/) {
+		my $dbh = dbconnect("CLIENTS");
+		my $sth = $dbh->prepare("update STATUS set CSTATE = 'DEACT' where ID = $EPID");
+		$sth->execute();
+		Broker::debugout(1,"Deactivated client ID $EPID on $EPADDR");
+		sendresponse($cs,$env,"OK",undef,undef);
+		}
+	else {
+		Broker::debugout(2,"Malformed UID in deregistration request from $EPADDR");
+		sendresponse($cs,$env,"ERR","MALFORMED_UID",undef);
 		}
 	}
 
@@ -696,7 +979,7 @@ sub isreg {
 	my $registered;
 
 	if ($EPFPNT =~ /^[a-f0-9]+$/) {
-		my $dbh = DBI->connect("DBI:mysql:CLIENTS",$dbuser,$dbpass,\%attr);
+		my $dbh = dbconnect("CLIENTS");
 		my $sth = $dbh->prepare("select count(ID),ID from AUTH where FINGERPRINT = '$EPFPNT'");
 		$sth->execute();
 		while (my @row = $sth->fetchrow_array()) {
@@ -708,27 +991,37 @@ sub isreg {
 	else { Broker::debugout(2,"Invalid fingerprint provided for registration check."); }
 	}
 
-# Record Client Check-In
+# Record Client Check-In (protocol 7.2). Identity is established by
+# the per-message signature against the stored public key for the
+# claimed UID, so no fingerprint is carried in the message.
 #
 sub checkin {
-	my $EPID = $_[0];
-	my $EPFPNT = $_[1];
-	my $EPADDR = $_[2];
-	my $EPNAME = $_[3];
-	my $osplat = $_[4];
-	my $osrel = $_[5];
-	my $clientver = $_[6];
+	my $cs = shift;
+	my $env = shift;
+	my $EPID = shift;
+	my $ipv4 = shift;
+	my $EPNAME = shift;
+	my $osplat = shift;
+	my $osrel = shift;
+	my $clientver = shift;
+	my $EPADDR = shift;
 
 	if ($EPID =~ /^[0-9]+$/) {
-		if (isreg($EPFPNT) eq $EPID) {
-			my $dbh = DBI->connect("DBI:mysql:CLIENTS",$dbuser,$dbpass,\%attr);
-			my $sth = $dbh->prepare("update STATUS set HOSTNAME = '$EPNAME', IPV4 = '$EPADDR', OSPLATFORM = '$osplat', OSRELEASE = '$osrel', CLIENTVER = '$clientver', CSTATE = 'OK', LASTSEEN = now() where ID = $EPID");
-			$sth->execute();
-			Broker::debugout(0,"Received check-in from client on $EPADDR (ID $EPID)");
+		my $dbh = dbconnect("CLIENTS");
+		my $sth;
+		if (defined $ipv4) {
+			$sth = $dbh->prepare("update STATUS set HOSTNAME = '$EPNAME', IPV4 = '$ipv4', OSPLATFORM = '$osplat', OSRELEASE = '$osrel', CLIENTVER = '$clientver', CSTATE = 'OK', LASTSEEN = now() where ID = $EPID");
 			}
 		else {
-			Broker::debugout(2,"Attempted check-in from unregistered client at $EPADDR");
+			$sth = $dbh->prepare("update STATUS set HOSTNAME = '$EPNAME', OSPLATFORM = '$osplat', OSRELEASE = '$osrel', CLIENTVER = '$clientver', CSTATE = 'OK', LASTSEEN = now() where ID = $EPID");
 			}
+		$sth->execute();
+		Broker::debugout(0,"Received check-in from client on $EPADDR (ID $EPID)");
+		sendresponse($cs,$env,"OK",undef,undef);
+		}
+	else {
+		Broker::debugout(2,"Malformed UID in check-in from $EPADDR");
+		sendresponse($cs,$env,"ERR","MALFORMED_UID",undef);
 		}
 	}
 
@@ -757,9 +1050,17 @@ sub catchhup {
 		undef($SHOST);
 		undef($LADDR);
 		undef($LPORT);
+		undef($MADDR);
+		undef($MPORT);
+		undef($CMDTIMEOUT);
+		undef($DEPLTIMEOUT);
 		undef($sslcert);
 		undef($sslprvkey);
 		undef($sslpubkey);
+		undef($srvseed);
+		undef($srvpub);
+		undef($srvpubspki);
+		%seenid = ();
 		stoplistener();
 		getbrokerconf();
 		readconfig();
@@ -802,18 +1103,17 @@ sub debugout {
 		$DBCFLAG = colored("FAIL","red");
 		}
 
-	if ($writelog == 1) {
-		open (BLOG, "+>>", $brokerlog);
+	if ($main::writelog == 1) {
+		open (BLOG, "+>>", $main::brokerlog);
 		print BLOG "[$DBTIME] [$DBFLAG] $DBMSG\n";
+		close (BLOG);
 		}
 
 	# Break signals are usually caused by a CTRL+C. This is here to
 	# print a newline to stdout after the break to keep the debug
 	# stream output tidy.
-	if ($debug == 1) {
+	if ($main::debug == 1) {
 		if ($DBMSG =~ /SIGINT/) { print "\n"; }
 		print "[$DBTIME] [$DBCFLAG] $DBMSG\n";
 		}
-	close (BLOG);
 	}
-
