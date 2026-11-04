@@ -175,6 +175,9 @@ sub run {
 	unless (apply_schema($dbh, "$root/sql/schema.sql", $log)) {
 		return $fail->("database schema application failed");
 		}
+	unless (migrate_users($dbh, $log)) {
+		return $fail->("AUTH.USERS migration failed");
+		}
 	unless (setup_dbuser($dbh, $dbuser, $dbpass)) {
 		return $fail->("database user setup failed");
 		}
@@ -232,6 +235,9 @@ EOF
 		SSLPUBKEY   => $pub,
 		INSTALLDATE => scalar(localtime),
 		);
+	# The admin email is optional; only seed it when supplied so an
+	# existing value (e.g. changed later in the console) is preserved.
+	$rows{OWNEREMAIL} = $adminemail if defined $adminemail && $adminemail ne "";
 	unless (seed_config($dbh, \%rows)) {
 		return $fail->("SYSTEM.CONFIG seeding failed");
 		}
@@ -409,6 +415,31 @@ sub apply_schema {
 	return 1;
 	}
 
+# Upgrade AUTH.USERS from the pre-1.0 layout: add any column the current
+# schema defines that the table lacks. CREATE TABLE IF NOT EXISTS in
+# schema.sql cannot extend an existing table, so older installations keep
+# the narrower layout unless migrated here.
+#
+sub migrate_users {
+	my ($dbh, $log) = @_;
+	my %defs = (
+		EMAIL      => "EMAIL tinytext DEFAULT NULL",
+		PHONE      => "PHONE tinytext NOT NULL DEFAULT ''",
+		TYPE       => "TYPE tinytext NOT NULL DEFAULT 'local'",
+		REGDATE    => "REGDATE datetime NOT NULL DEFAULT '1970-01-01 00:00:00'",
+		CHANGEPASS => "CHANGEPASS tinyint(1) NOT NULL DEFAULT 0",
+		);
+	my %have = map { $_->[0] => 1 }
+		@{ $dbh->selectall_arrayref(qq{select COLUMN_NAME from information_schema.COLUMNS where TABLE_SCHEMA = 'AUTH' and TABLE_NAME = 'USERS'}) || [] };
+	for my $col (sort keys %defs) {
+		next if $have{$col};
+		my $rc = eval { $dbh->do("alter table AUTH.USERS add " . $defs{$col}); 1 };
+		unless ($rc) { $log->("  AUTH.USERS migration failed for $col: $@"); return 0; }
+		$log->("  AUTH.USERS: added missing column $col");
+		}
+	return 1;
+	}
+
 # Create (or update) the application database user and grant it access to
 # the Luminum databases.
 #
@@ -463,11 +494,16 @@ sub seed_admin_user {
 			@{ $dbh->selectall_arrayref(qq{select COLUMN_NAME from information_schema.COLUMNS where TABLE_SCHEMA = 'AUTH' and TABLE_NAME = 'USERS'}) || [] };
 		if ($exists) {
 			my $set = "PASSWORD = ?, ROLE = 1, ENABLED = 1";
+			my @vals = ($hash);
 			# Backfill REGDATE on accounts created before it was tracked;
 			# never overwrite a value that is already set.
 			$set .= ", REGDATE = COALESCE(NULLIF(REGDATE, '0000-00-00 00:00:00'), NOW())" if $have{REGDATE};
+			if ($have{EMAIL} && defined $email && $email ne "") {
+				$set .= ", EMAIL = ?";
+				push(@vals, $email);
+				}
 			my $sth = $dbh->prepare("update AUTH.USERS set $set where USERNAME = ?");
-			$sth->execute($hash, $username) or die "AUTH.USERS update failed: " . ($sth->errstr || "unknown error");
+			$sth->execute(@vals, $username) or die "AUTH.USERS update failed: " . ($sth->errstr || "unknown error");
 			}
 		else {
 			my @cols = ("USERNAME", "FULLNAME", "PASSWORD");
