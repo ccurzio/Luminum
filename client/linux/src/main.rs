@@ -653,8 +653,17 @@ fn clientsetup() {
 // ---------------------------------------------------------------------------
 
 fn get_os_release() -> String {
+	// The server validates osrel against ^[A-Za-z0-9\s\.\-]+$ (protocol
+	// 6.1), so strip anything outside that set from the pretty name.
 	match OsRelease::open() {
-		Ok(result) => result.pretty_name().to_string(),
+		Ok(result) => result
+			.pretty_name()
+			.chars()
+			.map(|c| if c.is_ascii_alphanumeric() || matches!(c, ' ' | '.' | '-') { c } else { ' ' })
+			.collect::<String>()
+			.split_whitespace()
+			.collect::<Vec<_>>()
+			.join(" "),
 		Err(_) => String::from("Unknown"),
 	}
 }
