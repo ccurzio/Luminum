@@ -1,15 +1,9 @@
 <?php
-mysqli_select_db($db, "CLIENTS") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
-
-$starttime = microtime(true);
-$clientsquery = mysqli_query($db, "select ID,HOSTNAME,IPV4,OSPLATFORM,OSRELEASE,CLIENTVER,CSTATE,LASTSEEN from STATUS where MISSING = 0 order by HOSTNAME");
-$endtime = microtime(true);
-
-$duration = number_format((float)$endtime - $starttime, 2, '.', '');
-$clientscount = mysqli_num_rows($clientsquery);
-$lincount = 0;
-$maccount = 0;
-$wincount = 0;
+//
+// Client Status. The table is rendered client-side by LuminumTable from the
+// JSON served by /api/clients.php and kept live via AJAX polling. The PHP
+// here is only the page shell; all data flows through the API.
+//
 ?>
 
 <div class="content">
@@ -19,37 +13,17 @@ $wincount = 0;
 		<div style="display: block; width: 100%; text-align: right;">
 			<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled" id="deploy">Deploy Action</button> <button class="formgo" id="investigate" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Investigate</button> <button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled" id="getinfo">Get Info</button>
 			<table id="cstable" style="margin-top: 10px; text-align: left;">
-			<tr><td colspan="8"><div style="position: absolute; padding-top: 5px; padding-left: 5px;"><?php print "<span id=\"selcount\">0</span> <span id=\"totcount\">of $clientscount"; ?> items</span> <img id="refresh" src="icons/refresh.png" style="cursor: pointer; margin-left: 5px; width: 15px; height: 15px; vertical-align: top;" onclick="reloadTable()"></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($clientscount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
-			<tr><td style="width: 15px;">
-			<?php
-			if ($clientscount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
-			else { print "<input id=\"selectall\" type=\"checkbox\" onclick=\"allToggle()\">"; }
-			?>
-			</td><td>Hostname</td><td style="width: 125px;">IP Address</td><td style="width: 50px; text-align: center;">Platform</td><td style="width: 150px;">Operating System</td><td style="width: 120px;">Client Version</td><td style="width: 60px; text-align: center;">Status</td><td style="width: 175px;">Last Check-In</td></tr>
-			<?php
-			if ($clientscount == 0) {
-				print "<tr><td colspan=\"9\" style=\"text-align: center; background-color: #494a69; font-weight: normal; font-style: italic;\">No Results</td></tr>\n";
-				}
-			else {
-				while($row = mysqli_fetch_assoc($clientsquery)) {
-					if ($row["OSPLATFORM"] == "Linux") { $lincount++; }
-					else if ($row["OSPLATFORM"] == "macOS") { $maccount++; }
-					else if ($row["OSPLATFORM"] == "Windows") { $wincount++; }
-					if ($row["CSTATE"] == "OK") { $staticon = "sysgreen.png"; }
-					else if ($row["CSTATE"] == "WARN") { $staticon = "sysyellow.png"; }
-					else if ($row["CSTATE"] == "CRIT") { $staticon = "sysred.png"; }
-					print "<tr><td id=\"" . $row["ID"] . "A\" style=\"width: 15px; background-color: #494a69;\"><input class=\"client\" id=\"ID" . $row["ID"] . "\" type=\"checkbox\" onclick=\"rowHighlight(" . $row["ID"] . ")\"></td><td id=\"" . $row["ID"] . "B\" style=\"width: 50px; background-color: #494a69; font-weight: normal;\">" . $row["HOSTNAME"] . "</td><td id=\"" . $row["ID"] . "C\" style=\"width: 75px; background-color: #494a69; font-weight: normal;\">" . $row["IPV4"] . "</td><td id=\"" . $row["ID"] . "D\" style=\"width: 24px; background-color: #494a69; font-weight: normal; text-align: center;\"><img src=\"images/" . strtolower($row["OSPLATFORM"]) . ".png\" style=\"width: 24px; height: 24px; margin-top: 2px;\"></td><td id=\"" . $row["ID"] . "E\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["OSRELEASE"] . "</td><td id=\"" . $row["ID"] . "F\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $row["CLIENTVER"] . "</td>" . "<td id=\"" . $row["ID"] . "G\" style=\"width: 24px; background-color: #494a69; font-weight: normal; text-align: center; padding-top: 7px;\"><img src=\"/icons/" . $staticon . "\" title=\"" . $row["CSTATE"] . "\"></td><td id=\"" . $row["ID"] . "H\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["LASTSEEN"] . "</td></tr>\n";
-					}
-				}
-			?>
-			<tr style="height: 35px;"><td colspan="8"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;"><i>Query Completed in <?php print $duration; ?> Seconds</i></div></td></tr>
+			<tr><td colspan="8"><div style="position: absolute; padding-top: 5px; padding-left: 5px;"><span id="selcount">0</span> <span id="totcount">of 0</span> items</span> <img id="refresh" src="icons/refresh.png" style="cursor: pointer; margin-left: 5px; width: 15px; height: 15px; vertical-align: top;" onclick="cstatusRefresh()"></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="cstatusfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" maxlength="64"></div></td></tr>
+			<tbody id="cstable-head"></tbody>
+			<tbody data-luminum-body id="cstable-body"></tbody>
+			<tr style="height: 35px;"><td colspan="8"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;"><i>Query Completed in <span id="queryms">0.00</span> Seconds</i></div></td></tr>
 			</table>
 		</div>
 	</div>
 
 	<div class="module-content" style="width: 21%; float: right; font-size: 13px;">
 	<p>
-		<b><input type="checkbox" id="checkinfilter" onclick="checkinform()" <?php if ($clientscount == 0) { print "disabled=\"disabled\""; } ?>> Show systems that have checked in within:</b><br>
+		<b><input type="checkbox" id="checkinfilter" onclick="checkinform()"> Show systems that have checked in within:</b><br>
 		<input id="intnum" type="text" style="font-size: 15px; padding: 5px; margin-top: 3px; width: 20px;" value="1" maxlength="2" disabled="disabled">
 		<select name="filterint" id="filterint" style="font-size: 15px; height: 30px; margin-left: 2px;" disabled="disabled">
 			 <option value="reg">Registration Interval</option>
@@ -67,175 +41,165 @@ $wincount = 0;
 	</p>
 	<table style="margin-bottom: 20px;">
 	<tr><td style="width: 15px;"></td><td>Platform</td><td style="text-align: center;">Percentage</td><td style="text-align: center;">Count</td></tr>
-	<tr><td class="lfilter" style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filterlinux" onclick="filterHighlight('filterlinux')" <?php if ($clientscount == 0) { print "disabled=\"disabled\""; } ?>></td><td class="lfilter" style="background-color: #494a69;">Linux</td><td class="lfilter" style="background-color: #494a69; text-align: center;"><?php if ($clientscount > 0) { $pct = ($lincount / $clientscount) * 100; print round($pct,2); } else { print "0"; } ?>%</td><td class="lfilter" style="background-color: #494a69; text-align: center;"><?php print "$lincount"; ?></td></tr>
-	<tr><td class="mfilter" style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filtermac" onclick="filterHighlight('filtermac')" <?php if ($clientscount == 0) { print "disabled=\"disabled\""; } ?>></td><td class="mfilter" style="background-color: #494a69;">macOS</td><td class="mfilter" style="background-color: #494a69; text-align: center;"><?php if ($clientscount > 0) { $pct = ($maccount / $clientscount) * 100; print round($pct,2); } else { print "0"; } ?>%</td><td class="mfilter" style="background-color: #494a69; text-align: center;"><?php print "$maccount"; ?></td></tr>
-	<tr><td class="wfilter" style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filterwin" onclick="filterHighlight('filterwin')" <?php if ($clientscount == 0) { print "disabled=\"disabled\""; } ?>></td><td class="wfilter" style="background-color: #494a69;">Windows</td><td class="wfilter" style="background-color: #494a69; text-align: center;"><?php if ($clientscount > 0) { $pct = ($wincount / $clientscount) * 100; print round($pct,2); } else { print "0"; } ?>%</td><td class="wfilter" style="background-color: #494a69; text-align: center;"><?php print "$wincount"; ?></td></tr>
+	<tr><td class="lfilter" style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filterlinux"></td><td class="lfilter" style="background-color: #494a69;">Linux</td><td class="lfilter" style="background-color: #494a69; text-align: center;"><span id="linuxpct">0</span>%</td><td class="lfilter" style="background-color: #494a69; text-align: center;"><span id="linuxcount">0</span></td></tr>
+	<tr><td class="mfilter" style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filtermac"></td><td class="mfilter" style="background-color: #494a69;">macOS</td><td class="mfilter" style="background-color: #494a69; text-align: center;"><span id="macospct">0</span>%</td><td class="mfilter" style="background-color: #494a69; text-align: center;"><span id="macoscount">0</span></td></tr>
+	<tr><td class="wfilter" style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filterwin"></td><td class="wfilter" style="background-color: #494a69;">Windows</td><td class="wfilter" style="background-color: #494a69; text-align: center;"><span id="winpct">0</span>%</td><td class="wfilter" style="background-color: #494a69; text-align: center;"><span id="wincount">0</span></td></tr>
 	</table>
 
-	<?php if ($clientscount > 0) {
-		print "<span style=\"font-size: 15px; font-weight: bold;\">Filter by Client Version:</span>\n";
-		}
-	?>
+	<span id="verfilter" style="font-size: 15px; font-weight: bold;">Filter by Client Version:</span>
 	<p>
 	</p>
 	</div>
 
 </div>
 
+<script src="layout/table.js"></script>
 <script>
-const itElement = document.getElementById('intnum');
+'use strict';
 
-itElement.addEventListener('input', function(event) {
-	document.getElementById('intnum').value = numbersOnly(document.getElementById('intnum').value);
-	});
+var cstatusConfig = {
+	emptyMessage: 'No Results',
+	searchKeys: ['hostname', 'ip', 'os', 'clientver', 'platform'],
+	columns: [
+		{ type: 'checkbox', width: '15px', inputClass: 'client', idPrefix: 'ID',
+		  header: '<input id="selectall" type="checkbox">' },
+		{ key: 'hostname', label: 'Hostname' },
+		{ key: 'ip', label: 'IP Address', width: '125px' },
+		{ key: 'platform', label: 'Platform', width: '50px', align: 'center',
+		  render: function (row) {
+			return '<img src="images/' + LuminumTable.escapeHTML(row.platform).toLowerCase() + '.png" style="width: 24px; height: 24px; margin-top: 2px;">';
+		  } },
+		{ key: 'os', label: 'Operating System', width: '150px' },
+		{ key: 'clientver', label: 'Client Version', width: '120px' },
+		{ key: 'state', label: 'Status', width: '60px', align: 'center', padTop: '7px',
+		  render: function (row) {
+			var icon = row.state === 'OK' ? 'sysgreen.png' : (row.state === 'WARN' ? 'sysyellow.png' : 'sysred.png');
+			return '<img src="/icons/' + icon + '" title="' + LuminumTable.escapeHTML(row.state) + '">';
+		  } },
+		{ key: 'lastseen', label: 'Last Check-In', width: '175px' }
+	]
+};
 
-function numbersOnly(str) { return str.replace(/[^0-9]/g, ''); }
+var cstatusState = { selected: {}, text: '', platforms: { linux: false, macos: false, windows: false } };
+var cstatusData = null;
+var cstatusPoll = null;
+var cstableEl = document.getElementById('cstable');
+var cstableBody = cstableEl.querySelector('tbody[data-luminum-body]');
 
-function filterHighlight(fid) {
-	var checkBox = document.getElementById(fid);
-	if (checkBox.checked == true) { var bgcolor = "#686993"; }
-	else { var bgcolor = "#494a69"; }
+function cstatusSelectedCount() {
+	var n = 0;
+	for (var k in cstatusState.selected) { if (cstatusState.selected[k]) { n++; } }
+	return n;
+}
 
-	if (fid == "filterlinux") { var ch = "lfilter"; }
-	else if (fid == "filtermac") { var ch = "mfilter"; }
-	else if (fid == "filterwin") { var ch = "wfilter"; }
+function cstatusButtons(n) {
+	var inv = document.getElementById('investigate');
+	var gi = document.getElementById('getinfo');
+	var dep = document.getElementById('deploy');
+	if (n >= 2) { inv.disabled = false; gi.disabled = true; dep.disabled = false; }
+	else if (n === 1) { inv.disabled = false; gi.disabled = false; dep.disabled = false; }
+	else { inv.disabled = true; gi.disabled = true; dep.disabled = true; }
+}
 
-	const frows = document.getElementsByClassName(ch);
-	var len =  frows.length;
-	for (var i=0 ; i<len; i++) {
-		frows[i].style.backgroundColor = bgcolor;
-		}
+function cstatusOSBreakdown() {
+	var total = cstatusData.count;
+	var p = cstatusData.platforms;
+	function setRow(prefix, count) {
+		document.getElementById(prefix + 'pct').textContent = total > 0 ? Math.round((count / total) * 10000) / 100 : 0;
+		document.getElementById(prefix + 'count').textContent = count;
 	}
+	setRow('linux', p.linux);
+	setRow('macos', p.macos);
+	setRow('win', p.windows);
+}
+
+// Re-render the table body and every derived UI element from the current
+// data + state. Called after any data update or state change.
+function cstatusApply() {
+	if (!cstatusData) { return; }
+	LuminumTable.render(cstableEl, cstatusConfig, cstatusData, cstatusState);
+
+	var selCount = cstatusSelectedCount();
+	document.getElementById('selcount').textContent = selCount;
+	document.getElementById('totcount').textContent = 'of ' + cstatusData.count;
+	document.getElementById('queryms').textContent = cstatusData.query_ms;
+	cstatusButtons(selCount);
+	cstatusOSBreakdown();
+	document.getElementById('verfilter').style.display = cstatusData.count > 0 ? '' : 'none';
+
+	var visible = LuminumTable.filterRows(cstatusData.rows, cstatusConfig, cstatusState);
+	var allChecked = visible.length > 0 && visible.every(function (r) { return cstatusState.selected[r.id]; });
+	document.getElementById('selectall').checked = allChecked;
+}
+
+function cstatusOSPanelHighlight(fid, checked) {
+	var bg = checked ? '#686993' : '#494a69';
+	var ch = fid === 'filterlinux' ? 'lfilter' : (fid === 'filtermac' ? 'mfilter' : 'wfilter');
+	document.querySelectorAll('.' + ch).forEach(function (el) { el.style.backgroundColor = bg; });
+}
+
+function cstatusRefresh() {
+	var btn = document.getElementById('refresh');
+	if (btn.className !== 'refresh') {
+		btn.className = 'refresh';
+		btn.style.cursor = 'progress';
+		cstableEl.style.cursor = 'progress';
+	}
+	if (cstatusPoll) { cstatusPoll.refresh(); }
+}
 
 function checkinform() {
-	var checkBox = document.getElementById('checkinfilter');
-	var intnum = document.getElementById('intnum');
-	var filterint = document.getElementById('filterint');
-	var fapply = document.getElementById('fapply');
+	var on = document.getElementById('checkinfilter').checked;
+	['intnum', 'filterint', 'fapply'].forEach(function (id) {
+		document.getElementById(id).disabled = on ? false : 'disabled';
+	});
+}
 
-	if (checkBox.checked == true) {
-		intnum.disabled = false;
-		filterint.disabled = false;
-		fapply.disabled = false;
-		}
-	else {
-		intnum.disabled = "disabled";
-		filterint.disabled = "disabled";
-		fapply.disabled = "disabled";
-		}
+// --- render the static header (contains the select-all checkbox) ----------
+// Must run before the event wiring below, which attaches to #selectall.
+
+document.getElementById('cstable-head').innerHTML = LuminumTable.headerHTML(cstatusConfig);
+
+// --- event wiring ----------------------------------------------------------
+
+// Row selection (delegated): the body is re-rendered on every poll, so listen
+// on the stable tbody rather than each row.
+cstableBody.addEventListener('change', function (e) {
+	if (e.target.classList.contains('client')) {
+		cstatusState.selected[e.target.dataset.id] = e.target.checked;
+		cstatusApply();
 	}
+});
 
-function rowHighlight(idnum) {
-	document.getElementById("selcount").style.transitionProperty = "none";
-	document.getElementById("totcount").style.transitionProperty = "none";
+document.getElementById('selectall').addEventListener('change', function (e) {
+	var visible = cstatusData ? LuminumTable.filterRows(cstatusData.rows, cstatusConfig, cstatusState) : [];
+	visible.forEach(function (r) { cstatusState.selected[r.id] = e.target.checked; });
+	cstatusApply();
+});
 
-	document.getElementById("selcount").style.color = "white";
-	document.getElementById("totcount").style.color = "white";
+document.getElementById('cstatusfilter').addEventListener('input', function (e) {
+	cstatusState.text = e.target.value;
+	cstatusApply();
+});
 
-	setTimeout(function (){
-		document.getElementById("selcount").style.transitionProperty = "color";
-		document.getElementById("selcount").style.transitionDuration = "0.5s";
-		document.getElementById("totcount").style.transitionProperty = "color";
-		document.getElementById("totcount").style.transitionDuration = "0.5s";
-		document.getElementById("selcount").style.color = "#bbb";
-		document.getElementById("totcount").style.color = "#bbb";
-		}, 10);
+[['filterlinux', 'linux'], ['filtermac', 'macos'], ['filterwin', 'windows']].forEach(function (pair) {
+	document.getElementById(pair[0]).addEventListener('change', function (e) {
+		cstatusState.platforms[pair[1]] = e.target.checked;
+		cstatusOSPanelHighlight(pair[0], e.target.checked);
+		cstatusApply();
+	});
+});
 
-	var checkBox = document.getElementById("ID" + idnum);
-	//const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-	const checkboxes = document.querySelectorAll('input[class="client"]');
-	var checkTrigger = 0;
+document.getElementById('intnum').addEventListener('input', function (e) {
+	e.target.value = e.target.value.replace(/[^0-9]/g, '');
+});
 
-	checkboxes.forEach(checkbox => {
-		if (checkbox.checked == true) { checkTrigger++; }
-		});
+// --- polling ----------------------------------------------------------------
 
-	if (checkBox.checked == true) {
-		var bgcolor = "#686993";
-		buttontoggle = false;
-		}
-	else {
-		var bgcolor = "#494a69";
-		buttontoggle = true;
-		}
-
-        document.getElementById("investigate").disabled = buttontoggle;
-	document.getElementById("getinfo").disabled = buttontoggle;
-	document.getElementById("deploy").disabled = buttontoggle;
-
-	console.log(checkTrigger);
-
-	if (checkTrigger >= 2) {
-		document.getElementById("investigate").disabled = false;
-		document.getElementById("getinfo").disabled = "disabled";
-		document.getElementById("deploy").disabled = false;
-		}
-	else if (checkTrigger == 1) {
-		document.getElementById("investigate").disabled = false;
-		document.getElementById("getinfo").disabled = false;
-		document.getElementById("deploy").disabled = false;
-		}
-	else {
-		document.getElementById("investigate").disabled = true;
-		document.getElementById("getinfo").disabled = true;
-		document.getElementById("deploy").disabled = true;
-		}
-
-	document.getElementById(idnum + "A").style.backgroundColor = bgcolor;
-	document.getElementById(idnum + "B").style.backgroundColor = bgcolor;
-	document.getElementById(idnum + "C").style.backgroundColor = bgcolor;
-	document.getElementById(idnum + "D").style.backgroundColor = bgcolor;
-	document.getElementById(idnum + "E").style.backgroundColor = bgcolor;
-	document.getElementById(idnum + "F").style.backgroundColor = bgcolor;
-	document.getElementById(idnum + "G").style.backgroundColor = bgcolor;
-	document.getElementById(idnum + "H").style.backgroundColor = bgcolor;
-
-	document.getElementById("selcount").innerHTML = checkTrigger;
-	}
-
-function wait(ms){
-	var start = new Date().getTime();
-	var end = start;
-	while(end < start + ms) { end = new Date().getTime(); }
-	}
-
-function reloadTable() {
-	var refreshButton = document.getElementById("refresh");
-	if (refreshButton.className != "refresh") {
-		refreshButton.className = "refresh";
-		refreshButton.disabled = "disabled";
-		refreshButton.style.cursor = "progress";
-		document.getElementById('cstable').style.cursor = "progress";
-		}
-	}
-
-function allToggle() {
-	const allCheckbox = document.getElementById("selectall");
-	const checkboxes = document.querySelectorAll('input[class="client"]');
-
-	checkboxes.forEach(checkbox => {
-		checkbox.checked = allCheckbox.checked;
-		var rowId = removeLetters(checkbox.id);
-		rowHighlight(rowId);
-		});
-	}
-
-function allCheck() {
-	const checkboxes = document.querySelectorAll('input[class="client"]');
-	var checkTrigger = 0;
-
-	checkboxes.forEach(checkbox => {
-		if (checkbox.checked == true) { checkTrigger++; }
-		});
-
-	if (checkTrigger == checkboxes.length) {
-		document.getElementById("selectall").checked = "checked";
-		}
-	else { document.getElementById("selectall").checked = false; }
-	}
-
-function removeLetters(str) {
-	return str.replace(/[a-zA-Z]/g, '');
-	}
+cstatusPoll = LuminumTable.poll('/api/clients.php', {
+	interval: 5000,
+	onData: function (data) { cstatusData = data; cstatusApply(); },
+	onError: function (err) { console.error('Client Status poll failed:', err); }
+});
+cstatusPoll.refresh();
 </script>
-
