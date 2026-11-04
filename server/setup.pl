@@ -60,6 +60,19 @@ my $yesbutton;
 my $nobutton;
 my $yesbsc;
 my $nobsc;
+my $certtitle;
+my $certgen;
+my $certgenkey;
+my $certimport;
+my $certfilel;
+my $keyfilel;
+my $keypassl;
+my $certerr;
+my $certerrkey;
+my $certnonsel;
+my $certkeyprompt;
+my $certpassprompt;
+my $certcertprompt;
 
 if ($ENV{LANG} =~ /en_/ || $ENV{LANG} eq "") {
 	$lang = "EN";
@@ -87,6 +100,19 @@ if ($ENV{LANG} =~ /en_/ || $ENV{LANG} eq "") {
 	$nobutton = " No ";
 	$yesbsc = "Y";
 	$nobsc = "N";
+	$certtitle = "Certificate Configuration";
+	$certgen = "Generate a new self-signed certificate (new private key)";
+	$certgenkey = "Generate a new certificate (existing private key)";
+	$certimport = "Import an existing certificate and private key";
+	$certfilel = "Certificate File";
+	$keyfilel = "Private Key File";
+	$keypassl = "Key Passphrase";
+	$certerr = "Certificate and private key paths are required for import.";
+	$certerrkey = "Private key path is required.";
+	$certnonsel = "Please select a certificate option.";
+	$certkeyprompt = "Path to existing private key";
+	$certpassprompt = "Key passphrase (blank if none)";
+	$certcertprompt = "Path to certificate";
 	}
 elsif ($ENV{LANG} =~ /de_/) {
 	$lang = "DE";
@@ -114,6 +140,19 @@ elsif ($ENV{LANG} =~ /de_/) {
 	$nobutton = " Nein ";
 	$yesbsc = "J";
 	$nobsc = "N";
+	$certtitle = "Zertifikatskonfiguration";
+	$certgen = "Neues selbstsigniertes Zertifikat erstellen (neuer privater Schlüssel)";
+	$certgenkey = "Neues Zertifikat erstellen (vorhandener privater Schlüssel)";
+	$certimport = "Vorhandenes Zertifikat und privaten Schlüssel importieren";
+	$certfilel = "Zertifikatsdatei";
+	$keyfilel = "Private Schlüsseldatei";
+	$keypassl = "Schlüsselkennwort";
+	$certerr = "Für den Import sind Zertifikats- und Schlüsselpfad erforderlich.";
+	$certerrkey = "Der Pfad zum privaten Schlüssel ist erforderlich.";
+	$certnonsel = "Bitte wählen Sie eine Zertifikatsoption.";
+	$certkeyprompt = "Pfad zum vorhandenen privaten Schlüssel";
+	$certpassprompt = "Schlüsselkennwort (leer, wenn keines)";
+	$certcertprompt = "Pfad zum Zertifikat";
 	}
 elsif ($ENV{LANG} =~ /it_/) {
 	$lang = "IT";
@@ -141,6 +180,19 @@ elsif ($ENV{LANG} =~ /it_/) {
 	$nobutton = " No ";
 	$yesbsc = "S";
 	$nobsc = "N";
+	$certtitle = "Configurazione Certificato";
+	$certgen = "Genera un nuovo certificato autofirmato (nuova chiave privata)";
+	$certgenkey = "Genera un nuovo certificato (chiave privata esistente)";
+	$certimport = "Importa un certificato e una chiave privata esistenti";
+	$certfilel = "File Certificato";
+	$keyfilel = "File Chiave Privata";
+	$keypassl = "Passphrase Chiave";
+	$certerr = "Per l'importazione sono richiesti i percorsi di certificato e chiave.";
+	$certerrkey = "Il percorso della chiave privata è richiesto.";
+	$certnonsel = "Selezionare un'opzione del certificato.";
+	$certkeyprompt = "Percorso della chiave privata esistente";
+	$certpassprompt = "Passphrase della chiave (vuoto se assente)";
+	$certcertprompt = "Percorso del certificato";
 	}
 elsif ($ENV{LANG} =~ /fr_/) {
 	$lang = "FR";
@@ -168,6 +220,19 @@ elsif ($ENV{LANG} =~ /fr_/) {
 	$nobutton = " Non ";
 	$yesbsc = "O";
 	$nobsc = "N";
+	$certtitle = "Configuration du Certificat";
+	$certgen = "Générer un nouveau certificat auto-signé (nouvelle clé privée)";
+	$certgenkey = "Générer un nouveau certificat (clé privée existante)";
+	$certimport = "Importer un certificat et une clé privée existants";
+	$certfilel = "Fichier Certificat";
+	$keyfilel = "Fichier Clé Privée";
+	$keypassl = "Passphrase de Clé";
+	$certerr = "Les chemins du certificat et de la clé sont requis pour l'importation.";
+	$certerrkey = "Le chemin de la clé privée est requis.";
+	$certnonsel = "Veuillez sélectionner une option de certificat.";
+	$certkeyprompt = "Chemin de la clé privée existante";
+	$certpassprompt = "Passphrase de la clé (vide si aucune)";
+	$certcertprompt = "Chemin du certificat";
 	}
 elsif ($ENV{LANG} =~ /es_/) {
 	$lang = "ES";
@@ -195,6 +260,19 @@ elsif ($ENV{LANG} =~ /es_/) {
 	$nobutton = " No ";
 	$yesbsc = "S";
 	$nobsc = "N";
+	$certtitle = "Configuración del Certificado";
+	$certgen = "Generar un nuevo certificado autofirmado (nueva clave privada)";
+	$certgenkey = "Generar un nuevo certificado (clave privada existente)";
+	$certimport = "Importar un certificado y una clave privada existentes";
+	$certfilel = "Archivo de Certificado";
+	$keyfilel = "Archivo de Clave Privada";
+	$keypassl = "Passphrase de Clave";
+	$certerr = "Los caminos del certificado y de la clave son necesarios para importar.";
+	$certerrkey = "El camino de la clave privada es necesario.";
+	$certnonsel = "Seleccione una opción de certificado.";
+	$certkeyprompt = "Camino a la clave privada existente";
+	$certpassprompt = "Passphrase de la clave (vacío si no tiene)";
+	$certcertprompt = "Camino al certificado";
 	}
 else {
 	$lang = "EN";
@@ -220,6 +298,19 @@ else {
 	$nobutton = " No ";
 	$yesbsc = "Y";
 	$nobsc = "N";
+	$certtitle = "Certificate Configuration";
+	$certgen = "Generate a new self-signed certificate (new private key)";
+	$certgenkey = "Generate a new certificate (existing private key)";
+	$certimport = "Import an existing certificate and private key";
+	$certfilel = "Certificate File";
+	$keyfilel = "Private Key File";
+	$keypassl = "Key Passphrase";
+	$certerr = "Certificate and private key paths are required for import.";
+	$certerrkey = "Private key path is required.";
+	$certnonsel = "Please select a certificate option.";
+	$certkeyprompt = "Path to existing private key";
+	$certpassprompt = "Key passphrase (blank if none)";
+	$certcertprompt = "Path to certificate";
 	}
 
 # ---------------------------------------------------------------------------
@@ -233,7 +324,7 @@ my %opt = (
 	start          => 1,
 	install_root   => $path,
 	);
-my @valueopts = qw(shost laddr lport waddr wport dbpass dbsocket dbhost dbuser adminuser adminpass adminemail perl5lib srcdir);
+my @valueopts = qw(shost laddr lport waddr wport dbpass dbsocket dbhost dbuser adminuser adminpass adminemail perl5lib srcdir certmode keymode cert key keypass);
 
 my $i = 0;
 while ($i < scalar(@ARGV)) {
@@ -287,6 +378,11 @@ Options:
   --adminemail ADDR  email for the admin account (set at creation)
   --perl5lib PATH    PERL5LIB for the broker start script
   --srcdir PATH      source tree to install from (default: this directory)
+  --certmode M       certificate mode: generate (default) or import
+  --keymode M        key mode for generate: new (default) or existing
+  --cert PATH        existing certificate to import
+  --key PATH         existing private key (import, or keymode existing)
+  --keypass PASS     passphrase for an encrypted private key
 EOF
 	}
 
@@ -314,23 +410,54 @@ sub detect_perl5lib {
 		"IO/Socket/SSL.pm",
 		"Crypt/Perl/Ed25519/PrivateKey.pm",
 		);
+	my %modname = (
+		"DBI.pm" => "DBI",
+		"IO/Socket/SSL.pm" => "IO::Socket::SSL",
+		"Crypt/Perl/Ed25519/PrivateKey.pm" => "Crypt::Perl::Ed25519",
+		);
 	my %dirs;
+	my @missing;
 	for my $mod (@mods) {
+		my $found = 0;
 		for my $dir (@INC) {
 			next unless defined $dir && length $dir;
 			if (-f "$dir/$mod") {
 				$dirs{$dir} = 1;
+				$found = 1;
 				last;
 				}
 		}
+		push @missing, $modname{$mod} unless $found;
+	}
+	# Warn early in the text / non-interactive interfaces. In the curses UI
+	# this would corrupt the screen; the broker compile check in
+	# Luminum::Setup::install_service still catches a missing module there
+	# and reports it in the failure dialog.
+	if (@missing && ($text == 1 || $opt{noninteractive})) {
+		warn "[setup] warning: could not find " . join(", ", @missing)
+			. " in \@INC (PERL5LIB=" . ($ENV{PERL5LIB} || "(unset)") . ").\n";
+		warn "[setup]           The generated broker start script may lack module paths and the broker may fail to start. Set PERL5LIB to include their directories before running setup.\n";
 	}
 	return join(":", sort keys %dirs);
 	}
 
+# Short human-readable description of a certificate spec (review/summary).
+#
+sub certdescription {
+	my ($c) = @_;
+	return "import existing" if $c->{mode} eq "import";
+	return "generate (existing key)" if $c->{keymode} eq "existing";
+	return "generate new";
+	}
+
 # Build the Setup::run parameter list from collected values.
+# Callers pass the certificate spec (or undef) as the LAST argument;
+# pop it before the hash assignment, since a hash in a list
+# assignment would greedily consume the rest of the argument list.
 #
 sub buildparams {
-	my (%v) = @_;
+	my $cs = pop @_;
+	my %v = @_;
 	my %p = (
 		install_root => $v{install_root} || $opt{install_root},
 		shost        => $v{shost},
@@ -357,6 +484,7 @@ sub buildparams {
 	# perl5lib, use the directories detected above so the generated start
 	# scripts export a working PERL5LIB.
 	$p{perl5lib} ||= detect_perl5lib();
+	$p{ssl} = $cs if $cs;
 	return %p;
 	}
 
@@ -368,13 +496,30 @@ if ($opt{noninteractive}) {
 	unless (defined $opt{shost} && defined $opt{laddr}) {
 		die "Non-interactive setup requires --shost and --laddr (see --help)\n";
 		}
-	my %params = buildparams(map { $_ => $opt{$_} } qw(shost laddr lport waddr wport dbuser dbpass dbhost dbsocket adminuser adminpass adminemail perl5lib srcdir));
+	my $certmode = $opt{certmode} || "generate";
+	my $keymode  = $opt{keymode} || "new";
+	die "Invalid --certmode (generate|import)\n" unless $certmode =~ /^(generate|import)$/;
+	die "Invalid --keymode (new|existing)\n" unless $keymode =~ /^(new|existing)$/;
+	my %ssl = (mode => $certmode, keymode => $keymode);
+	$ssl{cert} = $opt{cert} if defined $opt{cert};
+	$ssl{key} = $opt{key} if defined $opt{key};
+	$ssl{keypass} = $opt{keypass} if defined $opt{keypass};
+	if ($certmode eq "import") {
+		die "Import mode requires --cert and --key\n" unless $ssl{cert} && $ssl{key};
+		}
+	if ($keymode eq "existing") {
+		die "Existing-key mode requires --key\n" unless $ssl{key};
+		}
+	# Parenthesize the map: without them its LIST would swallow \%ssl
+	# as a final iteration and the cert spec would never be passed.
+	my %params = buildparams((map { $_ => $opt{$_} } qw(shost laddr lport waddr wport dbuser dbpass dbhost dbsocket adminuser adminpass adminemail perl5lib srcdir)), \%ssl);
 	print "Luminum Server non-interactive setup\n";
 	my $waddr = $params{waddr} || "0.0.0.0";
 	print "  Install root:  $params{install_root}\n";
 	print "  Server host:   $params{shost}\n";
 	print "  Broker:        $params{laddr}:$params{lport}\n";
 	print "  Web console:   $waddr:$params{wport}\n";
+	print "  Certificate:   " . certdescription(\%ssl) . "\n";
 	print "  Start services:" . ($opt{start} ? " yes\n" : " no\n");
 	unless ($opt{yes}) {
 		print "Proceed? [y/N]: ";
@@ -401,9 +546,11 @@ sub textprompt {
 	}
 
 sub textpromptpass {
-	my ($prompt, $default) = @_;
+	my ($prompt, $default, $hint) = @_;
 	print $prompt;
-	print " [blank = keep/generate]" unless defined $default && $default ne "";
+	if (defined $default && $default ne "") { print " [$default]"; }
+	elsif (defined $hint) { print " [$hint]"; }
+	else { print " [blank = keep/generate]"; }
 	print ": ";
 	my $ans;
 	if ($have_readkey) {
@@ -432,6 +579,52 @@ sub collect_params_text {
 	$v{adminpass}    = textpromptpass("Console admin password", $opt{adminpass});
 	$v{adminemail}   = textprompt("Admin Email", $opt{adminemail});
 	return %v;
+	}
+
+# Text-mode certificate configuration. Returns a spec hash for
+# Luminum::Setup (mode/keymode/cert/key/keypass).
+#
+sub collect_cert_text {
+	print "\n$certtitle\n\n";
+	print "[1] $certgen\n";
+	print "[2] $certgenkey\n";
+	print "[3] $certimport\n";
+	my $sel = "";
+	while ($sel ne "1" && $sel ne "2" && $sel ne "3") {
+		print "$badoplabel: $sel\n\n" if $sel ne "";
+		print "[1|2|3] (1): ";
+		$sel = <STDIN>;
+		$sel = "" unless defined $sel;
+		chomp($sel);
+		}
+	my %s = (mode => "generate", keymode => "new");
+	if ($sel eq "2") {
+		$s{keymode} = "existing";
+		my $k = "";
+		while ($k eq "" || !-e $k) {
+			$k = textprompt($certkeyprompt) || "";
+			print "File not found: $k\n\n" if $k ne "" && !-e $k;
+			}
+		$s{key} = $k;
+		$s{keypass} = textpromptpass($certpassprompt, undef, "blank if none");
+		}
+	elsif ($sel eq "3") {
+		$s{mode} = "import";
+		my $c = "";
+		while ($c eq "" || !-e $c) {
+			$c = textprompt($certcertprompt) || "";
+			print "File not found: $c\n\n" if $c ne "" && !-e $c;
+			}
+		$s{cert} = $c;
+		my $k = "";
+		while ($k eq "" || !-e $k) {
+			$k = textprompt($keyfilel) || "";
+			print "File not found: $k\n\n" if $k ne "" && !-e $k;
+			}
+		$s{key} = $k;
+		$s{keypass} = textpromptpass($certpassprompt, undef, "blank if none");
+		}
+	return %s;
 	}
 
 # ---------------------------------------------------------------------------
@@ -537,17 +730,19 @@ if ($text == 1) {
 		}
 
 	my %v = collect_params_text();
+	my %c = collect_cert_text();
 	print "\nReview:\n";
 	print "  Install root:  $v{install_root}\n";
 	print "  Server host:   $v{shost}\n";
 	print "  Broker:        $v{laddr}:$v{lport}\n";
 	print "  Web console:   port $v{wport}\n";
+	print "  Certificate:   " . certdescription(\%c) . "\n";
 	print "Proceed with installation? [y/N]: ";
 	my $ans = <STDIN>;
 	chomp($ans);
 	exit 0 unless lc($ans) eq "y" || lc($ans) eq "yes";
 	print "\e[?25l";
-	runinstaller(buildparams(%v));
+	runinstaller(buildparams(%v, \%c));
 	exit 0;
 	}
 
@@ -621,7 +816,7 @@ my $cancelAction = sub {
 			-buttonalignment=> "right",
 			-x		=> 2,
 			-ipadright	=> 3,
-			-y		=> 7,
+			-y		=> 8,
 			-selected	=> 0,
 			);
 		$warnbuttons->focus();
@@ -640,6 +835,7 @@ my %pentry;
 my $perr;
 my $paramsref;
 my $doInstall;
+my $showCertDialog;
 
 my $paramAction = sub {
 	# The pressed button is passed in as the argument; the field values
@@ -657,7 +853,7 @@ my $paramAction = sub {
 	$paramsref = \%v;
 	$win->delete('paramdialog');
 	$win->draw();
-	$doInstall->();
+	$showCertDialog->();
 	};
 
 my $showParamDialog = sub {
@@ -718,16 +914,16 @@ my $showParamDialog = sub {
 			-onpress	=> $cancelAction,
 			},
 		{
-			-label		=> " Install ",
-			-value		=> "install",
-			-shortcut	=> "I",
+			-label		=> $nextbutton,
+			-value		=> "next",
+			-shortcut	=> $nextbsc,
 			-onpress	=> $paramAction,
 			} ],
 		-fg		=> "black",
 		-buttonalignment => "right",
 		-x		=> 2,
 		-ipadright	=> 3,
-		-y		=> 14,
+		-y		=> 15,
 		-selected	=> 1,
 		);
 	$pentry{install_root}->focus();
@@ -740,7 +936,7 @@ my $showParamDialog = sub {
 # in the dialog instead of killing the wizard.
 #
 $doInstall = sub {
-	my %params = buildparams(%$paramsref);
+	my %params = @_;
 	my $status = $win->add('statusdialog', 'Window',
 		-centered => 1, -width => 74, -height => 24,
 		-bg => 'white', -fg => 'black', -border => 1,
@@ -826,12 +1022,213 @@ $doInstall = sub {
 		-buttons => \@sbuttons,
 		-fg => "black",
 		-buttonalignment => "right",
-		-x => 2, -y => 18,
+		-x => 2, -y => 19,
 		-ipadright => 3,
 		-selected => 0,
 		);
 	$status->draw;
 	$status->getobj('statusbuttons')->focus();
+	};
+
+# Certificate dialogs: the first screen chooses how the server
+# certificate/key are obtained; if the choice needs existing files
+# (generate from an existing key, or import) a second screen collects
+# the paths and passphrase.
+#
+my $cradio;
+my $cerr;
+my $cfsel;
+my $cfcert;
+my $cfkey;
+my $cfpass;
+my $cferr;
+my $showCertFilesDialog;
+
+my $certNextAction = sub {
+	my $sel = $cradio->get();
+	unless (defined $sel && $sel ne "") {
+		$cerr->text($certnonsel);
+		return;
+		}
+	$win->delete('certdialog');
+	$win->draw();
+	if ($sel eq "gen") {
+		$doInstall->(buildparams(%$paramsref,
+			{ mode => "generate", keymode => "new" }));
+		}
+	else {
+		$showCertFilesDialog->($sel);
+		}
+	};
+
+my $certBackAction = sub {
+	$win->delete('certdialog');
+	$win->draw();
+	$showParamDialog->($paramsref);
+	};
+
+$showCertFilesDialog = sub {
+	my ($sel) = @_;
+	$cfsel = $sel;
+	$changed = 1;
+	my $dlg = $win->add('certfiledialog', 'Window',
+		-centered	=> 1,
+		-width		=> 78,
+		-height	=> 13,
+		-bg		=> 'white',
+		-fg		=> 'black',
+		-border		=> 1,
+		-bfg		=> 'black',
+		-bbg		=> 'white',
+		);
+	$dlg->add('cf_title', 'Label',
+		-text => $certtitle, -bold => 1,
+		-x => 2, -y => 1,
+		);
+	my @fields = $sel eq "import"
+		? ( ['cfcert', $certfilel, 'TextEntry',     3],
+			['cfkey',  $keyfilel,  'TextEntry',     4],
+			['cfpass', $keypassl,  'PasswordEntry', 5] )
+		: ( ['cfkey',  $keyfilel,  'TextEntry',     3],
+			['cfpass', $keypassl,  'PasswordEntry', 4] );
+	for my $f (@fields) {
+		$dlg->add($f->[0] . "_l", 'Label',
+			-text => $f->[1], -width => 20, -height => 1,
+			-x => 2, -y => $f->[3],
+			);
+		$dlg->add($f->[0], $f->[2],
+			-text => "", -width => 46,
+			-x => 24, -y => $f->[3],
+			-fg => 'white', -bg => 'darkgray',
+			);
+		}
+	$cfcert = $dlg->getobj('cfcert');
+	$cfkey  = $dlg->getobj('cfkey');
+	$cfpass = $dlg->getobj('cfpass');
+	$cferr = $dlg->add('cf_err', 'Label',
+		-text => "", -fg => 'red', -width => -1, -height => 1,
+		-x => 2, -y => 7,
+		);
+	my $cfaction = sub {
+		my %s = (mode => "generate", keymode => "new");
+		if ($cfsel eq "import") {
+			$s{mode} = "import";
+			$s{cert} = $cfcert->get() || "";
+			$s{key}  = $cfkey->get() || "";
+			$s{keypass} = $cfpass->get() || "";
+			unless ($s{cert} ne "" && $s{key} ne "") {
+				$cferr->text($certerr);
+				return;
+				}
+			}
+		else {
+			$s{keymode} = "existing";
+			$s{key} = $cfkey->get() || "";
+			$s{keypass} = $cfpass->get() || "";
+			unless ($s{key} ne "") {
+				$cferr->text($certerrkey);
+				return;
+				}
+			}
+		$cferr->text("");
+		$win->delete('certfiledialog');
+		$win->draw();
+		$doInstall->(buildparams(%$paramsref, \%s));
+		};
+	my $cfbackaction = sub {
+		$win->delete('certfiledialog');
+		$win->draw();
+		$showCertDialog->();
+		};
+	my $buttons = $dlg->add('cf_buttons', 'Buttonbox',
+		-buttons => [ {
+			-label		=> $exitbutton,
+			-value		=> "cancel",
+			-shortcut	=> $exitbsc,
+			-onpress	=> $cancelAction,
+			},
+		{
+			-label		=> $backbutton,
+			-value		=> "back",
+			-shortcut	=> $backbsc,
+			-onpress	=> $cfbackaction,
+			},
+		{
+			-label		=> " Install ",
+			-value		=> "install",
+			-shortcut	=> "I",
+			-onpress	=> $cfaction,
+			} ],
+		-fg		=> "black",
+		-buttonalignment => "right",
+		-x		=> 2,
+		-ipadright	=> 3,
+		-y		=> 9,
+		-selected	=> 1,
+		);
+	($cfcert || $cfkey)->focus();
+	};
+
+$showCertDialog = sub {
+	$changed = 1;
+	my $dlg = $win->add('certdialog', 'Window',
+		-centered	=> 1,
+		-width		=> 78,
+		-height	=> 13,
+		-bg		=> 'white',
+		-fg		=> 'black',
+		-border		=> 1,
+		-bfg		=> 'black',
+		-bbg		=> 'white',
+		);
+	$dlg->add('c_title', 'Label',
+		-text => $certtitle, -bold => 1,
+		-x => 2, -y => 1,
+		);
+	# -height is mandatory: an auto-height listbox takes ALL remaining
+	# parent rows, so its window would overlap the button row and erase
+	# the buttons whenever the listbox is redrawn (i.e. while focused).
+	$cradio = $dlg->add('c_radio', 'Radiobuttonbox',
+		-values => ["gen", "genkey", "import"],
+		-labels => {
+			gen    => $certgen,
+			genkey => $certgenkey,
+			import => $certimport,
+			},
+		-selected => 0,
+		-x => 2, -y => 3, -height => 3,
+		);
+	$cerr = $dlg->add('c_err', 'Label',
+		-text => "", -fg => 'red', -width => -1, -height => 1,
+		-x => 2, -y => 7,
+		);
+	my $buttons = $dlg->add('c_buttons', 'Buttonbox',
+		-buttons => [ {
+			-label		=> $exitbutton,
+			-value		=> "cancel",
+			-shortcut	=> $exitbsc,
+			-onpress	=> $cancelAction,
+			},
+		{
+			-label		=> $backbutton,
+			-value		=> "back",
+			-shortcut	=> $backbsc,
+			-onpress	=> $certBackAction,
+			},
+		{
+			-label		=> $nextbutton,
+			-value		=> "next",
+			-shortcut	=> $nextbsc,
+			-onpress	=> $certNextAction,
+			} ],
+		-fg		=> "black",
+		-buttonalignment => "right",
+		-x		=> 2,
+		-ipadright	=> 3,
+		-y		=> 9,
+		-selected	=> 1,
+		);
+	$cradio->focus();
 	};
 
 $wizard = $win->add('welcdialog','Window',
@@ -920,7 +1317,7 @@ $wizbuttons = $wizard->add('wizbuttons','Buttonbox',
 					-buttonalignment=> "right",
 					-x		=> 2,
 					-ipadright	=> 3,
-					-y		=> 11,
+					-y		=> 12,
 					-selected	=> 2,
 					);
 				$confbuttons->focus();
@@ -934,7 +1331,7 @@ $wizbuttons = $wizard->add('wizbuttons','Buttonbox',
 	-buttonalignment=> "right",
 	-x		=> 2,
 	-ipadright	=> 3,
-	-y		=> 13,
+	-y		=> 14,
 	-selected	=> 1,
 	);
 
