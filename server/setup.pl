@@ -346,7 +346,7 @@ my %opt = (
 	start          => 1,
 	install_root   => $path,
 	);
-my @valueopts = qw(shost laddr lport waddr wport dbpass dbsocket dbhost dbuser adminuser adminpass adminemail perl5lib srcdir certmode keymode cert key keypass);
+my @valueopts = qw(shost laddr lport waddr wport dbpass dbsocket dbhost dbuser dbadmin dbadminpass adminuser adminpass adminemail perl5lib srcdir certmode keymode cert key keypass);
 
 my $i = 0;
 while ($i < scalar(@ARGV)) {
@@ -395,6 +395,8 @@ Options:
   --dbpass PASS      database password (default: generated)
   --dbhost HOST      database host (default: local socket)
   --dbsocket PATH    database socket (default /var/run/mysqld/mysqld.sock)
+  --dbadmin NAME     database admin user for schema setup (default root)
+  --dbadminpass PASS database admin password (default: none)
   --adminuser NAME   console admin username (default lumadmin)
   --adminpass PASS   console admin password (default: generated)
   --adminemail ADDR  email for the admin account (set at creation)
@@ -491,6 +493,8 @@ sub buildparams {
 		dbpass       => $v{dbpass},
 		dbhost       => $v{dbhost},
 		dbsocket     => $v{dbsocket},
+		dbadmin      => $v{dbadmin},
+		dbadminpass  => $v{dbadminpass},
 		adminuser    => $v{adminuser},
 		adminpass    => $v{adminpass},
 		adminemail   => $v{adminemail},
@@ -499,7 +503,7 @@ sub buildparams {
 		);
 	$p{srcdir} = $v{srcdir} if $v{srcdir};
 	# Drop empty optionals so Setup defaults apply.
-	for my $k (qw(waddr dbuser dbpass dbhost dbsocket adminuser adminpass adminemail perl5lib)) {
+	for my $k (qw(waddr dbuser dbpass dbhost dbsocket dbadmin dbadminpass adminuser adminpass adminemail perl5lib)) {
 		delete $p{$k} unless defined $p{$k} && $p{$k} ne "";
 		}
 	# The broker needs non-core modules; if the operator didn't supply a
@@ -534,7 +538,7 @@ if ($opt{noninteractive}) {
 		}
 	# Parenthesize the map: without them its LIST would swallow \%ssl
 	# as a final iteration and the cert spec would never be passed.
-	my %params = buildparams((map { $_ => $opt{$_} } qw(shost laddr lport waddr wport dbuser dbpass dbhost dbsocket adminuser adminpass adminemail perl5lib srcdir)), \%ssl);
+	my %params = buildparams((map { $_ => $opt{$_} } qw(shost laddr lport waddr wport dbuser dbpass dbhost dbsocket dbadmin dbadminpass adminuser adminpass adminemail perl5lib srcdir)), \%ssl);
 	print "Luminum Server non-interactive setup\n";
 	my $waddr = $params{waddr} || "0.0.0.0";
 	print "  Install root:  $params{install_root}\n";
@@ -595,8 +599,10 @@ sub collect_params_text {
 	$v{lport}        = textprompt("Broker listener port", $opt{lport} || "10465");
 	$v{wport}        = textprompt("Web console port", $opt{wport} || "443");
 	$v{dbsocket}     = textprompt("Database socket", $opt{dbsocket} || "/var/run/mysqld/mysqld.sock");
+	$v{dbadmin}      = textprompt("Database admin user", $opt{dbadmin} || "root");
+	$v{dbadminpass}  = textpromptpass("Database admin password", $opt{dbadminpass}, "blank = no password");
 	$v{dbuser}       = textprompt("Database user", $opt{dbuser} || "luminum");
-	$v{dbpass}       = textpromptpass("Database password", $opt{dbpass});
+	$v{dbpass}       = textpromptpass("DB App Password", $opt{dbpass});
 	$v{adminuser}    = textprompt("Console admin username", $opt{adminuser} || "lumadmin");
 	$v{adminpass}    = textpromptpass("Console admin password", $opt{adminpass});
 	$v{adminemail}   = textprompt("Admin Email", $opt{adminemail});
@@ -994,7 +1000,7 @@ my $showParamDialog = sub {
 	my $dlg = $win->add('paramdialog', 'Window',
 		-centered	=> 1,
 		-width		=> 78,
-		-height		=> 19,
+		-height		=> 21,
 		-bg		=> 'white',
 		-fg		=> 'black',
 		-border		=> 1,
@@ -1012,7 +1018,9 @@ my $showParamDialog = sub {
 		['lport',        "Listener Port",     $defaults->{lport}        // ($opt{lport} || "10465")],
 		['wport',        "Web Console Port",  $defaults->{wport}        // ($opt{wport} || "443")],
 		['dbsocket',     "Database Socket",   $defaults->{dbsocket}     // $opt{dbsocket}],
-		['dbpass',       "Database Password", $defaults->{dbpass}       // ""],
+		['dbadmin',      "DB Admin User",     $defaults->{dbadmin}      // $opt{dbadmin} // "root"],
+		['dbadminpass',  "DB Admin Password", $defaults->{dbadminpass}  // $opt{dbadminpass} // ""],
+		['dbpass',       "DB App Password",   $defaults->{dbpass}       // ""],
 		['adminpass',    "Lumadmin Password", $defaults->{adminpass} // ""],
 		['adminemail',   "Admin Email",       $defaults->{adminemail}   // $opt{adminemail}],
 	);
@@ -1037,7 +1045,7 @@ my $showParamDialog = sub {
 		}
 	$perr = $dlg->add('p_err', 'Label',
 		-text => "", -fg => 'red', -width => -1, -height => 1,
-		-x => 2, -y => 12,
+		-x => 2, -y => 14,
 		);
 	my $buttons = $dlg->add('p_buttons', 'Buttonbox',
 		-buttons => [ {
@@ -1056,7 +1064,7 @@ my $showParamDialog = sub {
 		-buttonalignment => "right",
 		-x		=> 2,
 		-ipadright	=> 3,
-		-y		=> 15,
+		-y		=> 17,
 		-selected	=> 1,
 		);
 	$pentry{install_root}->focus();
