@@ -140,12 +140,17 @@ function cstatusOSPanelHighlight(fid, checked) {
 
 function cstatusRefresh() {
 	var btn = document.getElementById('refresh');
-	if (btn.className !== 'refresh') {
-		btn.className = 'refresh';
-		btn.style.cursor = 'progress';
-		cstableEl.style.cursor = 'progress';
-	}
-	if (cstatusPoll) { cstatusPoll.refresh(); }
+	if (btn.className === 'refresh') { return; }
+	btn.className = 'refresh';
+	btn.style.cursor = 'progress';
+	cstableEl.style.cursor = 'progress';
+	var done = function () {
+		btn.className = '';
+		btn.style.cursor = 'pointer';
+		cstableEl.style.cursor = '';
+	};
+	var p = cstatusPoll ? cstatusPoll.refresh() : null;
+	if (p && p.then) { p.then(done, done); } else { done(); }
 }
 
 function checkinform() {
