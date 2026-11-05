@@ -147,7 +147,9 @@
 		timer = setTimeout(tick, interval);
 		return {
 			stop: function () { active = false; if (timer) { clearTimeout(timer); } },
-			refresh: function () { if (active) { fetchOnce(); } }
+			// Returns the fetch promise (or undefined when stopped) so callers
+			// can tell when the reload has settled.
+			refresh: function () { if (active) { return fetchOnce(); } }
 		};
 	}
 
