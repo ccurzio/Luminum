@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/db.php';
 $instdir = luminum_console_conf('instdir');
+$hostname = luminum_console_conf('hostname');
+if ($hostname === '') { $hostname = explode(':', $_SERVER['HTTP_HOST'] ?? '')[0]; }
 $db = luminum_db();
 mysqli_select_db($db, "AUTH") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
 
@@ -30,7 +32,7 @@ $ienabled = $invinfo["CVAL"];
 <html lang="en">
 <head>
 	<meta charset="UTF-8">
-	<title>Luminum (luminum.accipiter.org)</title>
+	<title>Luminum (<?php print $hostname; ?>)</title>
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<link rel="stylesheet" href="layout/default.css">
 	<style type="text/css" media="screen">
@@ -105,8 +107,8 @@ $ienabled = $invinfo["CVAL"];
 				print "<a href=\"/modules.php?view=summary\">Summary</a>\n";
 				mysqli_select_db($db, "SYSTEM") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
 				$lumyquery = mysqli_query($db, "select CVAL from CONFIG where CKEY = 'ENLUMYS'");
-				$lumyinfo = $lumyquery->fetch_assoc();
-				$lumys = explode(',', $lumyinfo["CVAL"]);
+				$lumyinfo = $lumyquery ? $lumyquery->fetch_assoc() : null;
+				$lumys = ($lumyinfo && $lumyinfo["CVAL"] !== '') ? explode(',', $lumyinfo["CVAL"]) : [];
 				sort($lumys);
 
 				foreach ($lumys as $lumy) {
