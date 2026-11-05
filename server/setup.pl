@@ -60,6 +60,9 @@ my $yesbutton;
 my $nobutton;
 my $yesbsc;
 my $nobsc;
+my $okbutton;
+my $emailreqlabel;
+my $genpasslabel;
 my $certtitle;
 my $certgen;
 my $certgenkey;
@@ -100,6 +103,9 @@ if ($ENV{LANG} =~ /en_/ || $ENV{LANG} eq "") {
 	$nobutton = " No ";
 	$yesbsc = "Y";
 	$nobsc = "N";
+	$okbutton = " OK ";
+	$emailreqlabel = "The admin email field must be populated before continuing.";
+	$genpasslabel = "If an admin password is not provided one will be generated automatically. Do you want to continue?";
 	$certtitle = "Certificate Configuration";
 	$certgen = "Generate a new self-signed certificate (new private key)";
 	$certgenkey = "Generate a new certificate (existing private key)";
@@ -140,6 +146,9 @@ elsif ($ENV{LANG} =~ /de_/) {
 	$nobutton = " Nein ";
 	$yesbsc = "J";
 	$nobsc = "N";
+	$okbutton = " OK ";
+	$emailreqlabel = "Das Feld für die Administrator-E-Mail-Adresse muss ausgefüllt werden, um fortzufahren.";
+	$genpasslabel = "Wenn kein Administrator-Kennwort angegeben wird, wird automatisch eines generiert. Möchten Sie fortfahren?";
 	$certtitle = "Zertifikatskonfiguration";
 	$certgen = "Neues selbstsigniertes Zertifikat erstellen (neuer privater Schlüssel)";
 	$certgenkey = "Neues Zertifikat erstellen (vorhandener privater Schlüssel)";
@@ -180,6 +189,9 @@ elsif ($ENV{LANG} =~ /it_/) {
 	$nobutton = " No ";
 	$yesbsc = "S";
 	$nobsc = "N";
+	$okbutton = " OK ";
+	$emailreqlabel = "Il campo e-mail dell'amministratore deve essere compilato per continuare.";
+	$genpasslabel = "Se non viene fornita una password amministratore, ne verrà generata una automaticamente. Vuoi continuare?";
 	$certtitle = "Configurazione Certificato";
 	$certgen = "Genera un nuovo certificato autofirmato (nuova chiave privata)";
 	$certgenkey = "Genera un nuovo certificato (chiave privata esistente)";
@@ -220,6 +232,9 @@ elsif ($ENV{LANG} =~ /fr_/) {
 	$nobutton = " Non ";
 	$yesbsc = "O";
 	$nobsc = "N";
+	$okbutton = " OK ";
+	$emailreqlabel = "Le champ e-mail de l'administrateur doit être rempli pour continuer.";
+	$genpasslabel = "Si aucun mot de passe d'administrateur n'est fourni, un mot de passe sera généré automatiquement. Voulez-vous continuer ?";
 	$certtitle = "Configuration du Certificat";
 	$certgen = "Générer un nouveau certificat auto-signé (nouvelle clé privée)";
 	$certgenkey = "Générer un nouveau certificat (clé privée existante)";
@@ -260,6 +275,9 @@ elsif ($ENV{LANG} =~ /es_/) {
 	$nobutton = " No ";
 	$yesbsc = "S";
 	$nobsc = "N";
+	$okbutton = " OK ";
+	$emailreqlabel = "El campo de correo electrónico del administrador debe estar rellenado para continuar.";
+	$genpasslabel = "Si no se proporciona una contraseña de administrador, se generará una automáticamente. ¿Desea continuar?";
 	$certtitle = "Configuración del Certificado";
 	$certgen = "Generar un nuevo certificado autofirmado (nueva clave privada)";
 	$certgenkey = "Generar un nuevo certificado (clave privada existente)";
@@ -298,6 +316,9 @@ else {
 	$nobutton = " No ";
 	$yesbsc = "Y";
 	$nobsc = "N";
+	$okbutton = " OK ";
+	$emailreqlabel = "The admin email field must be populated before continuing.";
+	$genpasslabel = "If an admin password is not provided one will be generated automatically. Do you want to continue?";
 	$certtitle = "Certificate Configuration";
 	$certgen = "Generate a new self-signed certificate (new private key)";
 	$certgenkey = "Generate a new certificate (existing private key)";
@@ -850,6 +871,92 @@ my $paramAction = sub {
 		$perr->text("Server hostname and listener address are required.") if $perr;
 		return;
 	}
+	if ($v{adminemail} eq "") {
+		my $w = $win->add('emailwarndialog', 'Window',
+			-centered	=> 1,
+			-width		=> 68,
+			-height		=> 12,
+			-bg		=> 'white',
+			-fg		=> 'black',
+			-border		=> 1,
+			-bfg		=> 'black',
+			-bbg		=> 'white',
+			);
+		$w->add('emailwarnlabel', 'Label',
+			-width		=> -1,
+			-height		=> -1,
+			-fg		=> 'black',
+			-padleft	=> 2,
+			-padright	=> 2,
+			-padtop		=> 1,
+			-text		=> wrap('', '', $emailreqlabel),
+			);
+		my $wb = $w->add('emailwarnbuttons', 'Buttonbox',
+			-buttons => [ {
+				-label		=> $okbutton,
+				-value		=> "ok",
+				-shortcut	=> "O",
+				-onpress	=> sub { $win->delete('emailwarndialog'); $win->draw(); },
+				} ],
+			-fg		=> "black",
+			-buttonalignment=> "right",
+			-x		=> 2,
+			-ipadright	=> 3,
+			-y		=> 8,
+			-selected	=> 1,
+			);
+		$wb->focus();
+		return;
+		}
+	if ($v{adminpass} eq "") {
+		my $w = $win->add('passwarndialog', 'Window',
+			-centered	=> 1,
+			-width		=> 68,
+			-height		=> 12,
+			-bg		=> 'white',
+			-fg		=> 'black',
+			-border		=> 1,
+			-bfg		=> 'black',
+			-bbg		=> 'white',
+			);
+		$w->add('passwarnlabel', 'Label',
+			-width		=> -1,
+			-height		=> -1,
+			-fg		=> 'black',
+			-padleft	=> 2,
+			-padright	=> 2,
+			-padtop		=> 1,
+			-text		=> wrap('', '', $genpasslabel),
+			);
+		my $wb = $w->add('passwarnbuttons', 'Buttonbox',
+			-buttons => [ {
+				-label		=> $nobutton,
+				-value		=> "no",
+				-shortcut	=> $nobsc,
+				-onpress	=> sub { $win->delete('passwarndialog'); $win->draw(); },
+				},
+			{
+				-label		=> $yesbutton,
+				-value		=> "yes",
+				-shortcut	=> $yesbsc,
+				-onpress	=> sub {
+					$win->delete('passwarndialog');
+					$paramsref = \%v;
+					$win->delete('paramdialog');
+					$win->draw();
+					$showCertDialog->();
+					},
+				} ],
+			-fg		=> "black",
+			-buttonalignment=> "right",
+			-x		=> 2,
+			-ipadright	=> 3,
+			-y		=> 8,
+			-selected	=> 0,
+			);
+		$wb->focus();
+		return;
+		}
 	$paramsref = \%v;
 	$win->delete('paramdialog');
 	$win->draw();
@@ -882,7 +989,7 @@ my $showParamDialog = sub {
 		['wport',        "Web Console Port",  $defaults->{wport}        // ($opt{wport} || "443")],
 		['dbsocket',     "Database Socket",   $defaults->{dbsocket}     // $opt{dbsocket}],
 		['dbpass',       "Database Password", $defaults->{dbpass}       // ""],
-		['adminpass',    "Admin Password",    $defaults->{adminpass}    // ""],
+		['adminpass',    "Lumadmin Password", $defaults->{adminpass} // ""],
 		['adminemail',   "Admin Email",       $defaults->{adminemail}   // $opt{adminemail}],
 	);
 	my $y = 3;
@@ -897,9 +1004,11 @@ my $showParamDialog = sub {
 			-x => 24, -y => $y,
 			-fg => 'white',
 			-bg => 'darkgray',
+			-homeonblur => 0,
 			);
 		my $wtype = $f->[0] =~ /pass$/ ? 'PasswordEntry' : 'TextEntry';
 		$pentry{$f->[0]} = $dlg->add($f->[0], $wtype, %eopts);
+		$pentry{$f->[0]}->cursor_to_end() if length $eopts{-text};
 		$y++;
 		}
 	$perr = $dlg->add('p_err', 'Label',
@@ -1100,6 +1209,7 @@ $showCertFilesDialog = sub {
 			-text => "", -width => 46,
 			-x => 24, -y => $f->[3],
 			-fg => 'white', -bg => 'darkgray',
+			-homeonblur => 0,
 			);
 		}
 	$cfcert = $dlg->getobj('cfcert');
