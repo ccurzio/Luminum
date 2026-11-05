@@ -16,6 +16,7 @@
 
 use strict;
 use POSIX ();
+use Socket qw(inet_aton AF_INET);
 use Term::ANSIColor;
 use Text::Wrap;
 use FindBin qw($Bin);
@@ -678,11 +679,34 @@ sub detect_dbsocket {
 	return "/var/run/mysqld/mysqld.sock";   # Debian default
 	}
 
-# System hostname (certificate name default).
+# Server FQDN (certificate name default). Tries the system FQDN first,
+# then a reverse DNS lookup of the primary non-loopback address, and
+# finally falls back to the short hostname.
 #
 sub detect_shost {
 	my $h = `hostname 2>/dev/null`;
 	chomp($h);
+	$h = "" unless defined $h;
+	my $fq;
+	if ($h ne "") {
+		my $f = `hostname -f 2>/dev/null`;
+		chomp($f);
+		$fq = $f if defined $f && $f ne $h && $f =~ /\./
+			&& $f =~ /^[A-Za-z0-9_\.\-]+$/;
+		}
+	if (!defined $fq) {
+		my $ip = detect_laddr();
+		if (defined $ip) {
+			my $packed = inet_aton($ip);
+			if (defined $packed) {
+				my $name = gethostbyaddr($packed, AF_INET);
+				$fq = $name if defined $name && $name ne $h
+					&& $name =~ /\./
+					&& $name =~ /^[A-Za-z0-9_\.\-]+$/;
+				}
+			}
+		}
+	return $fq if defined $fq;
 	return ($h =~ /^[A-Za-z0-9_\.\-]+$/) ? $h : undef;
 	}
 
