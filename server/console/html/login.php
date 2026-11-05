@@ -1,4 +1,7 @@
 <?php
+require_once __DIR__ . '/layout/db.php';
+$hostname = luminum_console_conf('hostname');
+if ($hostname === '') { $hostname = explode(':', $_SERVER['HTTP_HOST'] ?? '')[0]; }
 
 $showmsg = "0";
 $message = "Awaiting Credential Submission";
@@ -20,7 +23,7 @@ if (isset($_GET["err"])) {
 <html lang="en">
 <head>
 	<meta charset="UTF-8">
-	<title>Luminum (luminum.accipiter.org)</title>
+	<title>Luminum (<?php print $hostname; ?>)</title>
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<link rel="stylesheet" href="layout/default.css">
 </head>
@@ -36,7 +39,7 @@ if (isset($_GET["err"])) {
 		<form action="/index.php" method="post" id="loginform">
 			<div style="width: 275px; text-align: left; padding-left: 65px;">
 			<span style="color: #444; font-weight: bold; font-size: 15px;">Username:</span><br>
-			<input type="text" name="username" id="username" style="width: 250px; font-size: 16px; margin-top: 5px;">
+			<input type="text" name="username" id="username" autofocus style="width: 250px; font-size: 16px; margin-top: 5px;">
 			</div>
 			<div style="width: 277px; text-align: left; margin-top: 20px; padding-left: 65px;">
 			<span style="color: #444; font-weight: bold; font-size: 15px;">Password:</span><br>
