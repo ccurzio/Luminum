@@ -23,11 +23,30 @@ else {
 
 	<?php elseif ($_GET['view'] == "network"): ?>
 	<?php
-		$netifaces = explode(" ",shell_exec("/usr/sbin/ifconfig | /usr/bin/grep inet | /usr/bin/grep -v \"127.0.0.1\" | /usr/bin/sed -E 's/^.*inet/inet/; s/[inet|netmask|brodc]//g; s/\s+/ /g; s/^\s//'"));
-		$gateway = rtrim(shell_exec("/usr/sbin/route -n | /usr/bin/grep 'UG[ \t]' | /usr/bin/awk '{print \$2}'"));
+		$netifaces = array("", "");
+		$ipinfo = trim((string) shell_exec("/usr/bin/ip -4 -o addr show scope global 2>/dev/null | /usr/bin/head -n 1 | /usr/bin/awk '{print \$4}'"));
+		if ($ipinfo !== "" && strpos($ipinfo, "/") !== false) {
+			list($ipaddr, $prefixlen) = explode("/", $ipinfo);
+			$netifaces[0] = $ipaddr;
+			$netifaces[1] = long2ip((~((1 << (32 - (int) $prefixlen)) - 1)) & 0xFFFFFFFF);
+		}
+		$gateway = rtrim((string) shell_exec("/usr/bin/ip route 2>/dev/null | /usr/bin/grep '^default' | /usr/bin/awk '{print \$3}' | /usr/bin/head -n 1"));
 		$gwhostname = preg_replace("/.*pointer /","",shell_exec("/usr/bin/host $gateway"));
 		$gwhostname = rtrim(preg_replace("/\.$/","",$gwhostname));
-		$dnscfg = explode(" ",shell_exec("/usr/bin/cat /etc/resolv.conf | /usr/bin/sed -E 's/(search|nameserver) //g' | /usr/bin/tr '\n' ' '"));
+		$dnscfg = array("", "", "");
+		if (($dnslines = file("/etc/resolv.conf", FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES)) !== false) {
+			foreach ($dnslines as $dnsline) {
+				$dnsline = trim($dnsline);
+				if ($dnsline === "" || $dnsline[0] === "#") { continue; }
+				if (preg_match('/^[Nn]ameserver[ \t]*=?[ \t]*(\S+)/', $dnsline, $m)) {
+					if ($dnscfg[1] === "") { $dnscfg[1] = $m[1]; }
+					elseif ($dnscfg[2] === "") { $dnscfg[2] = $m[1]; }
+				}
+				elseif (preg_match('/^(?:search|domain)[ \t]+(\S+)/', $dnsline, $m)) {
+					$dnscfg[0] = $m[1];
+				}
+			}
+		}
 	?>
 
 	<div class="content">
