@@ -8,6 +8,8 @@ error_reporting(E_ALL);
 
 require_once __DIR__ . '/layout/db.php';
 $instdir = luminum_console_conf('instdir');
+$hostname = luminum_console_conf('hostname');
+if ($hostname === '') { $hostname = explode(':', $_SERVER['HTTP_HOST'] ?? '')[0]; }
 $db = luminum_db();
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
@@ -46,8 +48,8 @@ else {
 			else {
 				$acctrole = $storedhash["ROLE"];
 				$newsession = session_create_id('SID');
-				setcookie("username",$username,time()+3600, "/","luminum.accipiter.org",0);
-				setcookie("SID",$newsession,time()+3600, "/","luminum.accipiter.org",0);
+				setcookie("username",$username,time()+3600, "/",$hostname,0);
+				setcookie("SID",$newsession,time()+3600, "/",$hostname,0);
 				mysqli_query($db, "insert into SESSION (ID,SID,START,EXPIRES) values ((select ID from USERS where USERNAME = '$username'),'$newsession',now(),now()+interval 60 minute)");
 				mysqli_query($db, "update USERS set LASTSEEN = now() where ID = (select ID from USERS where USERNAME = '$username')");
 				$_SESSION['SID'] = $newsession;
