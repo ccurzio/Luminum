@@ -67,8 +67,8 @@ $pkgcount = mysqli_num_rows($pkgquery);
 
 		<form id="npform" action="/admin/packages.php" method="POST">
 		<div style="width: 100%; text-align: right; margin: -50px auto 10px auto;">
-			<button id="save" class="formgo" style="margin-right: 0px;" disabled="disabled">Save Package</button>
-			<a href="/index.php?view=packages"><button type="button" class="formgo" style="margin-top: 5px; margin-right: 25px;">Cancel</button></a>
+			<a href="/index.php?view=packages"><button type="button" class="formgo" style="margin-right: 0px;">Cancel</button></a>
+			<button id="save" class="formgo" style="margin-top: 5px; margin-right: 25px;" disabled="disabled">Save Package</button>
 		</div>
 
 		<div class="module-content" style="overflow: auto; min-width: 1000px;">
