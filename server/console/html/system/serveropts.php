@@ -55,6 +55,7 @@ else {
 			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'SMTP')">SMTP</button>
 			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Encryption')">Encryption</button>
 			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Accounts')">Accounts</button>
+			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'API')">API</button>
 		</div>
 
 		<div id="General" class="configtab">
@@ -211,6 +212,9 @@ else {
 			?>
 			</select> <div class="tooltip"><img src="/icons/tooltip.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Displays a warning to the user 2 minutes before they are automatically logged out<br><br>Default: Enabled</span></div></td></tr></td></tr>
 			</table>
+		</div>
+		<div id="API" class="configtab" style="display: none;">
+			<p>API Settings</p>
 		</div>
 	</div>
 	</form>
