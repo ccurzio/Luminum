@@ -70,14 +70,19 @@ function addRow(event) {
 
 	container.appendChild(newRow);
 
-	updateRemoveButtons(container);
-	updateDragHandleIcons(container);
+	// Update the whole edited list (not just the group) so remove buttons and
+	// drag handles stay consistent whether the row was added at top level or
+	// inside a group
+	const root = container.closest('#from-list') ? document.getElementById('from-list') : container;
+	updateRemoveButtons(root);
+	updateDragHandleIcons(root);
 	attachHandlers();
 
 	//if (container.id === 'from-list') { insertLogicalOperators(container); }
 	if (container.closest('#from-list')) {
-		const rootContainer = container.classList.contains('group-container') ? container : document.getElementById('from-list');
-		insertLogicalOperators(rootContainer);
+		// Always re-process from the root so the operator between a group and
+		// the next top-level row is kept when adding inside a group
+		insertLogicalOperators(document.getElementById('from-list'));
 		document.getElementById("tsuffix").textContent = "the following conditions:";
 		}
 	}
@@ -85,16 +90,36 @@ function addRow(event) {
 function removeRow(event) {
 	const listItem = event.target.closest('.list-item');
 	const container = listItem.parentElement;
+	const inFromList = container.closest('#from-list') !== null;
 	listItem.remove();
 
-	updateRemoveButtons(container);
-	updateDragHandleIcons(container);
+	// A group left with a single row has no AND/OR to join and no collapse
+	// button, so it would be stuck; un-group it (and any parent group that
+	// drops to one row as a result)
+	if (inFromList) {
+		let g = container;
+		while (g && g.classList.contains('group-container') && g.querySelectorAll('.list-item').length <= 1) {
+			while (g.firstChild) {
+				g.before(g.firstChild);
+				}
+			const parent = g.parentElement;
+			g.remove();
+			g = parent;
+			}
+		}
+
+	// After a collapse the group container is detached, so re-fetch the live
+	// root of the edited list
+	const root = inFromList ? document.getElementById('from-list') : container;
+	updateRemoveButtons(root);
+	updateDragHandleIcons(root);
 	attachHandlers();
 
 	//if (container.id === 'from-list') { insertLogicalOperators(container); }
-	if (container.closest('#from-list')) {
-		const rootContainer = container.classList.contains('group-container') ? container : document.getElementById('from-list');
-		insertLogicalOperators(rootContainer);
+	if (inFromList) {
+		// Always re-process from the root so the operator between a group and
+		// the next top-level row is kept when removing inside a group
+		insertLogicalOperators(document.getElementById('from-list'));
 		}
 	}
 
@@ -124,7 +149,7 @@ function updateRemoveButtons(container) {
 function attachHandlers() {
 	const images = document.querySelectorAll('img');
 	images.forEach(image => {
-		if (image.getAttribute('src') === '/icons/collapsegroup.png' || image.getAttribute('src') === '/icons/addgroup') {
+		if (image.getAttribute('src') === '/icons/collapsegroup.png' || image.getAttribute('src') === '/icons/addgroup.png') {
 			image.addEventListener('click', toggleGroup);
 			}
 		});
@@ -164,16 +189,34 @@ function insertLogicalOperators(container) {
 	// Clear existing operators and group buttons
 	container.querySelectorAll('.logical-operator, .logical-operator-br, .group-button').forEach(el => el.remove());
 
-	// Helper function to insert operators between rows
-	function processRows(rowContainer) {
-		const rows = Array.from(rowContainer.querySelectorAll(':scope > .list-item'));
+	// A "block" is a single row or a group container. Operators go between
+	// consecutive blocks, so a row followed by a group keeps its AND/OR
+	// dropdown (now sitting between the row and the group).
+	function getBlocks(parent) {
+		return Array.from(parent.children).filter(el =>
+			el.classList.contains('list-item') || el.classList.contains('group-container'));
+	}
 
-		if (rows.length == 1 && container.id === 'from-list') {
+	// The row that carries a block's trailing operator: the row itself, or
+	// the group's last row.
+	function anchorOf(block) {
+		if (block.classList.contains('group-container')) {
+			const rows = block.querySelectorAll(':scope > .list-item');
+			return rows.length ? rows[rows.length - 1] : null;
+			}
+		return block;
+	}
+
+	function processBlocks(parent) {
+		const blocks = getBlocks(parent);
+
+		if (container.id === 'from-list' && container.querySelectorAll('.list-item').length == 1) {
 			document.getElementById("tsuffix").textContent = "the following condition:";
 			}
 
-		for (let i = 0; i < rows.length - 1; i++) {
-			const row = rows[i];
+		for (let i = 0; i < blocks.length - 1; i++) {
+			const anchor = anchorOf(blocks[i]);
+			if (!anchor) continue;
 
 			const br = document.createElement('br');
 			br.className = 'logical-operator-br';
@@ -189,7 +232,10 @@ function insertLogicalOperators(container) {
 			select.appendChild(new Option('OR', 'OR'));
 
 			const groupImg = document.createElement('img');
-			groupImg.src = '/icons/addgroup.png';
+			// A row directly above a group carries the ungroup (collapse)
+			// button; every other row carries the group (add) button, which
+			// also creates nested groups from inside a group
+			groupImg.src = blocks[i + 1].classList.contains('group-container') ? '/icons/collapsegroup.png' : '/icons/addgroup.png';
 			groupImg.className = 'group-button';
 			groupImg.style.width = '24px';
 			groupImg.style.height = '24px';
@@ -199,18 +245,18 @@ function insertLogicalOperators(container) {
 			groupImg.style.verticalAlign = 'middle';
 			groupImg.addEventListener('click', toggleGroup);
 
-			row.appendChild(br);
-			row.appendChild(select);
-			row.appendChild(groupImg);
+			anchor.appendChild(br);
+			anchor.appendChild(select);
+			anchor.appendChild(groupImg);
 		}
 	}
 
-	// Process top-level rows
-	processRows(container);
+	// Process top-level blocks (rows and groups)
+	processBlocks(container);
 
-	// Process each group individually
+	// Process each group's rows individually
 	container.querySelectorAll('.group-container').forEach(group => {
-		processRows(group);
+		processBlocks(group);
 	});
 }
 
@@ -219,19 +265,14 @@ function toggleGroup(event) {
 	const row = groupIcon.closest('.list-item');
 
 	if (groupIcon.src.includes('addgroup.png')) {
-		// Start grouping
-		const nextRows = [];
-		let sibling = row.nextElementSibling;
-
-		const newRow = row.cloneNode(true);
-
-		while (sibling && sibling.classList.contains('list-item') && !sibling.querySelector('.logical-operator')) {
-			nextRows.push(newRow);
-			nextRows.push(sibling);
-			sibling = sibling.nextElementSibling;
+		// Start grouping: indent the row below the button and add a new empty row to the group
+		let nextRow = row.nextElementSibling;
+		if (nextRow && nextRow.classList.contains('group-container')) {
+			// the row below is the first row of an existing group; pull it out
+			nextRow = nextRow.querySelector(':scope > .list-item');
 			}
-
-		if (nextRows.length === 0) return;
+		if (!nextRow) return;
+		const oldParent = nextRow.parentElement;
 
 		const groupContainer = document.createElement('div');
 		groupContainer.className = 'group-container';
@@ -239,28 +280,46 @@ function toggleGroup(event) {
 		groupContainer.style.borderLeft = '4px solid #aaa';
 		groupContainer.style.paddingLeft = '10px';
 
-		nextRows.forEach(r => groupContainer.appendChild(r));
 		row.after(groupContainer);
+		groupContainer.appendChild(nextRow);
+		if (oldParent.classList.contains('group-container') && oldParent.children.length === 0) {
+			oldParent.remove();
+			}
 
-		groupIcon.src = '/icons/collapsegroup.png';
+		const newRow = nextRow.cloneNode(true);
+		newRow.querySelectorAll('input').forEach(input => input.value = '');
+		newRow.querySelectorAll('select').forEach(select => select.selectedIndex = 0);
+		newRow.querySelectorAll('.logical-operator, .logical-operator-br, .group-button, .remove').forEach(el => el.remove());
+		groupContainer.appendChild(newRow);
 		}
 	else {
-		const groupContainer = row.nextElementSibling;
-		const fromContainer = document.getElementById('from-list');
+		// Collapse: the ungroup button sits above the group it collapses. That
+		// group is normally the row's next sibling (the row sits directly above
+		// the group, including nested groups). When the row is instead the last
+		// row of a group that is itself followed by another group, the target is
+		// the next sibling of that group.
+		let groupContainer = row.nextElementSibling;
+		if (!groupContainer || !groupContainer.classList.contains('group-container')) {
+			const parent = row.parentElement;
+			if (parent && parent.classList.contains('group-container')) {
+				groupContainer = parent.nextElementSibling;
+				}
+			}
 		if (groupContainer && groupContainer.classList.contains('group-container')) {
 			while (groupContainer.firstChild) {
-				//row.after(groupContainer.firstChild);
-				fromContainer.appendChild(groupContainer.firstChild);
+				groupContainer.before(groupContainer.firstChild);
 				}
 			groupContainer.remove();
 			}
-		groupIcon.src = '/icons/addgroup.png';
 		}
 
 	const getContainer = document.getElementById('get-list');
 	const fromContainer = document.getElementById('from-list');
 	updateRemoveButtons(getContainer);
 	updateRemoveButtons(fromContainer);
+	updateDragHandleIcons(getContainer);
+	updateDragHandleIcons(fromContainer);
+	insertLogicalOperators(fromContainer);
 	attachHandlers();
 	initSortable();
 	}
@@ -299,6 +358,10 @@ function initSortable() {
 			handle: '.drag-handle',
 			animation: 150,
 			filter: '.group-container',
+			// Without this, Sortable preventDefault()s any mousedown that lands
+			// inside a filtered .group-container, which blocks the browser from
+			// focusing the group's inputs/selects (and opening the dropdowns)
+			preventOnFilter: false,
 			ghostClass: 'sortable-ghost',
 			onStart(evt) { evt.item.classList.add('hidden-during-drag'); },
 			onEnd(evt) {
@@ -324,9 +387,14 @@ function initSortable() {
 				onStart(evt) { evt.item.classList.add('hidden-during-drag'); },
 				onEnd(evt) {
 					evt.item.classList.remove('hidden-during-drag');
-					updateRemoveButtons(group);
-					updateDragHandleIcons(group);
+					// Re-process from the root so the AND/OR moves to the new
+					// first row of the group (it's a child of a row, so dragging
+					// carries it to the wrong row)
+					const root = document.getElementById('from-list');
+					updateRemoveButtons(root);
+					updateDragHandleIcons(root);
 					attachHandlers();
+					insertLogicalOperators(root);
 					}
 				});
 			});
