@@ -20,7 +20,7 @@
 		</div>
 	</div>
 	<div style="width: 100%; text-align: right; padding-top: 10px;">
-		<button id="querygo" class="formgo" style="margin-right: 0;" disabled="disabled">Submit Query</button> <button id="resetform" class="formgo" style="margin-left: 0;">Reset Form</button>
+		<button id="resetform" class="formgo" style="margin-right: 0;">Reset Form</button> <button id="querygo" class="formgo" style="margin-left: 0;" disabled="disabled">Submit Query</button> 
 	</div>
 
 </div>
@@ -68,7 +68,11 @@ function addRow(event) {
 	newRow.querySelectorAll('input').forEach(input => input.value = '');
 	newRow.querySelectorAll('select').forEach(select => select.selectedIndex = 0);
 
-	container.appendChild(newRow);
+	// Insert right after the clicked row (not at the end of the container).
+	// Appending to the end put a new row *after* a group and dropped the
+	// group's trailing AND/OR onto the group's last row, which read as an
+	// operator inside the group.
+	listItem.after(newRow);
 
 	// Update the whole edited list (not just the group) so remove buttons and
 	// drag handles stay consistent whether the row was added at top level or
