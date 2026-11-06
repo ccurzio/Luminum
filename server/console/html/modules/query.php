@@ -20,7 +20,7 @@
 		</div>
 	</div>
 	<div style="width: 100%; text-align: right; padding-top: 10px;">
-		<button id="querygo" class="formgo" style="margin-right: 0;" disabled="disabled">Submit Query</button> <button class="formgo" style="margin-left: 0;">Reset Form</button>
+		<button id="querygo" class="formgo" style="margin-right: 0;" disabled="disabled">Submit Query</button> <button id="resetform" class="formgo" style="margin-left: 0;">Reset Form</button>
 	</div>
 
 </div>
@@ -29,6 +29,11 @@
 
 <script>
 window.addEventListener('DOMContentLoaded', () => {
+	// Capture pristine markup before any rows are added or mutated
+	initialGetList = document.getElementById('get-list').innerHTML;
+	initialFromList = document.getElementById('from-list').innerHTML;
+
+	document.getElementById('resetform').addEventListener('click', resetForm);
 	updateRemoveButtons(document.getElementById('get-list'));
 	updateRemoveButtons(document.getElementById('from-list'));
 	updateDragHandleIcons(document.getElementById('get-list'));
@@ -36,6 +41,23 @@ window.addEventListener('DOMContentLoaded', () => {
 	attachHandlers();
 	initSortable();
 	});
+
+let initialGetList = '';
+let initialFromList = '';
+
+function resetForm() {
+	const getContainer = document.getElementById('get-list');
+	const fromContainer = document.getElementById('from-list');
+
+	getContainer.innerHTML = initialGetList;
+	fromContainer.innerHTML = initialFromList;
+
+	document.getElementById('targets').selectedIndex = 0;
+	document.getElementById('tsuffix').textContent = ' the following condition:';
+	fromContainer.style.opacity = '1';
+
+	initSortable();
+	}
 
 function addRow(event) {
 	const addBtn = event.target;
@@ -263,10 +285,11 @@ function initSortable() {
 	const fromContainer = document.getElementById('from-list');
 	getContainer.replaceWith(getContainer.cloneNode(true));
 	fromContainer.replaceWith(fromContainer.cloneNode(true));
-	updateRemoveButtons(getContainer);
-	updateRemoveButtons(fromContainer);
-	updateDragHandleIcons(getContainer);
-	updateDragHandleIcons(fromContainer);
+	// Re-fetch: the variables above still reference the detached originals
+	updateRemoveButtons(document.getElementById('get-list'));
+	updateRemoveButtons(document.getElementById('from-list'));
+	updateDragHandleIcons(document.getElementById('get-list'));
+	updateDragHandleIcons(document.getElementById('from-list'));
 	attachHandlers();
 
 	['get-list', 'from-list'].forEach(id => {
