@@ -126,10 +126,12 @@ function updateDragHandleIcons(container) {
 		if (dragHandle) {
 			if (rows.length > 1) {
 				dragHandle.style.opacity = 1;
+				dragHandle.style.pointerEvents = 'auto';
 				dragHandle.src = `/icons/${dragIcon}`;
 				}
 			else {
-				dragHandle.style.opacity = 0
+				dragHandle.style.opacity = 0;
+				dragHandle.style.pointerEvents = 'none';
 				dragHandle.src = '/icons/reorder-dis.png';
 				}
 			}
