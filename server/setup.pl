@@ -1094,6 +1094,7 @@ $doInstall = sub {
 	# curses screen).
 	my $tmpout = "/tmp/luminum-setup-out.$$";
 	my $rc;
+	my $summary = "";
 	my $runerr = "";
 	{
 		my $fh;
@@ -1116,7 +1117,9 @@ $doInstall = sub {
 				&& POSIX::dup2(2, fileno($saveerr)) == fileno($saveerr)
 				&& POSIX::dup2(fileno($fh), 1) == 1
 				&& POSIX::dup2(fileno($fh), 2) == 2) {
-				$rc = eval { Luminum::Setup::run(%params) };
+				my ($s, $r) = eval { Luminum::Setup::run(%params) };
+				$summary = $s if defined $s;
+				$rc = $r;
 				$runerr = $@ if $@;
 				POSIX::dup2(fileno($saveout), 1);
 				POSIX::dup2(fileno($saveerr), 2);
@@ -1126,7 +1129,9 @@ $doInstall = sub {
 			close($fh);
 			}
 		else {
-			$rc = eval { Luminum::Setup::run(%params) };
+			my ($s, $r) = eval { Luminum::Setup::run(%params) };
+			$summary = $s if defined $s;
+			$rc = $r;
 			$runerr = $@ if $@;
 			}
 		}
@@ -1137,12 +1142,16 @@ $doInstall = sub {
 
 	$status->delete('statuslabel');
 	my $msg = $rc == 0
-		? "Installation completed successfully.\n\nThe server is running."
+		? $summary
 		: "Installation FAILED."
 		  . ($runerr ne "" ? "\n\nError: $runerr" : "")
 		  . ($output ne "" ? "\n\n" . substr($output, -1000) : "");
+	{
+		local $Text::Wrap::columns = 68;
+		$msg = wrap('', '', $msg);
+		}
 	$status->add('statuslabel', 'Label',
-		-text => wrap('', '', $msg),
+		-text => $msg,
 		-width => -1, -height => -1,
 		-fg => ($rc == 0 ? 'black' : 'red'),
 		-x => 2, -y => 2,
