@@ -72,7 +72,9 @@ our $VERSION = "0.0.1";
 #   start         start services after install (default 1; 0 to skip)
 #   quiet         suppress progress output
 #
-# Returns 0 on success, nonzero on failure.
+# Returns (summary, rc): summary is the completion summary text (empty on
+# failure), rc is 0 on success, nonzero on failure. In scalar context
+# returns rc.
 #
 sub run {
 	my (%o) = @_;
@@ -300,19 +302,22 @@ EOF
 		}
 
 	if ($rc == 0) {
-		print "[setup] Luminum Server installed at $root\n";
-		print "[setup]   Broker listener:  $laddr:$lport\n";
-		print "[setup]   Web console:      https://$shost:$wport\n";
-		print "[setup]   Server ID:        $sid\n";
-		print "[setup]   Server key:       $skey\n";
-		print "[setup]   Console admin:    "
-			. ((defined $adminpass && $adminpass ne "")
-				? "$adminuser / $adminpass"
-				: "$adminuser ($adminnote || 'existing account, password unchanged')")
-			. "\n";
-		print "[setup]   Start/stop:       $dir{bin}/start-broker, $dir{bin}/stop-broker, $dir{bin}/start-web, $dir{bin}/stop-web\n";
+		my $adminpw = (defined $adminpass && $adminpass ne "")
+			? $adminpass
+			: ($adminnote || "existing account, password unchanged");
+		my @summary = (
+			"Luminum Server installed at $root",
+			"- Database Admin User: $dbadmin",
+			"- Database Admin Password: " . ($dbadminpass ne "" ? $dbadminpass : "(none)"),
+			"- Web Console: https://$shost:$wport",
+			"- Console Admin Username: $adminuser",
+			"- Console Admin Password: $adminpw",
+			);
+		my $summary = join("\n", @summary) . "\n";
+		print $summary;
+		return ($summary, $rc);
 		}
-	return $rc;
+	return ("", $rc);
 	}
 
 # ---------------------------------------------------------------------------
