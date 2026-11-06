@@ -54,54 +54,101 @@ else {
 
 	<div style="width: 65%; text-align: right; margin: -50px auto 10px auto;">
 		<input type="reset" id="reset" style="margin-right: 0;" value="Reset Values" class="formgo" onclick="return resetForm();">
-		<button id="save" class="formgo" disabled="disabled">Save Changes</button>
+		<button id="save" class="formgo" style="margin-right: 35px" disabled="disabled">Save Changes</button>
 	</div>
 
-	<div class="module-content" style="padding: 0; width: 60%; margin-left: auto; margin-right: auto; padding: 10px;">
-		<div style="width: 75%; margin-left: auto; margin-right: auto; text-align: center;">
-			<table style="border: 0;">
-			<?php
-				$connected = @fsockopen("www.google.com", 443);
-				print "\t\t\t<tr style=\"pointer-events: none; user-select: none;\"><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; font-size: 10px;\"><img src=\"/icons/server.png\" style=\"width: 125px; height: 125px;\"><br>$hostname<br>" . $netifaces[0] . "</td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal;\">";
-				if (shell_exec("/usr/bin/ping -c1 $gateway -W1 | /usr/bin/grep ttl") != "") {
-					print "<img src=\"/icons/greenlink.png\"></td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; font-size: 10px;\"><img src=\"/icons/firewall.png\" style=\"width: 125px; height: 125px;\">";
-					print "<br>$gwhostname<br>$gateway</td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; font-size: 10px;\">";
-					if ($connected) { print "<img src=\"/icons/greenlink.png\"></td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; font-size: 10px;\"><img src=\"/icons/internet.png\" style=\"width: 125px; height: 125px;\"><br>Internet<br>Connected</td></tr>\n"; }
-					else { print "<img src=\"/icons/redlink.png\"></td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; font-size: 10px;\"><img src=\"/icons/internet.png\" style=\"width: 125px; height: 125px; opacity: 0.25;\"><br>Internet<br>Unreachable</td></tr>\n"; }
-					fclose($connected);
-					}
-				else {
-					print "<img src=\"/icons/redlink.png\"></td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; font-size: 10px;\"><img src=\"/icons/firewall.png\" style=\"width: 125px; height: 125px; opacity: 0.25\"><br>$gwhostname<br>$gateway</td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; font-size: 10px;\"><img src=\"/icons/redlink.png\"></td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; font-size: 10px;\"><img src=\"/icons/internet.png\" style=\"width: 125px; height: 125px; opacity: 0.25;\"><br>Internet<br>Unreachable</td></tr>\n";
-					}
-			?>
-			</table>
+	<div class="module-content" style="padding: 0; width: 60%; margin-left: auto; margin-right: auto;">
+		<div class="tabbar tabbarback">
+			<button type="button" class="tabbaritem tabbutton tablink tabbarsel" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'General')">General</button>
+			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Proxies')">Proxies</button>
+			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Subnets')">Subnets</button>
+			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Bandwidth')">Bandwidth</button>
 		</div>
-		<br>
-		<hr style="width: 90%;">
-		<br>
+		<div id="General" class="configtab" style="width: 75%; margin-left: auto; margin-right: auto; text-align: center;">
+			<table style="border: 0; margin-top: 20px;">
+				<?php
+					$connected = @fsockopen("www.google.com", 443);
+					print "\t\t\t<tr style=\"pointer-events: none; user-select: none;\"><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; font-size: 10px;\"><img src=\"/icons/server.png\" style=\"width: 125px; height: 125px;\"><br>$hostname<br>" . $netifaces[0] . "</td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal;\">";
+					if (shell_exec("/usr/bin/ping -c1 $gateway -W1 | /usr/bin/grep ttl") != "") {
+						print "<img src=\"/icons/greenlink.png\"></td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; font-size: 10px;\"><img src=\"/icons/firewall.png\" style=\"width: 125px; height: 125px;\">";
+						print "<br>$gwhostname<br>$gateway</td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; font-size: 10px;\">";
+						if ($connected) { print "<img src=\"/icons/greenlink.png\"></td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; font-size: 10px;\"><img src=\"/icons/internet.png\" style=\"width: 125px; height: 125px;\"><br>Internet<br>Connected</td></tr>\n"; }
+						else { print "<img src=\"/icons/redlink.png\"></td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; font-size: 10px;\"><img src=\"/icons/internet.png\" style=\"width: 125px; height: 125px; opacity: 0.25;\"><br>Internet<br>Unreachable</td></tr>\n"; }
+						fclose($connected);
+						}
+					else {
+						print "<img src=\"/icons/redlink.png\"></td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; font-size: 10px;\"><img src=\"/icons/firewall.png\" style=\"width: 125px; height: 125px; opacity: 0.25\"><br>$gwhostname<br>$gateway</td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; font-size: 10px;\"><img src=\"/icons/redlink.png\"></td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; font-size: 10px;\"><img src=\"/icons/internet.png\" style=\"width: 125px; height: 125px; opacity: 0.25;\"><br>Internet<br>Unreachable</td></tr>\n";
+						}
+				?>
+			</table>
+			<br>
+			<hr />
+			<br>
 
-		<table style="border: 0; width: 85%; margin-left: auto; margin-right: auto;">
-		<?php print "<tr><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\">Primary IP Address:</td><td style=\"color: #444; background-color: transparent; border: 0;\"><input id=\"ipaddr\" type=\"text\" style=\"width: 200px; font-size: 15px; padding: 3px; margin-top: 0;\" maxlength=\"39\" value=\"$netifaces[0]\" onchange=\"formCheck();\" tabindex=\"1\"></td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\">Web Console Port:</td><td style=\"color: #444; background-color: transparent; border: 0;\"><input id=\"wcport\" type=\"text\" style=\"width: 100px; font-size: 15px; padding: 3px; margin-top: 0;\" maxlength=\"5\" value=\"$wcport\" onchange=\"formCheck();\" tabindex=\"6\"></td></tr>\n"; ?>
-		<?php print "<tr><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\">Subnet Mask:</td><td style=\"color: #444; background-color: transparent; border: 0;\"><input id=\"subnetmask\" type=\"text\" style=\"width: 200px; font-size: 15px; padding: 3px; margin-top: 0;\" maxlength=\"39\" value=\"$netifaces[1]\" onchange=\"formCheck();\" tabindex=\"2\"></td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\">Luminum Port:</td><td style=\"color: #444; background-color: transparent; border: 0;\"><input id=\"lport\" type=\"text\" style=\"width: 100px; font-size: 15px; padding: 3px; margin-top: 0;\" value=\"$lport\" onchange=\"formCheck();\" tabindex=\"7\"></td></tr>\n"; ?>
-		<?php print "<tr><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\">Default Gateway:</td><td style=\"color: #444; background-color: transparent; border: 0;\"><input id=\"dgateway\" type=\"text\" style=\"width: 200px; font-size: 15px; padding: 3px; margin-top: 0;\" maxlength=\"39\" value=\"$gateway\" onchange=\"formCheck();\" tabindex=\"3\"></td></tr>\n"; ?>
-		<?php print "<tr><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\">Primary DNS Server:</td><td style=\"color: #444; background-color: transparent; border: 0;\"><input id=\"dnsserver\" type=\"text\" style=\"width: 200px; font-size: 15px; padding: 3px; margin-top: 0;\" maxlength=\"39\" value=\"$dnscfg[1]\" onchange=\"formCheck();\" tabindex=\"4\"></td></tr>\n"; ?>
-		<?php print "<tr><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\">Secondary DNS Server:</td><td style=\"color: #444; background-color: transparent; border: 0;\"><input id=\"dns2server\" type=\"text\" style=\"width: 200px; font-size: 15px; padding: 3px; margin-top: 0;\" maxlength=\"39\" value=\"$dnscfg[2]\" onchange=\"formCheck();\" tabindex=\"4\"></td></tr>\n"; ?>
-		<?php print "<tr><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\">DNS Search Suffix:</td><td style=\"color: #444; background-color: transparent; border: 0;\"><input id=\"suffix\" type=\"text\" style=\"width: 200px; font-size: 15px; padding: 3px; margin-top: 0;\" maxlength=\"39\" value=\"$dnscfg[0]\" onchange=\"formCheck();\" tabindex=\"5\"></td></tr>\n"; ?>
-		</table>
-		<br>
-	</div>
+			<table style="text-align: left; border: 0; margin-left: auto; margin-right: auto;">
+				<?php print "<tr><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\">Primary IP Address:</td><td style=\"color: #444; background-color: transparent; border: 0;\"><input id=\"ipaddr\" type=\"text\" style=\"width: 150px; font-size: 15px; padding: 3px; margin-top: 0; margin-right: 20px;\" maxlength=\"39\" value=\"$netifaces[0]\" onchange=\"formCheck();\" tabindex=\"1\"></td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\">Web Console Port:</td><td style=\"color: #444; background-color: transparent; border: 0;\"><input id=\"wcport\" type=\"text\" style=\"width: 100px; font-size: 15px; padding: 3px; margin-top: 0;\" maxlength=\"5\" value=\"$wcport\" onchange=\"formCheck();\" tabindex=\"6\"></td></tr>\n"; ?>
+				<?php print "<tr><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\">Subnet Mask:</td><td style=\"color: #444; background-color: transparent; border: 0;\"><input id=\"subnetmask\" type=\"text\" style=\"width: 150px; font-size: 15px; padding: 3px; margin-top: 0; margin-right: 20px;\" maxlength=\"39\" value=\"$netifaces[1]\" onchange=\"formCheck();\" tabindex=\"2\"></td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\">Luminum Port:</td><td style=\"color: #444; background-color: transparent; border: 0;\"><input id=\"lport\" type=\"text\" style=\"width: 100px; font-size: 15px; padding: 3px; margin-top: 0;\" value=\"$lport\" onchange=\"formCheck();\" tabindex=\"7\"></td></tr>\n"; ?>
+				<?php print "<tr><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\">Default Gateway:</td><td style=\"color: #444; background-color: transparent; border: 0;\"><input id=\"dgateway\" type=\"text\" style=\"width: 150px; font-size: 15px; padding: 3px; margin-top: 0; margin-right: 20px;\" maxlength=\"39\" value=\"$gateway\" onchange=\"formCheck();\" tabindex=\"3\"></td></tr>\n"; ?>
+				<?php print "<tr><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\">Primary DNS Server:</td><td style=\"color: #444; background-color: transparent; border: 0;\"><input id=\"dnsserver\" type=\"text\" style=\"width: 150px; font-size: 15px; padding: 3px; margin-top: 0; margin-right: 20px;\" maxlength=\"39\" value=\"$dnscfg[1]\" onchange=\"formCheck();\" tabindex=\"4\"></td></tr>\n"; ?>
+				<?php print "<tr><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\">Secondary DNS Server:</td><td style=\"color: #444; background-color: transparent; border: 0;\"><input id=\"dns2server\" type=\"text\" style=\"width: 150px; font-size: 15px; padding: 3px; margin-top: 0; margin-right: 20px;\" maxlength=\"39\" value=\"$dnscfg[2]\" onchange=\"formCheck();\" tabindex=\"4\"></td></tr>\n"; ?>
+				<?php print "<tr><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\">DNS Search Suffix:</td><td style=\"color: #444; background-color: transparent; border: 0;\"><input id=\"suffix\" type=\"text\" style=\"width: 150px; font-size: 15px; padding: 3px; margin-top: 0; margin-right: 20px;\" maxlength=\"39\" value=\"$dnscfg[0]\" onchange=\"formCheck();\" tabindex=\"5\"></td></tr>\n"; ?>
+			</table>
+			<br>
+		</div>
+		<div id="Proxies" class="configtab" style="display: none;">
+			<p>
+			</p>
+		</div>
+		<div id="Subnets" class="configtab" style="display: none;">
+			<p>
+			</p>
+		</div>
+		<div id="Bandwidth" class="configtab" style="display: none;">
+			<p>
+			</p>
+		</div>
 
-	<?php elseif ($_GET['view'] == "auth"): ?>
-	<div class="content">
-	<h1>Authentication</h1>
+		<?php elseif ($_GET['view'] == "auth"): ?>
+		<div class="content">
+		<h1>Authentication</h1>
 
-	<?php elseif ($_GET['view'] == "certs"): ?>
-	<div class="content">
-	<h1>Certificates</h1>
+		<?php elseif ($_GET['view'] == "certs"): ?>
+		<div class="content">
+		<h1>Certificates</h1>
 
-	<?php endif; 
-	} ?>
+		<?php endif; 
+		} ?>
 
 </div>
+
+<script>
+function resetForm() {
+	setTimeout(function() {
+		srevCheck();
+		prevCheck();
+		formCheck();
+		document.getElementById('save').disabled = true;
+		}, 25);
+	return true;
+	}
+
+
+function switchTab(evt, configSect) {
+	var i, x, tablinks;
+	x = document.getElementsByClassName("configtab");
+
+	for (i = 0; i < x.length; i++) {
+		x[i].style.display = "none";
+		}
+
+	tablinks = document.getElementsByClassName("tablink");
+	for (i = 0; i < x.length; i++) {
+		tablinks[i].className = tablinks[i].className.replace(" tabbarsel", "");
+		}
+
+	document.getElementById(configSect).style.display = "block";
+	evt.currentTarget.className += " tabbarsel";
+	}
+</script>
 
 <?php include ("layout/footer.php"); ?>
