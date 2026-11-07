@@ -55,7 +55,6 @@ else {
 			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Content')">Content</button>
 			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Logging')">Logging</button>
 			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'SMTP')">SMTP</button>
-			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Encryption')">Encryption</button>
 			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'API')">API</button>
 			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Export')">Export</button>
 		</div>
@@ -138,10 +137,6 @@ else {
 
 		<div id="SMTP" class="configtab" style="display: none;">
 			<p>SMTP Settings</p>
-		</div>
-
-		<div id="Encryption" class="configtab" style="display: none;">
-			<p>Encryption Settings</p>
 		</div>
 
 		<div id="Accounts" class="configtab" style="display: none;">

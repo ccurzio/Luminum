@@ -169,7 +169,7 @@ $ienabled = $invinfo["CVAL"];
 					print "<div class=\"submenu-content\">\n";
 					print "<a href=\"/config.php?view=options\">Server Options</a>\n";
 					print "<a href=\"/config.php?view=network\">Network</a>\n";
-					print "<a href=\"/config.php?view=certs\">Certificates</a>\n";
+					print "<a href=\"/config.php?view=encryption\">Encryption</a>\n";
 					print "<a href=\"/config.php?view=auth\">Authentication</a>\n";
 					print "</div>\n";
 					print "</div>\n";
