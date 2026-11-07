@@ -37,6 +37,7 @@ use std::error::Error;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::io::{self, Read, Write};
 use std::time::Duration;
 use rusqlite::{params, Connection};
@@ -224,6 +225,13 @@ fn parse_clientconfig(debug: bool) -> HashMap<String, String> {
 				process::exit(1);
 			}
 		};
+		// The config DB holds the client's private signing key (CLPPRV);
+		// enforce 0600 in case the file was created or copied with a looser mode.
+		let mode = fs::metadata(cfg_path()).expect("Error: Could not stat configuration database").permissions().mode();
+		if mode & 0o777 != 0o600 {
+			fs::set_permissions(cfg_path(), fs::Permissions::from_mode(0o600))
+				.expect("Error: Could not secure configuration database");
+		}
 		let mut stmt = confconn.prepare("select KEY,VALUE from CONFIG").expect("Error: Could not prepare CONFIG query");
 		let cfg_iter = stmt.query_map(params![], |row| {
 			Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
@@ -614,9 +622,26 @@ fn clientsetup() {
 	io::stdin().read_line(&mut ui_server_key).expect("Error reading user input");
 	let server_key = ui_server_key.trim().to_string();
 
+	// Server certificate: the TLS trust anchor for the bootstrap channel.
+	// Validated before anything is written so a bad path leaves no
+	// partial configuration behind.
+	let mut ui_cert = String::new();
+	print!("Enter path to Luminum server certificate: ");
+	io::stdout().flush().unwrap();
+	io::stdin().read_line(&mut ui_cert).expect("Error reading user input");
+	let cert_src = ui_cert.trim().to_string();
+	let cert_pem = match fs::read(&cert_src) {
+		Ok(pem) if String::from_utf8_lossy(&pem).contains("BEGIN CERTIFICATE") => pem,
+		_ => {
+			println!("Invalid server certificate: {}", cert_src);
+			process::exit(1);
+		}
+	};
+
 	if let Some(parent) = Path::new(&cfg_path()).parent() {
 		fs::create_dir_all(parent).expect("Error: Could not create configuration directory");
 	}
+	fs::write(crt_path(), &cert_pem).expect("Error: Could not save server certificate");
 	let confconn = Connection::open(cfg_path()).expect("Error: Could not initialize configuration database");
 	confconn.execute("create table if not exists CONFIG ( KEY text not null, VALUE text not null )", [])
 		.expect("Error: Could not create CONFIG table in configuration database");
@@ -640,9 +665,13 @@ fn clientsetup() {
 	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)", params!["FPNT", fpnt.as_str()])
 		.expect("Error: Could not insert FPNT into CONFIG table.");
 	confconn.close().unwrap();
+	// The config DB holds the client's private signing key (CLPPRV).
+	fs::set_permissions(&cfg_path(), fs::Permissions::from_mode(0o600))
+		.expect("Error: Could not secure configuration database");
 
 	println!("\nLuminum Server: {}", server);
 	println!("Server port: {}", port);
+	println!("Server certificate: {}", cert_src);
 	println!("Client fingerprint: {}\n", fpnt);
 	println!("Luminum Client configuration complete.");
 	process::exit(0);
