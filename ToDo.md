@@ -23,6 +23,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9654; |*In Progress*  |Database User Accounts      |Automatically create database user accounts with permissions                            |
 |&#9654; |*In Progress*  |nginx Configuration         |Routines to automatically configure the nginx webserver software for Luminum            |
 |&#9654; |*In Progress*  |PHP Configuration           |Routines to automatically configure PHP and associated nginx support                    |
+| --     |Not Started    |Page Server Configuration   |Configuration options and routines specific to creating a Luminum Page Server           |
 
 
 ### Debian Support
@@ -146,6 +147,14 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#10003;|**Completed**  |LPORT          |10465                      |Port number for the network listener                                             |
 |&#10003;|**Completed**  |WADDR          |                           |The IP address to be used by the HTTPS Web Console                               |
 |&#10003;|**Completed**  |WPORT          |443                        |Port number for access to the HTTPS Web Console                                  |
+
+</li>
+
+<li>
+
+#### Page Server Configuration Options
+
+TBD
 
 </li>
 
