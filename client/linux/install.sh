@@ -4,7 +4,13 @@
 # by Christopher R. Curzio (ccurzio@luminum.net)
 #
 # Installs the client and its Lumy modules into the install root
-# (default /opt/Luminum/LuminumClient):
+# (default /opt/Luminum/LuminumClient). The distribution ships the
+# prebuilt binaries in dist/ next to this script:
+#
+#   dist/LuminumClient                 client binary
+#   dist/modules/<lumy>/Lumy_*         Lumy module binaries
+#
+# The installed layout:
 #
 #   <root>/LuminumClient           client binary
 #   <root>/bin/start-client        start/stop scripts (non-systemd hosts)
@@ -22,7 +28,7 @@
 # Usage: sudo bash install.sh [options]
 #
 #   --install-root P   installation directory (default /opt/Luminum/LuminumClient)
-#   --binary P         prebuilt LuminumClient binary (default: build from source)
+#   --binary P         client binary to install (default: dist/LuminumClient)
 #   --no-setup         skip the configuration wizard
 #   --no-start         install without starting the client
 #
@@ -44,7 +50,7 @@ while [ $# -gt 0 ]; do
 Usage: sudo bash install.sh [options]
 
   --install-root P   installation directory (default /opt/Luminum/LuminumClient)
-  --binary P         prebuilt LuminumClient binary (default: build from source)
+  --binary P         client binary to install (default: dist/LuminumClient)
   --no-setup         skip the configuration wizard
   --no-start         install without starting the client
 USAGE
@@ -90,20 +96,12 @@ fi
 
 # --- obtain the client binary -------------------------------------------------
 if [ -n "$BINARG" ]; then
-	[ -x "$BINARG" ] || fail "binary not found or not executable: $BINARG"
 	CLIENT_BIN="$BINARG"
 else
-	command -v cargo >/dev/null 2>&1 || \
-		fail "no --binary given and cargo not found; build the client elsewhere and re-run with --binary"
-	echo "Building LuminumClient from source..."
-	# Offline first (works on air-gapped hosts with a populated cargo
-	# cache), then online for hosts that still need to fetch crates.
-	(cd "$SCRIPT_DIR" && cargo build --release --offline) ||
-		(cd "$SCRIPT_DIR" && cargo build --release) ||
-		fail "cargo build failed"
-	CLIENT_BIN="$SCRIPT_DIR/target/release/LuminumClient"
-	[ -x "$CLIENT_BIN" ] || fail "build did not produce $CLIENT_BIN"
+	CLIENT_BIN="$SCRIPT_DIR/dist/LuminumClient"
 fi
+[ -x "$CLIENT_BIN" ] || \
+	fail "missing binary: $CLIENT_BIN (the distribution must include the prebuilt LuminumClient binary in dist/)"
 
 # --- install layout -------------------------------------------------------------
 mkdir -p "$ROOT/bin" "$ROOT/config" "$ROOT/logs" "$ROOT/run" "$ROOT/modules" || \
@@ -111,29 +109,23 @@ mkdir -p "$ROOT/bin" "$ROOT/config" "$ROOT/logs" "$ROOT/run" "$ROOT/modules" || 
 install -m 0755 "$CLIENT_BIN" "$ROOT/LuminumClient" || fail "cannot install client binary"
 
 # --- Lumy modules -----------------------------------------------------------------
-# Each crate under client/modules/linux/<Name> installs to
-# <root>/modules/<name>/Lumy_<Name>, matching the client's discovery.
-MODSRC="$SCRIPT_DIR/../modules/linux"
-if [ -d "$MODSRC" ]; then
-	for mdir in "$MODSRC"/*/; do
-		[ -f "$mdir/Cargo.toml" ] || continue
+# Each directory under dist/modules/ mirrors its installed location:
+# dist/modules/<lumy>/Lumy_* -> <root>/modules/<lumy>/Lumy_*.
+MODDIST="$SCRIPT_DIR/dist/modules"
+if [ -d "$MODDIST" ]; then
+	for mdir in "$MODDIST"/*/; do
+		[ -d "$mdir" ] || continue
 		mname=$(basename "$mdir")
-		mbin="Lumy_${mname}"
-		mdest="$ROOT/modules/$(echo "$mname" | tr 'A-Z' 'a-z')"
-		if [ ! -x "$mdir/target/release/$mbin" ]; then
-			if command -v cargo >/dev/null 2>&1; then
-				echo "Building $mbin from source..."
-				(cd "$mdir" && cargo build --release --offline) ||
-					(cd "$mdir" && cargo build --release) || true
-			fi
+		installed=0
+		for f in "$mdir"*; do
+			[ -f "$f" ] && [ -x "$f" ] || continue
+			mkdir -p "$ROOT/modules/$mname" || fail "cannot create $ROOT/modules/$mname"
+			install -m 0755 "$f" "$ROOT/modules/$mname/" || fail "cannot install $f"
+			installed=1
+		done
+		if [ "$installed" -eq 0 ]; then
+			echo "WARNING: no Lumy binaries in $mdir; module $mname skipped"
 		fi
-		if [ ! -x "$mdir/target/release/$mbin" ]; then
-			echo "WARNING: $mbin is not built and could not be built; module skipped"
-			continue
-		fi
-		mkdir -p "$mdest" || fail "cannot create $mdest"
-		install -m 0755 "$mdir/target/release/$mbin" "$mdest/$mbin" || \
-			fail "cannot install $mbin"
 	done
 fi
 
