@@ -35,6 +35,7 @@ use File::Basename qw(dirname);
 use FindBin qw($Bin);
 use DBI;
 use IO::Socket::INET;
+use MIME::Base64;
 
 our $VERSION = "0.0.1";
 
@@ -205,7 +206,8 @@ sub run {
 			? "Generating server certificate from existing key"
 			: "Generating server certificate");
 	$log->("$sslwhat for $shost ...");
-	my ($slok, $cert, $key, $pub, $sslerr) = prepare_ssl($shost, $dir{ssl}, $sslspec, $log);
+	my ($slok, $cert, $key, $pub, $signseed, $signpub, $sslerr) =
+		prepare_ssl($shost, $dir{ssl}, $sslspec, $log);
 	unless ($slok) {
 		return $fail->("certificate setup failed: $sslerr");
 		}
@@ -252,6 +254,11 @@ EOF
 		SSLCERT     => $cert,
 		SSLPRVKEY   => $key,
 		SSLPUBKEY   => $pub,
+		# Server Ed25519 signing keypair (protocol 7.1): the broker signs
+		# envelopes with this key; its public key is the one carried in
+		# the server-signing.crt distributed to clients.
+		SRVPRV      => encode_base64($signseed, ""),
+		SRVPUB      => encode_base64($signpub, ""),
 		INSTALLDATE => scalar(localtime),
 		);
 	# The admin email is optional; only seed it when supplied so an
@@ -692,8 +699,74 @@ sub cert_covers {
 	return 0;
 	}
 
+# Generate the Ed25519 signing keypair and signing certificate
+# (protocol 7.1 bootstrap trust anchor): server-signing.key (0600) and
+# server-signing.crt in $ssldir. The signing certificate is the client's
+# out-of-band anchor for the server's envelope signatures. When $tls_issued
+# is true it is issued by the server TLS certificate (the same trust root
+# the client already uses for the handshake); otherwise - import mode,
+# where the operator's CA is not available - it is self-signed and travels
+# to the client as a standalone anchor.
+#
+# Returns (1, $seed, $pub, $signcert, $signkey) on success,
+# (0, undef, undef, undef, undef, $err) on failure.
+#
+sub prepare_signing {
+	my ($shost, $ssldir, $tls_cert, $tls_key, $tls_issued, $log) = @_;
+	my $signkey  = "$ssldir/server-signing.key";
+	my $signcert = "$ssldir/server-signing.crt";
+	my $csr      = "$ssldir/server-signing.csr";
+	my $ext      = "$ssldir/server-signing.ext";
+	my $fail = sub { return (0, undef, undef, undef, undef, $_[0]) };
+
+	my $priv = eval {
+		require Crypt::Perl::Ed25519::PrivateKey;
+		Crypt::Perl::Ed25519::PrivateKey->new();
+		};
+	return $fail->("Crypt::Perl::Ed25519 is not available (PERL5LIB missing the module)")
+		unless $priv;
+	my $seed = $priv->get_private();
+	my $pub  = $priv->get_public_key()->get_public();
+
+	# PKCS#8 for an Ed25519 seed is a fixed 48-byte structure:
+	# AlgorithmIdentifier (id-Ed25519) + OCTET STRING wrapping the seed.
+	my $der = pack("H*", "302e020100300506032b657004220420") . $seed;
+	open(my $kf, ">", $signkey) or return $fail->("cannot write $signkey: $!");
+	print $kf "-----BEGIN PRIVATE KEY-----\n";
+	print $kf "$_\n" for encode_base64($der, "") =~ /(.{1,64})/g;
+	print $kf "-----END PRIVATE KEY-----\n";
+	close($kf);
+	chmod(0600, $signkey);
+
+	open(my $ef, ">", $ext) or return $fail->("cannot write $ext: $!");
+	print $ef "basicConstraints=critical,CA:FALSE\n";
+	print $ef "keyUsage=critical,digitalSignature\n";
+	close($ef);
+
+	my $rc;
+	if ($tls_issued) {
+		$rc = system("openssl", "req", "-new", "-key", $signkey,
+			"-subj", "/CN=$shost", "-out", $csr) == 0
+			&& system("openssl", "x509", "-req", "-in", $csr,
+				"-CA", $tls_cert, "-CAkey", $tls_key,
+				"-set_serial", "0x" . randomhex(16),
+				"-days", "3650", "-extfile", $ext, "-out", $signcert) == 0;
+	} else {
+		$rc = system("openssl", "req", "-x509", "-key", $signkey, "-days", "3650",
+			"-subj", "/CN=$shost", "-out", $signcert) == 0;
+	}
+	unlink($csr, $ext);
+	return $fail->("signing certificate generation failed") unless $rc;
+	chmod(0644, $signcert);
+	$log->("  Ed25519 signing certificate: $signcert"
+		. ($tls_issued ? " (issued by the server TLS certificate)" : " (self-signed)"));
+	return (1, $seed, $pub, $signcert, $signkey);
+	}
+
 # Prepare the server certificate, private key, and public key in $ssldir
-# (server.crt / server.key / server.pub).
+# (server.crt / server.key / server.pub), plus the Ed25519 signing keypair
+# and signing certificate (server-signing.key / server-signing.crt,
+# protocol 7.1).
 #
 # $spec:
 #   mode    => 'generate' (default) | 'import'
@@ -702,8 +775,8 @@ sub cert_covers {
 #   key     => existing private key path      (import, generate/existing)
 #   keypass => passphrase for an encrypted key (optional)
 #
-# Returns (1, $cert, $key, $pub) on success,
-# (0, undef, undef, undef, $err) on failure.
+# Returns (1, $cert, $key, $pub, $signseed, $signpub) on success,
+# (0, undef, undef, undef, undef, undef, $err) on failure.
 #
 sub prepare_ssl {
 	my ($shost, $ssldir, $spec, $log) = @_;
@@ -714,7 +787,7 @@ sub prepare_ssl {
 	my $cert = "$ssldir/server.crt";
 	my $key  = "$ssldir/server.key";
 	my $pub  = "$ssldir/server.pub";
-	my $fail = sub { return (0, undef, undef, undef, $_[0]) };
+	my $fail = sub { return (0, undef, undef, undef, undef, undef, $_[0]) };
 
 	my $san = $shost =~ /^\d+\.\d+\.\d+\.\d+$/ ? "IP:$shost" : "DNS:$shost";
 
@@ -750,7 +823,12 @@ sub prepare_ssl {
 			return $fail->("cannot install private key");
 			}
 		unless (derive_pub($cert, $pub)) { return $fail->("cannot derive public key"); }
-		return (1, $cert, $key, $pub);
+		# Imported TLS certificates come from an external CA whose key is
+		# not available, so the signing certificate is self-signed.
+		my ($sok, $sseed, $spub, $scert, $skey, $serr) =
+			prepare_signing($shost, $ssldir, $cert, $key, 0, $log);
+		return $fail->("signing certificate setup failed: $serr") unless $sok;
+		return (1, $cert, $key, $pub, $sseed, $spub);
 		}
 
 	unless ($mode eq "generate") { return $fail->("unknown ssl mode: $mode"); }
@@ -766,25 +844,37 @@ sub prepare_ssl {
 		unless (install_key($spec->{key}, $key, $spec->{keypass})) {
 			return $fail->("cannot install private key");
 			}
+		# CA:TRUE: the self-signed certificate also acts as the issuing
+		# CA for the Ed25519 signing certificate (protocol 7.1).
 		my $cmd = "openssl req -new -x509 -key \"$key\" -days 3650 "
-			. "-out \"$cert\" -subj \"/CN=$shost\" -addext \"subjectAltName=$san\" 2>/dev/null";
+			. "-out \"$cert\" -subj \"/CN=$shost\" -addext \"subjectAltName=$san\" "
+			. "-addext \"basicConstraints=critical,CA:TRUE\" 2>/dev/null";
 		return $fail->("certificate generation failed") unless system($cmd) == 0;
 		chmod(0644, $cert);
 		unless (derive_pub($cert, $pub)) { return $fail->("cannot derive public key"); }
-		return (1, $cert, $key, $pub);
+		my ($sok, $sseed, $spub, $scert, $skey, $serr) =
+			prepare_signing($shost, $ssldir, $cert, $key, 1, $log);
+		return $fail->("signing certificate setup failed: $serr") unless $sok;
+		return (1, $cert, $key, $pub, $sseed, $spub);
 		}
 
 	unless ($keymode eq "new") { return $fail->("unknown key mode: $keymode"); }
 
-	# generate / new: fresh RSA key + self-signed certificate (CN + SAN = $shost).
+	# generate / new: fresh RSA key + self-signed certificate (CN + SAN =
+	# $shost). CA:TRUE: the self-signed certificate also acts as the
+	# issuing CA for the Ed25519 signing certificate (protocol 7.1).
 	my $cmd = "openssl req -x509 -newkey rsa:2048 -nodes -days 3650 "
 		. "-keyout \"$key\" -out \"$cert\" "
-		. "-subj \"/CN=$shost\" -addext \"subjectAltName=$san\" 2>/dev/null";
+		. "-subj \"/CN=$shost\" -addext \"subjectAltName=$san\" "
+		. "-addext \"basicConstraints=critical,CA:TRUE\" 2>/dev/null";
 	return $fail->("certificate generation failed") unless system($cmd) == 0;
 	unless (derive_pub($cert, $pub)) { return $fail->("cannot derive public key"); }
 	chmod(0600, $key);
 	chmod(0644, $cert);
-	return (1, $cert, $key, $pub);
+	my ($sok, $sseed, $spub, $scert, $skey, $serr) =
+		prepare_signing($shost, $ssldir, $cert, $key, 1, $log);
+	return $fail->("signing certificate setup failed: $serr") unless $sok;
+	return (1, $cert, $key, $pub, $sseed, $spub);
 	}
 
 # Insert or update SYSTEM.CONFIG rows. Existing values are preserved unless
