@@ -186,6 +186,9 @@ sub run {
 	unless (migrate_users($dbh, $log)) {
 		return $fail->("AUTH.USERS migration failed");
 		}
+	unless (migrate_clients_auth($dbh, $log)) {
+		return $fail->("CLIENTS.AUTH migration failed");
+		}
 	unless (setup_dbuser($dbh, $dbuser, $dbpass)) {
 		return $fail->("database user setup failed");
 		}
@@ -435,6 +438,30 @@ sub apply_schema {
 			}
 		}
 	$log->("  schema applied.");
+	return 1;
+	}
+
+# Upgrade CLIENTS.AUTH to the protocol v1 layout: add any column the
+# current schema defines that the table lacks. The MQTTSECRET column
+# (SHA-256 hash of the client's MQTT secret, protocol 3.1) was added
+# after the first production installs; a NOT NULL DEFAULT is used here
+# because strict mode refuses a bare NOT NULL addition on a table that
+# already has rows. Pre-existing rows carry an empty hash, which the
+# MQTT login check (when it lands) must treat as "secret not issued".
+#
+sub migrate_clients_auth {
+	my ($dbh, $log) = @_;
+	my %defs = (
+		MQTTSECRET => "MQTTSECRET char(64) NOT NULL DEFAULT ''",
+		);
+	my %have = map { $_->[0] => 1 }
+		@{ $dbh->selectall_arrayref(qq{select COLUMN_NAME from information_schema.COLUMNS where TABLE_SCHEMA = 'CLIENTS' and TABLE_NAME = 'AUTH'}) || [] };
+	for my $col (sort keys %defs) {
+		next if $have{$col};
+		my $rc = eval { $dbh->do("alter table CLIENTS.AUTH add " . $defs{$col}); 1 };
+		unless ($rc) { $log->("  CLIENTS.AUTH migration failed for $col: $@"); return 0; }
+		$log->("  CLIENTS.AUTH: added missing column $col");
+		}
 	return 1;
 	}
 
