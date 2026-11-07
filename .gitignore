@@ -16,6 +16,7 @@ Cargo.lock
 # Finalized Binaries
 bin/Luminum-Server
 bin/Luminum-Client
+client/linux/dist/
 
 # Encryption Stuff
 *.key
