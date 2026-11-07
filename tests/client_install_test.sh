@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Client installer test: layout, generated scripts, wizard integration,
-# idempotent re-run, start/stop cycle, missing-binary handling, and the
-# --binary override - all against scratch install roots under $HOME
-# (never /opt).
+# idempotent re-run, start/stop cycle, missing-binary handling, the
+# --binary override, and install-mode detection (fresh / upgrade /
+# configure-in-place over a foreign install) - all against scratch
+# install roots under $HOME (never /opt).
 #
 # The installer expects the prebuilt binaries in a dist/ directory next
 # to itself, so the test stages a throwaway package (install.sh + dist/)
@@ -28,6 +29,9 @@ LUMY_BIN="$REPO/client/modules/linux/Integrity/target/debug/Lumy_Integrity"
 ROOT="$HOME/.lumclient-install-test"
 ROOT2="$HOME/.lumclient-install-test-badcert"
 ROOT3="$HOME/.lumclient-install-test-override"
+ROOT4="$HOME/.lumclient-install-test-configure"
+ROOT5="$HOME/.lumclient-install-test-configure2"
+ROOT6="$HOME/.lumclient-install-test-foreign"
 PKG="$HOME/.lumclient-pkg-test"
 CERTDIR="$HOME/.lumclient-install-test-certs"
 UNIT=/etc/systemd/system/luminum-client.service
@@ -47,7 +51,7 @@ UNIT_PRE=0
 [ -f "$UNIT" ] && { cp "$UNIT" "$UNIT_BAK"; UNIT_PRE=1; }
 cleanup() {
     [ -x "$ROOT/bin/stop-client" ] && "$ROOT/bin/stop-client" >/dev/null 2>&1
-    rm -rf "$ROOT" "$ROOT2" "$ROOT3" "$PKG" "$CERTDIR"
+    rm -rf "$ROOT" "$ROOT2" "$ROOT3" "$ROOT4" "$ROOT5" "$ROOT6" "$PKG" "$CERTDIR"
     if [ -f "$UNIT" ]; then
         # Restore the pre-test unit (the installer overwrote it with a
         # scratch-root unit), or remove the one the installer created.
@@ -105,18 +109,20 @@ check "install: server.crt matches the provided certificate" \
     $([ -f "$ROOT/config/server.crt" ] && cmp -s "$CERT" "$ROOT/config/server.crt"; echo $?)
 check "install: Integrity Lumy installed" \
     $([ -x "$ROOT/modules/integrity/Lumy_Integrity" ]; echo $?)
+check "install: installer marker written" $([ -f "$ROOT/.luminum-installer" ]; echo $?)
 if [ "$UNIT_PRE" -eq 0 ]; then
     check "install: no unit written while systemd is offline" $([ ! -f "$UNIT" ]; echo $?)
 else
     :
 fi
 
-# --- Phase 2: idempotent re-run ------------------------------------------------------
+# --- Phase 2: idempotent re-run (upgrade mode: marker present) ------------------------
 bash "$PKG/install.sh" --install-root "$ROOT" --no-start --no-setup \
     > "$ROOT-rerun.log" 2>&1
 rc=$?
 check "re-run: exits 0" $([ "$rc" -eq 0 ]; echo $?) "rc=$rc; see $ROOT-rerun.log"
 check "re-run: existing config preserved" $([ "$(cfgval SHOST "$ROOT")" = "install.test" ]; echo $?)
+check "re-run: installer marker still present" $([ -f "$ROOT/.luminum-installer" ]; echo $?)
 
 # --- Phase 3: start/stop cycle ---------------------------------------------------------
 "$ROOT/bin/start-client" > "$ROOT-start.log" 2>&1
@@ -163,9 +169,74 @@ check "--binary: provided binary installed" \
     $([ -x "$ROOT3/LuminumClient" ] && cmp -s "$OVERRIDE" "$ROOT3/LuminumClient"; echo $?)
 rm -f "$OVERRIDE"
 
+# --- Phase 7: configure mode over a foreign, already-configured install -------------------
+# Simulates a .deb/.rpm install: layout present, no installer marker.
+mkdir -p "$ROOT4/bin" "$ROOT4/config" "$ROOT4/logs" "$ROOT4/run"
+printf '#!/bin/sh\nexit 97\n' > "$ROOT4/LuminumClient"
+chmod 0755 "$ROOT4/LuminumClient"
+python3 - "$ROOT4" <<'EOF'
+import sqlite3, sys
+conn = sqlite3.connect(sys.argv[1] + "/config/client.conf.db")
+conn.execute("create table if not exists CONFIG (KEY text not null, VALUE text not null)")
+conn.execute("insert into CONFIG (KEY,VALUE) values ('SHOST','pkg.example')")
+conn.commit()
+EOF
+chmod 0600 "$ROOT4/config/client.conf.db"
+STUB_SUM=$(sha256sum "$ROOT4/LuminumClient" | cut -d' ' -f1)
+bash "$PKG/install.sh" --install-root "$ROOT4" --no-start > "$ROOT4.log" 2>&1
+rc=$?
+check "configure: exits 0" $([ "$rc" -eq 0 ]; echo $?) "rc=$rc; see $ROOT4.log"
+check "configure: reports the existing installation" \
+    $(grep -q "Existing installation found" "$ROOT4.log" 2>/dev/null; echo $?)
+check "configure: existing binary untouched" \
+    $([ "$(sha256sum "$ROOT4/LuminumClient" | cut -d' ' -f1)" = "$STUB_SUM" ]; echo $?)
+check "configure: no installer marker created" $([ ! -f "$ROOT4/.luminum-installer" ]; echo $?)
+check "configure: existing config preserved" $([ "$(cfgval SHOST "$ROOT4")" = "pkg.example" ]; echo $?)
+check "configure: no start/stop scripts written" \
+    $([ ! -f "$ROOT4/bin/start-client" ]; echo $?)
+
+# --- Phase 8: configure mode over a foreign, unconfigured install -------------------------
+mkdir -p "$ROOT5"
+cp "$CLIENT_BIN" "$ROOT5/LuminumClient"
+chmod 0755 "$ROOT5/LuminumClient"
+REAL_SUM=$(sha256sum "$ROOT5/LuminumClient" | cut -d' ' -f1)
+printf 'install.test\n\nsvrkey456\n%s\n' "$CERT" | \
+    bash "$PKG/install.sh" --install-root "$ROOT5" --no-start > "$ROOT5.log" 2>&1
+rc=$?
+check "configure (unconfigured): exits 0" $([ "$rc" -eq 0 ]; echo $?) "rc=$rc; see $ROOT5.log"
+check "configure (unconfigured): wizard ran against the existing binary" \
+    $([ "$(cfgval SHOST "$ROOT5")" = "install.test" ]; echo $?)
+check "configure (unconfigured): existing binary untouched" \
+    $([ "$(sha256sum "$ROOT5/LuminumClient" | cut -d' ' -f1)" = "$REAL_SUM" ]; echo $?)
+check "configure (unconfigured): no installer marker created" \
+    $([ ! -f "$ROOT5/.luminum-installer" ]; echo $?)
+
+# --- Phase 9: foreign directory that is not a client install fails cleanly -----------------
+mkdir -p "$ROOT6"
+bash "$PKG/install.sh" --install-root "$ROOT6" --no-start > "$ROOT6.log" 2>&1
+rc=$?
+check "foreign dir: installer exits nonzero" $([ "$rc" -ne 0 ]; echo $?) "rc=$rc"
+check "foreign dir: error names the problem" \
+    $(grep -q "not a Luminum client installation" "$ROOT6.log" 2>/dev/null; echo $?)
+check "foreign dir: nothing written" $([ -z "$(ls -A "$ROOT6")" ]; echo $?)
+
+# --- Phase 10: explicit --binary over a foreign install is a deliberate replacement --------
+OVERRIDE2="$HOME/.lumclient-override-bin2"
+cp "$CLIENT_BIN" "$OVERRIDE2"
+bash "$PKG/install.sh" --install-root "$ROOT4" --binary "$OVERRIDE2" --no-start --no-setup \
+    > "$ROOT4-override.log" 2>&1
+rc=$?
+check "--binary over foreign install: exits 0" $([ "$rc" -eq 0 ]; echo $?) "rc=$rc; see $ROOT4-override.log"
+check "--binary over foreign install: binary replaced" \
+    $([ -x "$ROOT4/LuminumClient" ] && cmp -s "$OVERRIDE2" "$ROOT4/LuminumClient"; echo $?)
+check "--binary over foreign install: marker now written" \
+    $([ -f "$ROOT4/.luminum-installer" ]; echo $?)
+rm -f "$OVERRIDE2"
+
 # --- cleanup ---------------------------------------------------------------------------------
 rm -f "$ROOT-install.log" "$ROOT-rerun.log" "$ROOT-start.log" "$ROOT-stop.log" \
-      "$ROOT2.log" "$ROOT3.log" "$ROOT3-override.log"
+      "$ROOT2.log" "$ROOT3.log" "$ROOT3-override.log" \
+      "$ROOT4.log" "$ROOT4-override.log" "$ROOT5.log" "$ROOT6.log"
 
 echo "------------------------------------------------------------"
 if [ "$FAILURES" -gt 0 ]; then
