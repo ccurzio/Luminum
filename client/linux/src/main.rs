@@ -13,10 +13,12 @@
 //    check-ins, and Lumy traffic currently ride the bootstrap/direct
 //    channel to the server listener (LPORT 10465).
 //  - Every outgoing envelope is signed with the client's Ed25519 key
-//    over the canonical JSON (§5.3); server responses are verified
-//    against the server signing public key (SRVPUB) and Lumy IPC
-//    messages are verified against the client's own public key
-//    (§3.3, §8.2).
+//    over the canonical JSON (§5.3). Server responses are verified
+//    against the server signing key extracted from the validated
+//    signing certificate (config/server-signing.crt, the bootstrap
+//    trust anchor of §7.1); the in-band serverpubkey field is
+//    cross-checked against that anchor. Lumy IPC messages are
+//    verified against the client's own public key (§3.3, §8.2).
 
 use clap::{Arg, App};
 use colored::Colorize;
@@ -61,6 +63,7 @@ fn base_path() -> String {
 
 fn cfg_path() -> String { format!("{}/config/client.conf.db", base_path()) }
 fn crt_path() -> String { format!("{}/config/server.crt", base_path()) }
+fn signing_crt_path() -> String { format!("{}/config/server-signing.crt", base_path()) }
 fn mod_path() -> String { format!("{}/modules", base_path()) }
 fn outq_path() -> String { format!("{}/config/outqueue.db", base_path()) }
 
@@ -295,6 +298,73 @@ fn server_pubkey(ccfg: &HashMap<String, String>) -> Option<[u8; 32]> {
 	Some(out)
 }
 
+/// The server's Ed25519 signing public key (raw 32 bytes) extracted from
+/// the signing certificate distributed out of band (config/server-signing.crt),
+/// which is the bootstrap trust anchor (protocol §7.1). The certificate is
+/// accepted when it chains to the TLS trust root (config/server.crt - the
+/// server certificate issued it) or when it is a valid self-signed
+/// Ed25519 certificate (servers with imported TLS certificates cannot
+/// issue from their CA). Returns None when no validated anchor exists.
+fn server_signing_key(debug: bool) -> Option<[u8; 32]> {
+	use openssl::stack::Stack;
+	use openssl::x509::store::X509StoreBuilder;
+	use openssl::x509::{X509, X509StoreContext};
+
+	let pem = match fs::read(signing_crt_path()) {
+		Ok(p) => p,
+		Err(_) => {
+			dbout(debug, 1, "Server signing certificate not found (config/server-signing.crt); registration requires the trust anchor distributed with the server certificate.");
+			return None;
+		}
+	};
+	let cert = match X509::from_pem(&pem) {
+		Ok(c) => c,
+		Err(_) => { dbout(debug, 1, "Server signing certificate is not a valid X.509 certificate."); return None; }
+	};
+	let pkey = match cert.public_key() {
+		Ok(k) => k,
+		Err(_) => { dbout(debug, 1, "Server signing certificate has no usable public key."); return None; }
+	};
+	if pkey.id() != openssl::pkey::Id::ED25519 {
+		dbout(debug, 1, "Server signing certificate is not an Ed25519 certificate.");
+		return None;
+	}
+	// Anchor validation: chain against the TLS trust root, else a valid
+	// self-signature.
+	let mut trusted = false;
+	if let Ok(rootpem) = fs::read(crt_path()) {
+		if let Ok(root) = X509::from_pem(&rootpem) {
+			let store = X509StoreBuilder::new()
+				.and_then(|mut b| { b.add_cert(root)?; Ok(b.build()) })
+				.ok();
+			if let Some(store) = store {
+				if let Ok(chain) = Stack::<X509>::new() {
+					if let Ok(mut ctx) = X509StoreContext::new() {
+						trusted = matches!(ctx.init(&store, &cert, &chain, |c| c.verify_cert()), Ok(true));
+					}
+				}
+			}
+		}
+	}
+	if !trusted {
+		trusted = matches!(cert.issuer_name().try_cmp(cert.subject_name()), Ok(std::cmp::Ordering::Equal))
+			&& cert.verify(pkey.as_ref()).map(|ok| ok).unwrap_or(false);
+	}
+	if !trusted {
+		dbout(debug, 1, "Server signing certificate is not trusted: it neither chains to the server certificate nor is it a valid self-signed certificate.");
+		return None;
+	}
+	let raw = pkey.raw_public_key().ok()?;
+	if raw.len() != 32 {
+		dbout(debug, 1, "Server signing certificate public key has an unexpected length.");
+		return None;
+	}
+	let mut out = [0u8; 32];
+	out.copy_from_slice(&raw);
+	dbout(debug, 3, "Server signing certificate validated (trust anchor established).");
+	Some(out)
+}
+
 // ---------------------------------------------------------------------------
 // Server channel (bootstrap/direct, TLS + framed JSON)
 // ---------------------------------------------------------------------------
@@ -358,25 +428,33 @@ fn register_with_server(debug: bool, ccfg: &HashMap<String, String>) {
 	match server_send(server_host, server_port, &crt_path(), &msg, debug) {
 		Ok(response) => {
 			if response.action == "register" && response.status == "OK" {
-				// Verify the response against the server signing public key
-				// carried in the response (§7.1). The TLS-bound signing
-				// certificate is the full trust anchor; the convenience
-				// field is cross-checked against it once certificate
-				// validation lands.
-				let srvpub = response.data.as_ref()
+				// Bootstrap trust anchor (protocol §7.1): the server
+				// signing key must come from the validated signing
+				// certificate, not from the response. The in-band
+				// serverpubkey field is a convenience and is
+				// cross-checked against the anchor; a mismatch is fatal.
+				let anchor = match server_signing_key(debug) {
+					Some(k) => k,
+					None => return,
+				};
+				if !verify_envelope(&response, &anchor) {
+					dbout(debug, 1, "MSG_AUTH_FAIL: registration response signature verification failed.");
+					return;
+				}
+				if let Some(b64) = response.data.as_ref()
 					.and_then(|d| d.get("serverpubkey"))
-					.and_then(|v| v.as_str())
-					.and_then(|b64| base64ct::Base64::decode_vec(b64).ok().map(|b| b.to_vec()))
-					.and_then(|der| spki_to_raw(&der));
-				match srvpub {
-					Some(raw) if verify_envelope(&response, &raw) => {
-						config_set("SRVPUB", &base64ct::Base64::encode_string(&raw));
-					}
-					_ => {
-						dbout(debug, 1, "MSG_AUTH_FAIL: registration response signature verification failed.");
-						return;
+					.and_then(|v| v.as_str()) {
+					let inband = base64ct::Base64::decode_vec(b64).ok()
+						.and_then(|der| spki_to_raw(&der));
+					match inband {
+						Some(raw) if raw == anchor => {}
+						_ => {
+							dbout(debug, 1, "MSG_AUTH_FAIL: serverpubkey does not match the signing certificate.");
+							return;
+						}
 					}
 				}
+				config_set("SRVPUB", &base64ct::Base64::encode_string(&anchor));
 				let data = response.data.as_ref();
 				if let Some(uid) = data.and_then(|d| d.get("uid")).and_then(|v| v.as_str()) {
 					config_set("UID", uid);
@@ -657,10 +735,33 @@ fn clientsetup() {
 		}
 	};
 
+	// Server signing certificate: the bootstrap trust anchor for
+	// verifying server→client signatures (protocol §7.1). Optional
+	// here, but registration will not succeed without it.
+	let mut ui_signing = String::new();
+	print!("Enter path to Luminum server signing certificate [blank to skip]: ");
+	io::stdout().flush().unwrap();
+	io::stdin().read_line(&mut ui_signing).expect("Error reading user input");
+	let signing_src = ui_signing.trim().to_string();
+	let signing_pem = if signing_src.is_empty() {
+		None
+	} else {
+		match fs::read(&signing_src) {
+			Ok(pem) if String::from_utf8_lossy(&pem).contains("BEGIN CERTIFICATE") => Some(pem),
+			_ => {
+				println!("Invalid server signing certificate: {}", signing_src);
+				process::exit(1);
+			}
+		}
+	};
+
 	if let Some(parent) = Path::new(&cfg_path()).parent() {
 		fs::create_dir_all(parent).expect("Error: Could not create configuration directory");
 	}
 	fs::write(crt_path(), &cert_pem).expect("Error: Could not save server certificate");
+	if let Some(pem) = &signing_pem {
+		fs::write(signing_crt_path(), pem).expect("Error: Could not save server signing certificate");
+	}
 	let confconn = Connection::open(cfg_path()).expect("Error: Could not initialize configuration database");
 	confconn.execute("create table if not exists CONFIG ( KEY text not null, VALUE text not null )", [])
 		.expect("Error: Could not create CONFIG table in configuration database");
@@ -691,6 +792,11 @@ fn clientsetup() {
 	println!("\nLuminum Server: {}", server);
 	println!("Server port: {}", port);
 	println!("Server certificate: {}", cert_src);
+	if signing_pem.is_some() {
+		println!("Server signing certificate: {}", signing_src);
+	} else {
+		println!("Server signing certificate: (none provided - registration requires it)");
+	}
 	println!("Client fingerprint: {}\n", fpnt);
 	println!("Luminum Client configuration complete.");
 	process::exit(0);
