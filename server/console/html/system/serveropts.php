@@ -57,6 +57,7 @@ else {
 			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'SMTP')">SMTP</button>
 			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Encryption')">Encryption</button>
 			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'API')">API</button>
+			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Export')">Export</button>
 		</div>
 
 		<div id="General" class="configtab">
@@ -220,6 +221,9 @@ else {
 		</div>
 		<div id="API" class="configtab" style="display: none;">
 			<p>API Settings</p>
+		</div>
+		<div id="Export" class="configtab" style="display: none;">
+			<p>Configuration Export Settings</p>
 		</div>
 	</div>
 	</form>
