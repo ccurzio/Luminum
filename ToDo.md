@@ -24,7 +24,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9654; |*In Progress*  |nginx Configuration         |Routines to automatically configure the nginx webserver software for Luminum            |
 |&#9654; |*In Progress*  |PHP Configuration           |Routines to automatically configure PHP and associated nginx support                    |
 | --     |Not Started    |Page Server Configuration   |Configuration options and routines specific to creating a Luminum Page Server           |
-
+| --     |Not Started    |Failover Configuration      |Support for high availability server clustering                                         |
 
 ### Debian Support
 |        |Status         |Task                        |Description                                                                             |
@@ -113,6 +113,9 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#10003;|**Completed**  |SSLPUBKEY      |                 |Path to the public key associated with SSLCERT                                          |
 |&#10003;|**Completed**  |SHOST          |                 |The server's fully-qualified domain name                                                |
 |&#10003;|**Completed**  |INSTALLDATE    |                 |Date and time Luminum Server was installed                                              |
+| --     |Not Started    |PRIMARY        |                 |Config definition for the primary Luminum server                                        |
+| --     |Not Started    |SECONDARY      |None             |Config definition for the secondary Luminum server                                      |
+| --     |Not Started    |TERTIARY       |None             |Config definition for the tertiary Luminum server                                       |
 |&#10003;|**Completed**  |ENLUMYS        |                 |A comma-separated list of currently enabled Lumys                                       |
 |&#10003;|**Completed**  |TARGETCONF     |Enabled          |Action confirmation based on the number of targeted endpoints                           |
 |&#10003;|**Completed**  |TCONFTHRESHOLD |250              |Number of targeted endpoints to trigger action confirmation                             |
@@ -132,7 +135,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#10003;|**Completed**  |SENREVS        |5                |Maximum revision history for sensors                                                    |
 |&#10003;|**Completed**  |PKGREVS        |5                |Maximum revision history for packages                                                   |
 |&#10003;|**Completed**  |INVESTIGATE    |Enabled          |Enable or Disable Luminum Investigate                                                   |
-| --     |Not Started    |INSECURE       |Disabled         |Allow Unsigned Lumys                                                                    | 
+| --     |Not Started    |INSECURE       |Disabled         |Allow Unsigned Lumys                                                                    |
 </li>
 
 <li>
@@ -153,6 +156,14 @@ In order to be accountable to the community - but more importantly to myself - I
 <li>
 
 #### Page Server Configuration Options
+
+TBD
+
+</li>
+
+<li>
+
+#### Cluster Server Configuration Options
 
 TBD
 
