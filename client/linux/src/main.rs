@@ -377,11 +377,30 @@ fn register_with_server(debug: bool, ccfg: &HashMap<String, String>) {
 						return;
 					}
 				}
-				if let Some(uid) = response.data.as_ref().and_then(|d| d.get("uid")).and_then(|v| v.as_str()) {
+				let data = response.data.as_ref();
+				if let Some(uid) = data.and_then(|d| d.get("uid")).and_then(|v| v.as_str()) {
 					config_set("UID", uid);
 					dbout(debug, 3, &format!("Registration successful. (UID: {})", uid));
 				} else {
 					dbout(debug, 1, "Registration response did not include a UID.");
+				}
+				// MQTT broker credentials (protocol §7.1): the secret is
+				// delivered only in this signed bootstrap response, and the
+				// config DB's 0600 file mode is its protection at rest.
+				if let Some(secret) = data.and_then(|d| d.get("mqttsecret")).and_then(|v| v.as_str()) {
+					config_set("MQTTSECRET", secret);
+				} else {
+					dbout(debug, 1, "Registration response did not include an MQTT secret.");
+				}
+				if let Some(host) = data.and_then(|d| d.get("mqtthost")).and_then(|v| v.as_str()) {
+					config_set("MQTTHOST", host);
+				} else {
+					dbout(debug, 1, "Registration response did not include an MQTT host.");
+				}
+				if let Some(port) = data.and_then(|d| d.get("mqttport")).and_then(|v| v.as_str()) {
+					config_set("MQTTPORT", port);
+				} else {
+					dbout(debug, 1, "Registration response did not include an MQTT port.");
 				}
 			} else {
 				dbout(debug, 1, &format!("Registration failed: {} {}", response.status, response.err.unwrap_or_default()));
