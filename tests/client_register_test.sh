@@ -6,6 +6,13 @@
 # MQTTSECRET, MQTTHOST, and MQTTPORT from the signed registration
 # response (protocol 7.1).
 #
+# The fake server signs with the key of an Ed25519 signing
+# certificate issued by the test TLS certificate (which carries
+# CA:TRUE), and the client is given that certificate as its
+# bootstrap trust anchor (config/server-signing.crt). Negative
+# scenarios: a serverpubkey that does not match the anchor, and a
+# missing anchor - in both cases the client must store nothing.
+#
 # Usage: bash tests/client_register_test.sh
 set -u
 REPO=$(cd "$(dirname "$0")/.." && pwd)
@@ -26,13 +33,10 @@ MQTTPORT_EXPECTED="18883"
 
 SCRATCH="$HOME/.lumclient-reg-test"
 CERTDIR="$SCRATCH/certs"
-LUMY_HOME="$SCRATCH/home"
 FAKE="$SCRATCH/fakeserver.pl"
-ISSUED="$SCRATCH/issued"
-READY="$SCRATCH/ready"
+FAILURES=0
 CLIENT_PID=""
 FAKE_PID=""
-FAILURES=0
 check() {
     local name="$1" ok="$2" detail="${3:-}"
     if [ "$ok" -eq 0 ]; then
@@ -63,20 +67,38 @@ EOF
 }
 
 issued_val() {
-    grep "^$1=" "$ISSUED" 2>/dev/null | head -n 1 | cut -d= -f2-
+    # $1 = key, $2 = issued file
+    grep "^$1=" "$2" 2>/dev/null | head -n 1 | cut -d= -f2-
 }
 
 # --- TLS certificate valid for 127.0.0.1 (the client verifies the hostname) ---
-mkdir -p "$CERTDIR" "$LUMY_HOME/config" || exit 1
+# CA:TRUE so it can issue the Ed25519 signing certificate, which the
+# client chains against it as the bootstrap trust anchor (protocol 7.1).
+mkdir -p "$CERTDIR" || exit 1
 openssl req -x509 -newkey rsa:2048 -nodes -days 30 \
     -keyout "$CERTDIR/key.pem" -out "$CERTDIR/cert.pem" \
-    -subj "/CN=127.0.0.1" -addext "subjectAltName=IP:127.0.0.1" 2>/dev/null
+    -subj "/CN=127.0.0.1" \
+    -addext "subjectAltName=IP:127.0.0.1" \
+    -addext "basicConstraints=critical,CA:TRUE" 2>/dev/null
+
+# --- Ed25519 signing key + certificate issued by the TLS certificate ---------
+openssl genpkey -algorithm ed25519 -out "$CERTDIR/signing.key" 2>/dev/null
+openssl req -new -key "$CERTDIR/signing.key" -subj "/CN=127.0.0.1" \
+    -out "$CERTDIR/signing.csr" 2>/dev/null
+openssl x509 -req -in "$CERTDIR/signing.csr" -CA "$CERTDIR/cert.pem" \
+    -CAkey "$CERTDIR/key.pem" -set_serial 0x01 -days 30 \
+    -out "$CERTDIR/signing.crt" 2>/dev/null
+# PKCS#8 Ed25519 DER is a fixed 48-byte prefix + the 32-byte seed.
+openssl pkey -in "$CERTDIR/signing.key" -outform DER 2>/dev/null | tail -c 32 > "$CERTDIR/signing.seed"
+[ "$(stat -c %s "$CERTDIR/signing.seed")" = "32" ] || { echo "SKIP - could not derive the signing seed"; exit 0; }
 
 # --- one-shot fake bootstrap server ------------------------------------------
 # Listens, signals readiness, accepts exactly one connection, reads the
 # registration frame, and answers with a signed OK response carrying the
-# MQTT credentials. The issued values are written to $ISSUED for the
-# test to compare against the client's config DB.
+# MQTT credentials. Signs with the seed from the signing key. In
+# "mismatch" mode the in-band serverpubkey field carries a *different*
+# key, which the client must reject. The issued values are written to
+# $ISSUED for the test to compare against the client's config DB.
 cat > "$FAKE" <<'PERL'
 use strict;
 use warnings;
@@ -85,12 +107,22 @@ use MIME::Base64;
 use Crypt::Perl::Ed25519::PrivateKey;
 use Luminum::Protocol;
 
-my ($port, $cert, $key, $uid, $mqtthost, $mqttport, $issued, $ready) = @ARGV;
+my ($port, $cert, $key, $uid, $mqtthost, $mqttport, $issued, $ready,
+    $seedfile, $mode) = @ARGV;
 
-my $priv = Crypt::Perl::Ed25519::PrivateKey->new();
-my $seed = $priv->get_private();
+open(my $sf, "<", $seedfile) or die "fake server: cannot read seed: $!\n";
+binmode($sf);
+read($sf, my $seed, 32);
+close($sf);
+my $priv = Crypt::Perl::Ed25519::PrivateKey->new($seed);
 my $pubraw = $priv->get_public_key()->get_public();
 my $spki_b64 = encode_base64(Luminum::Protocol::raw_to_spki($pubraw), "");
+if ($mode eq "mismatch") {
+    # A different key in the convenience field: the client must treat
+    # the mismatch with the validated anchor as fatal.
+    my $other = Crypt::Perl::Ed25519::PrivateKey->new();
+    $spki_b64 = encode_base64(Luminum::Protocol::raw_to_spki($other->get_public_key()->get_public()), "");
+}
 
 open(my $ur, "<", "/dev/urandom") or die "urandom: $!\n";
 binmode($ur);
@@ -156,8 +188,18 @@ print $out "SRVPUB=", encode_base64($pubraw, ""), "\n";
 close($out);
 PERL
 
-# --- seed the client config (no UID: registration is triggered) ---------------
-python3 - "$LUMY_HOME" "$PORT" <<'EOF'
+# --- scenario runner ----------------------------------------------------------
+# $1 = scenario name, $2 = fake server mode (ok|mismatch),
+# $3 = install the signing anchor (1|0). Seeds a fresh client home,
+# runs one registration attempt, and leaves the home in $SCEN_HOME.
+SCEN_HOME=""
+run_scenario() {
+    local name="$1" mode="$2" anchor="$3"
+    SCEN_HOME="$SCRATCH/home-$1"
+    local issued="$SCRATCH/issued-$1" ready="$SCRATCH/ready-$1"
+    mkdir -p "$SCEN_HOME/config"
+
+    python3 - "$SCEN_HOME" "$PORT" <<'EOF'
 import sqlite3, sys
 home, port = sys.argv[1], sys.argv[2]
 conn = sqlite3.connect(home + "/config/client.conf.db")
@@ -166,48 +208,73 @@ for k, v in [("SHOST", "127.0.0.1"), ("SPORT", port), ("SVRKEY", "regtest")]:
     conn.execute("insert into CONFIG (KEY,VALUE) values (?,?)", (k, v))
 conn.commit()
 EOF
-cp "$CERTDIR/cert.pem" "$LUMY_HOME/config/server.crt"
+    cp "$CERTDIR/cert.pem" "$SCEN_HOME/config/server.crt"
+    [ "$anchor" = "1" ] && cp "$CERTDIR/signing.crt" "$SCEN_HOME/config/server-signing.crt"
 
-# --- start the fake server, wait for readiness, start the client ---------------
-PERL5LIB="$PERL_LIBS" perl "$FAKE" "$PORT" "$CERTDIR/cert.pem" "$CERTDIR/key.pem" \
-    "$UID_EXPECTED" "$MQTTHOST_EXPECTED" "$MQTTPORT_EXPECTED" "$ISSUED" "$READY" &
-FAKE_PID=$!
-ready=1
-for _ in $(seq 1 40); do
-    [ -f "$READY" ] && { ready=0; break; }
-    sleep 0.25
-done
-check "fake server: listening" $ready
+    PERL5LIB="$PERL_LIBS" perl "$FAKE" "$PORT" "$CERTDIR/cert.pem" "$CERTDIR/key.pem" \
+        "$UID_EXPECTED" "$MQTTHOST_EXPECTED" "$MQTTPORT_EXPECTED" "$issued" "$ready" \
+        "$CERTDIR/signing.seed" "$mode" &
+    FAKE_PID=$!
+    local i
+    for i in $(seq 1 40); do
+        [ -f "$ready" ] && break
+        sleep 0.25
+    done
+    check "$name: fake server listening" $([ -f "$ready" ]; echo $?)
 
-LUMINUM_HOME="$LUMY_HOME" "$CLIENT_BIN" > "$SCRATCH/client.log" 2>&1 &
-CLIENT_PID=$!
+    LUMINUM_HOME="$SCEN_HOME" "$CLIENT_BIN" > "$SCRATCH/client-$1.log" 2>&1 &
+    CLIENT_PID=$!
+    # Wait for a stored result (happy path) or a full registration
+    # round to elapse (negative scenarios store nothing).
+    for i in $(seq 1 20); do
+        [ -n "$(cfgval MQTTSECRET "$SCEN_HOME")" ] && break
+        sleep 0.5
+    done
+    kill "$CLIENT_PID" 2>/dev/null
+    wait "$CLIENT_PID" 2>/dev/null
+    CLIENT_PID=""
+    for i in $(seq 1 20); do
+        kill -0 "$FAKE_PID" 2>/dev/null || break
+        sleep 0.25
+    done
+    FAKE_PID=""
+    SCEN_ISSUED="$issued"
+}
 
-# --- wait for the registration to land in the config DB ------------------------
-found=1
-for _ in $(seq 1 30); do
-    [ -n "$(cfgval MQTTSECRET "$LUMY_HOME")" ] && { found=0; break; }
-    sleep 0.5
-done
-check "registration: client stored MQTTSECRET" $found "see $SCRATCH/client.log"
-
-kill "$CLIENT_PID" 2>/dev/null
-wait "$CLIENT_PID" 2>/dev/null
-CLIENT_PID=""
-for _ in $(seq 1 20); do
-    kill -0 "$FAKE_PID" 2>/dev/null || break
-    sleep 0.25
-done
-
-# --- verify the stored values against what the server issued --------------------
+# --- scenario 1: happy path (anchor installed, matching serverpubkey) --------
+run_scenario happy ok 1
+check "registration: client stored MQTTSECRET" \
+    $([ -n "$(cfgval MQTTSECRET "$SCEN_HOME")" ]; echo $?) "see $SCRATCH/client-happy.log"
 check "registration: stored MQTTSECRET matches the issued secret" \
-    $([ "$(cfgval MQTTSECRET "$LUMY_HOME")" = "$(issued_val MQTTSECRET)" ]; echo $?)
-check "registration: stored UID" $([ "$(cfgval UID "$LUMY_HOME")" = "$UID_EXPECTED" ]; echo $?)
-check "registration: stored MQTTHOST" $([ "$(cfgval MQTTHOST "$LUMY_HOME")" = "$MQTTHOST_EXPECTED" ]; echo $?)
-check "registration: stored MQTTPORT" $([ "$(cfgval MQTTPORT "$LUMY_HOME")" = "$MQTTPORT_EXPECTED" ]; echo $?)
-check "registration: stored SRVPUB matches the server signing key" \
-    $([ "$(cfgval SRVPUB "$LUMY_HOME")" = "$(issued_val SRVPUB)" ]; echo $?)
+    $([ "$(cfgval MQTTSECRET "$SCEN_HOME")" = "$(issued_val MQTTSECRET "$SCEN_ISSUED")" ]; echo $?)
+check "registration: stored UID" \
+    $([ "$(cfgval UID "$SCEN_HOME")" = "$UID_EXPECTED" ]; echo $?)
+check "registration: stored MQTTHOST" \
+    $([ "$(cfgval MQTTHOST "$SCEN_HOME")" = "$MQTTHOST_EXPECTED" ]; echo $?)
+check "registration: stored MQTTPORT" \
+    $([ "$(cfgval MQTTPORT "$SCEN_HOME")" = "$MQTTPORT_EXPECTED" ]; echo $?)
+check "registration: stored SRVPUB matches the signing certificate key" \
+    $([ "$(cfgval SRVPUB "$SCEN_HOME")" = "$(issued_val SRVPUB "$SCEN_ISSUED")" ]; echo $?)
 check "registration: config DB mode is 0600" \
-    $([ "$(stat -c %a "$LUMY_HOME/config/client.conf.db" 2>/dev/null)" = "600" ]; echo $?)
+    $([ "$(stat -c %a "$SCEN_HOME/config/client.conf.db" 2>/dev/null)" = "600" ]; echo $?)
+
+# --- scenario 2: serverpubkey mismatch (fatal, nothing stored) ----------------
+run_scenario mismatch mismatch 1
+check "mismatch: nothing stored (UID)" \
+    $([ -z "$(cfgval UID "$SCEN_HOME")" ]; echo $?) "see $SCRATCH/client-mismatch.log"
+check "mismatch: nothing stored (MQTTSECRET)" \
+    $([ -z "$(cfgval MQTTSECRET "$SCEN_HOME")" ]; echo $?)
+check "mismatch: nothing stored (SRVPUB)" \
+    $([ -z "$(cfgval SRVPUB "$SCEN_HOME")" ]; echo $?)
+
+# --- scenario 3: no trust anchor (fatal, nothing stored) ----------------------
+run_scenario noanchor ok 0
+check "noanchor: nothing stored (UID)" \
+    $([ -z "$(cfgval UID "$SCEN_HOME")" ]; echo $?) "see $SCRATCH/client-noanchor.log"
+check "noanchor: nothing stored (MQTTSECRET)" \
+    $([ -z "$(cfgval MQTTSECRET "$SCEN_HOME")" ]; echo $?)
+check "noanchor: nothing stored (SRVPUB)" \
+    $([ -z "$(cfgval SRVPUB "$SCEN_HOME")" ]; echo $?)
 
 echo "------------------------------------------------------------"
 if [ "$FAILURES" -gt 0 ]; then
