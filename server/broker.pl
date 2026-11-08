@@ -934,6 +934,7 @@ sub newreg {
 
 	sendresponse($cs,$env,"OK",undef,{
 		uid => "$EPID",
+		sid => $SID,
 		mqtthost => $MADDR,
 		mqttport => "$MPORT",
 		mqttsecret => $secret,
