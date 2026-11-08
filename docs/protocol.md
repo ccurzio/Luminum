@@ -1,7 +1,7 @@
 # Luminum Wire Protocol Specification
 
 **Version:** 1.0-draft
-**Status:** PROPOSED — v1.0-draft. Core transport decisions locked: Ed25519 (Crypt::Perl::Ed25519), Mosquitto, MQTT 5.0, TLS-bound signing certificate, data ports 10465 + 10704, JSON everywhere.
+**Status:** PROPOSED — v1.0-draft. Core transport decisions locked: Ed25519 (Crypt::Perl::Ed25519), Mosquitto, MQTT 3.1.1, TLS-bound signing certificate, data ports 10465 + 10704, JSON everywhere.
 **Scope:** All client↔server communication for Luminum Server and Luminum Clients (all platforms), including Lumy module traffic.
 
 This document supersedes the ad-hoc message exchange currently implemented in `client/linux/src/main.rs` (MessagePack over raw TCP) and `server/broker.pl` (JSON envelope over raw TCP). Both ends must conform to this specification. Where this document makes a choice that is not yet settled, it is marked **[DECISION]**.
@@ -112,18 +112,20 @@ Key storage: the 32-byte raw seed (`get_private()`) and 32-byte raw public key (
 
 | Parameter | Value |
 |---|---|
-| Protocol version | MQTT 5.0 |
+| Protocol version | MQTT 3.1.1 |
 | Client ID | The client's UID (string form) |
 | Clean session | `false` (persistent session so QoS 1 commands queue while offline) |
 | Keep alive | 60 seconds |
 | Will (LWT) | Topic `luminum/{SID}/{UID}/status`, QoS 1, retained, payload = a valid signed envelope with `status: "offline"` (see §7.5) |
-| Auth | Username = UID, password = client secret; TLS with server certificate verification |
+| Auth | Username = UID, password = client secret; one-way TLS with server certificate verification |
 
-The server-side broker process authenticates MQTT logins by checking the SHA-256 hash of the presented secret against `CLIENTS.AUTH` (or a dedicated credentials table). The broker must reject logins for deactivated UIDs. The exact Mosquitto authentication mechanism (password file, C plugin, or external auth callback) is confirmed against the deployed version.
+**Authentication — Mosquitto built-in `password_file`.** Mosquitto performs the MQTT login check against a `password_file` (salted PBKDF2-SHA512 hashes, maintained with `mosquitto_passwd`). The broker process keeps this file in sync with `CLIENTS.AUTH`: it adds the entry when a client registers and removes it when a client is deactivated, then signals Mosquitto to reload (`SIGHUP`). A deactivated UID is therefore rejected at login because its entry no longer exists. No C plugin or external auth callback is required.
 
-MQTT 5.0's **Message Expiry Interval** is set on every `cmd` message to the command deadline (§9.3), so a command queued in a persistent session while the client is offline expires automatically instead of executing stale.
+Because MQTT 3.1.1 has no Message Expiry Interval, a command queued in a persistent session while the client is offline does not expire automatically. Stale-command protection is provided instead by the server-side command timeout (§9.3) and client-side deduplication (§9.2): the server tracks outstanding commands and abandons them past the deadline, and the client ignores any command whose `id` it has already processed.
 
 ### 4.2 Topic scheme
+
+Per-endpoint topics (the `{UID}` target):
 
 ```
 luminum/{SID}/{UID}/cmd      server → client   commands (query, deploy, config)
@@ -132,8 +134,17 @@ luminum/{SID}/{UID}/status   client → server   check-ins + LWT (retained)
 luminum/{SID}/{UID}/events   client → server   unsolicited events (e.g., Integrity alerts)
 ```
 
-- `{SID}` is the Luminum Server ID; `{UID}` is the numeric client ID. All lowercase, no wildcards in granted topics except as listed in §4.3.
+Group topics (fan-out to a set of endpoints; `cmd` only, server → client):
+
+```
+luminum/{SID}/all/cmd            all endpoints
+luminum/{SID}/os/{os}/cmd        all endpoints of OS {os} (e.g. os/linux)
+luminum/{SID}/grp/{name}/cmd     all endpoints in custom group {name}
+```
+
+- `{SID}` is the Luminum Server ID; `{UID}` is the numeric client ID. All lowercase, no wildcards in granted topics except as listed in §4.3. `{UID}` is numeric, so the group targets `all`/`os`/`grp` never collide with a real endpoint.
 - **Lumy routing is in the envelope, not the topic.** The `lumy` field (§5.1) selects the handling module. This keeps the ACL surface small and lets a single subscription carry all module traffic.
+- A client subscribes to its own `cmd` topic plus the group `cmd` topics it belongs to: `all`, its OS (`os/{osplat}`), and each custom group in `INGROUPS` (delivered to the client via a `setgroups` command). Group topics carry commands only; responses, check-ins, and events always go to the per-UID topics.
 - Commands are **never retained**. Status is **retained** (last known state). Resp and events are never retained.
 - The server publishes nothing to `status`/`resp`/`events`; clients publish nothing to `cmd`. Enforced by ACL (§4.3).
 
@@ -144,13 +155,45 @@ Per-client ACL (client authenticated as UID `{UID}`):
 | Direction | Topic |
 |---|---|
 | subscribe | `luminum/{SID}/{UID}/cmd` |
+| subscribe | `luminum/{SID}/all/cmd` |
+| subscribe | `luminum/{SID}/os/{os}/cmd` (its own OS) |
+| subscribe | `luminum/{SID}/grp/{name}/cmd` (its groups) |
 | publish | `luminum/{SID}/{UID}/resp` |
 | publish | `luminum/{SID}/{UID}/status` |
 | publish | `luminum/{SID}/{UID}/events` |
 
 Server ACL: unrestricted within `luminum/{SID}/#`.
 
-No client may read or write another client's topics. ACLs are enforced by Mosquitto, keyed on the client's UID (used as both the MQTT client ID and the username, §4.1). **VERIFY** the specific mechanism — static `pattern` rules in a Mosquitto ACL file vs. a dynamic ACL callback/plugin — against the deployed version, and confirm it scales to the target client count.
+No client may read or write another client's **per-UID** topics. ACLs are enforced by Mosquitto via **static `pattern` rules in an `acl_file`**, keyed on the client's UID (used as the MQTT username, §4.1) through the `%u` substitution:
+
+```
+# Per-endpoint topics: each client reads its own cmd, writes its own resp/status/events
+pattern read  luminum/{SID}/%u/cmd
+pattern write luminum/{SID}/%u/resp
+pattern write luminum/{SID}/%u/status
+pattern write luminum/{SID}/%u/events
+
+# Group topics: readable by any authenticated client. 'pattern' rules cannot use
+# +/# wildcards (only %u/%c/%a substitution), so the OS and group topics are
+# enumerated explicitly — one line per known OS value and per group name. The
+# server regenerates these lines (and SIGHUPs the broker) when groups change.
+pattern read  luminum/{SID}/all/cmd
+pattern read  luminum/{SID}/os/linux/cmd
+pattern read  luminum/{SID}/os/windows/cmd
+pattern read  luminum/{SID}/os/macos/cmd
+pattern read  luminum/{SID}/grp/{name}/cmd
+
+# Server: unrestricted within the Luminum tree. The server only PUBLISHES (and
+# reads back resp/status/events), so a 'topic' rule is sufficient here.
+user {server-uid}
+topic readwrite luminum/{SID}/#
+```
+
+> **Mosquitto 2.0.x `topic` vs `pattern` delivery quirk.** A `topic [read|write]` ACL grants the SUBSCRIBE (a SUBACK is sent, no denial) but **never delivers the message** to the subscriber; only `pattern` ACLs actually deliver. This was confirmed empirically against Mosquitto 2.0.21. It is why the per-UID and group *read* grants above all use `pattern`. The quirk does not affect the *publisher* path, which is why the server's `topic readwrite luminum/{SID}/#` still lets it publish to every topic. The same quirk is why `pattern` (the only delivering form) must enumerate the variable OS/group topics instead of using `os/#`/`grp/#`.
+
+Group topics are readable by any authenticated client because Mosquitto's static `pattern` rules can only substitute the username (`%u`), not a per-client attribute such as OS — so they cannot express "Linux clients may read only `os/linux`". Isolation therefore comes from the **client subscribing only to the group topics it belongs to** (§4.2): a Linux client subscribes to `os/linux/cmd`, not `os/windows/cmd`. This is safe because commands are server-signed (a client cannot forge or escalate them) and the hard write boundary is per-UID (a client can only publish to its own `resp`/`status`/`events`); a command delivered to the wrong OS is simply ignored by that client. Tighter isolation would require a dynamic ACL (Mosquitto C/security plugin), which is ruled out by the no-build-in-production constraint.
+
+The server-side worker authenticates under a dedicated username (not a client UID) and is granted unrestricted access to `luminum/{SID}/#` via the `user` rule above. Because the client rules are static patterns rather than per-client entries, the ACL file does not grow with the client count and requires no dynamic callback or plugin.
 
 ### 4.4 QoS and delivery semantics
 
@@ -239,7 +282,7 @@ Both implementations MUST include a shared test vector (a fixed envelope with it
 | Direction | lumy | action | `data` fields | Description |
 |---|---|---|---|---|
 | c→s (bootstrap) | core | `register` | `hostname`, `fingerprint`, `pubkey` (base64 SPKI/DER), `osplat`, `osrel`, `clientver`, `ipv4`, `ipv6` (opt), `serverkey` | First-time registration. Only valid with `uid` = `"0"`. |
-| s→c (bootstrap) | core | `register` | `uid`, `mqtthost`, `mqttport`, `mqttsecret`, `serverpubkey` (base64 SPKI/DER) | Registration response. Only valid over the bootstrap channel. |
+| s→c (bootstrap) | core | `register` | `uid`, `sid`, `mqtthost`, `mqttport`, `mqttsecret`, `serverpubkey` (base64 SPKI/DER) | Registration response. Only valid over the bootstrap channel. `sid` is the Luminum Server ID used to build MQTT topics (§4.2). |
 | c→s | core | `checkin` | `hostname`, `osplat`, `osrel`, `clientver`, `ipv4` (opt), `ipv6` (opt) | Periodic liveness + state refresh. Interval = `CHECKININT`. |
 | c→s | core | `unregister` | — | Client-initiated deactivation request (sanctioned uninstall flow). |
 | s→c | core | `query` | `qid`, `sensors` (array of `{sid, params}`) | Run named sensors, return results. |
@@ -415,13 +458,13 @@ Client (config DB):
 1. **Signature algorithm** — Ed25519; Perl: `Crypt::Perl::Ed25519` v0.38 (installed, verified); Rust: `ed25519-dalek` (§3.4).
 2. **MQTT broker** — Mosquitto, running as its own service (§1, §4.1, §4.3).
 3. **Bootstrap trust anchor** — TLS-bound Ed25519 signing certificate (§7.1).
-4. **MQTT version** — 5.0, using Message Expiry for command TTL (§4.1).
+4. **MQTT version** — 3.1.1 (minimal install). No Message Expiry Interval; command TTL is enforced by the server-side timeout (§9.3) and client deduplication (§9.2) (§4.1).
 5. **Data channel ports** — 10465 (server listener, client→server data + registration) and 10704 (client listener, server→client data) (§2, §8.3).
 6. **Wire encoding** — JSON everywhere; MessagePack dropped (§5.4).
 7. **Lumy IPC identity** — `src` enum extended with `"lumy"`; same envelope, signed with the client key (§8.2).
+8. **Mosquitto auth + ACL mechanism** — built-in `password_file` (PBKDF2-SHA512, kept in sync with `CLIENTS.AUTH` and reloaded via `SIGHUP`) for login, and static `pattern` rules with `%u` substitution in an `acl_file` for access control. No C plugin or dynamic callback (§4.1, §4.3).
 
 ### Still open / to verify
-- **Mosquitto auth + ACL mechanism** — password file / C plugin / external callback, and static ACL patterns vs. dynamic ACL, on the deployed version (§4.1, §4.3). Verify.
 - **`CHECKININT` vs. keepalive** — keepalive 60 s, check-in 5 min; confirm the Mosquitto session timeout is not shorter than the check-in interval plus margin (§4.1, §9.3).
 
 ---
