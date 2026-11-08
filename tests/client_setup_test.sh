@@ -47,10 +47,16 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 30 \
     -keyout "$CERTDIR/key.pem" -out "$CERTDIR/cert.pem" \
     -subj "/CN=setup.test" 2>/dev/null
 CERT="$CERTDIR/cert.pem"
+# Self-signed Ed25519 signing certificate (the wizard copies it
+# verbatim; chain/self-signature validation happens at registration).
+openssl req -x509 -newkey ed25519 -nodes -days 30 \
+    -keyout "$CERTDIR/signing.key" -out "$CERTDIR/signing.crt" \
+    -subj "/CN=setup.test" 2>/dev/null
+SIGNING="$CERTDIR/signing.crt"
 
 # --- Phase 1: wizard happy path ----------------------------------------------
 mkdir -p "$LUMINUM_HOME/config"
-printf 'setup.test\n\nsvrkey123\n%s\n' "$CERT" | "$CLIENT" -s \
+printf 'setup.test\n\nsvrkey123\n%s\n%s\n' "$CERT" "$SIGNING" | "$CLIENT" -s \
     > "$LUMINUM_HOME/wizard.log" 2>&1
 rc=$?
 check "wizard: exits 0" $([ "$rc" -eq 0 ]; echo $?) "rc=$rc"
@@ -66,6 +72,8 @@ check "wizard: FPNT is 64 lowercase hex" \
         && [ ${#FPNT} -eq 64 ]; echo $?) "fpnt=$FPNT"
 check "wizard: server.crt copied into config" \
     $([ -f "$LUMINUM_HOME/config/server.crt" ] && cmp -s "$CERT" "$LUMINUM_HOME/config/server.crt"; echo $?)
+check "wizard: server-signing.crt copied into config" \
+    $([ -f "$LUMINUM_HOME/config/server-signing.crt" ] && cmp -s "$SIGNING" "$LUMINUM_HOME/config/server-signing.crt"; echo $?)
 MODE=$(stat -c %a "$LUMINUM_HOME/config/client.conf.db" 2>/dev/null)
 check "wizard: config DB mode is 0600" $([ "$MODE" = "600" ]; echo $?) "mode=$MODE"
 
