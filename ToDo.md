@@ -218,7 +218,7 @@ TBD
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9654; |*In Progress*  |Network Listener            |The actual process that opens on a secure network interface to listen for connections   |
 |&#9654; |*In Progress*  |Message Handling            |Routines that parse messages from the server and/or endpoints                           |
-| --     |Not Started    |Client Certificate          |Attach a requirement for client certificats to the listener process                     |
+|&#9654; |*In Progress*  |Client Certificate          |Attach a requirement for client certificats to the listener process                     |
 |&#9654; |*In Progress*  |Lumy Scanning               |Include Lumys based on enabled/disabled state in configuration and file include presence|
 |&#9654; |*In Progress*  |Client Onboarding           |Processing for newly-added clients on first report to the server                        |
 |&#9654; |*In Progress*  |Client Deactivation         |Processing the removal of clients from the server                                       |
@@ -506,9 +506,12 @@ TBD
 |&#9654; |*In Progress*  |General Settings            |User interface for administrators to view/modify general Luminum settings               |
 |&#9654; |*In Progress*  |Endpoint Settings           |User interface for administrators to view/modify endpoint settings                      |
 |&#9654; |*In Progress*  |Content Settings            |User interface for administrators to view/modify content settings                       |
+| --     |Not Started    |Server Settings            |User interface for administrators to view/modify Luminum Server settings                 |
 | --     |Not Started    |Log Settings                |User interface for administrators to configure system logging                           |
 | --     |Not Started    |SMTP Settings               |User interface for administrators to configure SMTP servers and settings                |
 | --     |Not Started    |Encryption Settings         |User interface for administrators to configure encryption settings                      |
+| --     |Not Started    |API Settings                |User interface for administrators to configure Luminum API settings                     |
+| --     |Not Started    |Export Settings             |User interface for administrators to export Luminum configuration settings              |
 |&#10003;|**Completed**  |User Login Settings         |User interface for administrators to view/modify user login settings                    |
 |&#10003;|**Completed**  |Networking Settings         |User interface for administrators to view/modify server network settings                |
 |&#10003;|**Completed**  |Connectivity Status         |Display user interface elements to reflect network connectivity status                  |
