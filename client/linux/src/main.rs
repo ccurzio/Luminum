@@ -55,6 +55,9 @@ const IPORT: u16 = 10704;
 const DPORT: u16 = 10465;
 const LPORT: u16 = 10461;
 const CHECKIN_SECS: u64 = 300;
+// This client's OS platform (protocol §4.2 / §6.1). Used both in the check-in
+// payload (osplat) and to build the OS group topic luminum/{SID}/os/{os}/cmd.
+const OSPLAT: &str = "Linux";
 
 // Install root; overridable via LUMINUM_HOME for testing.
 fn base_path() -> String {
@@ -480,6 +483,13 @@ fn register_with_server(debug: bool, ccfg: &HashMap<String, String>) {
 				} else {
 					dbout(debug, 1, "Registration response did not include an MQTT port.");
 				}
+				// Luminum Server ID (protocol §4.2): required to build the
+				// MQTT topic tree luminum/{SID}/{UID}/... .
+				if let Some(sid) = data.and_then(|d| d.get("sid")).and_then(|v| v.as_str()) {
+					config_set("SID", sid);
+				} else {
+					dbout(debug, 1, "Registration response did not include a server ID (SID).");
+				}
 			} else {
 				dbout(debug, 1, &format!("Registration failed: {} {}", response.status, response.err.unwrap_or_default()));
 			}
@@ -488,32 +498,171 @@ fn register_with_server(debug: bool, ccfg: &HashMap<String, String>) {
 	}
 }
 
-fn checkin(debug: bool) {
-	let ccfg = parse_clientconfig(debug);
-	if let Some(uid) = ccfg.get("UID") {
-		let endpointname = gethostname().to_string_lossy().into_owned();
-		let ip_address = local_ip().map(|a| a.to_string()).unwrap_or_default();
+// ---------------------------------------------------------------------------
+// MQTT control channel (protocol §4)
+// ---------------------------------------------------------------------------
 
-		let data = serde_json::json!({
-			"hostname": endpointname,
-			"osplat": "Linux",
-			"osrel": get_os_release(),
-			"clientver": VER,
-			"ipv4": ip_address
-		});
-		let mut msg = new_envelope("client", uid, "core", "checkin", "OK", Some(data));
-		let (seed, _) = client_keypair(debug, &ccfg);
-		sign_envelope(&mut msg, &seed);
-		let server_host = ccfg.get("SHOST").unwrap();
-		let server_port = ccfg.get("SPORT").unwrap();
-		dbout(debug, 4, "Sending check-in to Luminum server");
-		match server_send(server_host, server_port, &crt_path(), &msg, debug) {
-			Ok(response) => match server_pubkey(&ccfg) {
-				Some(srvpub) if verify_envelope(&response, &srvpub) => dbout(debug, 4, "Check-in acknowledged"),
-				Some(_) => dbout(debug, 1, "MSG_AUTH_FAIL: check-in response signature verification failed."),
-				None => dbout(debug, 2, "No server signing public key on file; check-in response not verified."),
-			},
-			Err(err) => dbout(debug, 2, &format!("Check-in failed: {}", err)),
+// Check-in interval (seconds); overridable via LUMINUM_CHECKIN_SECS for
+// testing. Protocol §4.4: status check-ins are QoS 0, retained.
+fn checkin_secs() -> u64 {
+	std::env::var("LUMINUM_CHECKIN_SECS").ok().and_then(|v| v.parse().ok()).unwrap_or(CHECKIN_SECS)
+}
+
+// Build and sign a check-in envelope (protocol §6.1: action=checkin,
+// status=OK) and return its JSON wire bytes.
+fn build_checkin(uid: &str, seed: &[u8; 32]) -> Vec<u8> {
+	let endpointname = gethostname().to_string_lossy().into_owned();
+	let ip_address = local_ip().map(|a| a.to_string()).unwrap_or_default();
+	let data = serde_json::json!({
+		"hostname": endpointname,
+		"osplat": OSPLAT,
+		"osrel": get_os_release(),
+		"clientver": VER,
+		"ipv4": ip_address
+	});
+	let mut msg = new_envelope("client", uid, "core", "checkin", "OK", Some(data));
+	sign_envelope(&mut msg, seed);
+	serde_json::to_vec(&msg).expect("Error: unable to serialize check-in envelope")
+}
+
+// The client's long-lived MQTT control channel (protocol §4): connects to the
+// broker over TLS with username/password auth, a persistent session, and a
+// pre-signed offline LWT; subscribes to its command topic; publishes periodic
+// check-ins on the status topic; and processes incoming commands. Reconnects
+// automatically on failure (poll() re-establishes the connection).
+async fn mqtt_run(debug: bool, ccfg: HashMap<String, String>) {
+	use rumqttc::{AsyncClient, ConnectionError, Event, LastWill, MqttOptions, Packet, QoS, Transport};
+	use std::collections::VecDeque;
+
+	// MQTT connection parameters (protocol §4.1). A missing value means the
+	// control channel cannot start; the client keeps running (IPC, Lumys).
+	let uid = match ccfg.get("UID") { Some(v) => v.clone(), None => return };
+	let sid = match ccfg.get("SID") { Some(v) => v.clone(), None => { dbout(debug, 1, "No server ID (SID) on file; MQTT control channel unavailable."); return; } };
+	let secret = match ccfg.get("MQTTSECRET") { Some(v) => v.clone(), None => { dbout(debug, 1, "No MQTT secret on file; MQTT control channel unavailable."); return; } };
+	let host = match ccfg.get("MQTTHOST") { Some(v) => v.clone(), None => { dbout(debug, 1, "No MQTT host on file; MQTT control channel unavailable."); return; } };
+	let port: u16 = match ccfg.get("MQTTPORT").and_then(|p| p.parse().ok()) { Some(p) => p, None => { dbout(debug, 1, "No valid MQTT port on file; MQTT control channel unavailable."); return; } };
+
+	let (seed, _clpub) = client_keypair(debug, &ccfg);
+	let srvpub = server_pubkey(&ccfg);
+
+	// Topic tree (protocol §4.2). The client subscribes to its own command
+	// topic plus the group command topics it belongs to: all endpoints, its OS,
+	// and any custom groups (GROUPS = comma-separated names, set by the server
+	// via a setgroups command). Groups carry commands only (server -> client);
+	// responses/check-ins always go to the per-UID topics below.
+	let status_topic = format!("luminum/{}/{}/status", sid, uid);
+	let resp_topic = format!("luminum/{}/{}/resp", sid, uid);
+	let mut cmd_topics: Vec<String> = vec![
+		format!("luminum/{}/{}/cmd", sid, uid),
+		format!("luminum/{}/all/cmd", sid),
+		format!("luminum/{}/os/{}/cmd", sid, OSPLAT.to_lowercase()),
+	];
+	if let Some(groups) = ccfg.get("GROUPS") {
+		for g in groups.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
+			cmd_topics.push(format!("luminum/{}/grp/{}/cmd", sid, g));
+		}
+	}
+
+	// LWT: a pre-signed offline envelope (protocol §7.5), retained, QoS 1.
+	// Re-sent in the CONNECT packet on every (re)connect.
+	let mut offline = new_envelope("client", &uid, "core", "checkin", "offline", None);
+	sign_envelope(&mut offline, &seed);
+	let offline_payload = serde_json::to_vec(&offline).expect("Error: unable to serialize LWT envelope");
+	let will = LastWill::new(&status_topic, offline_payload, QoS::AtLeastOnce, true);
+
+	// TLS trust anchor: the server certificate (config/server.crt).
+	let ca = match fs::read(crt_path()) {
+		Ok(c) => c,
+		Err(_) => { dbout(debug, 1, "Server certificate not found (config/server.crt); MQTT control channel unavailable."); return; }
+	};
+
+	let mut mopts = MqttOptions::new(&uid, &host, port);
+	mopts.set_transport(Transport::tls(ca, None, None));
+	mopts.set_credentials(&uid, &secret);
+	mopts.set_clean_session(false);
+	mopts.set_keep_alive(Duration::from_secs(60));
+	mopts.set_max_packet_size(65536, 65536);
+	mopts.set_last_will(will);
+
+	let (client, mut eventloop) = AsyncClient::new(mopts, 100);
+
+	// Shared connection state for the check-in subtask.
+	let connected = Arc::new(AtomicBool::new(false));
+
+	// Periodic check-ins (protocol §4.4). Gated on connection state so no
+	// check-ins accumulate in the request channel while offline.
+	let checkin_client = client.clone();
+	let checkin_seed = seed;
+	let checkin_uid = uid.clone();
+	let checkin_topic = status_topic.clone();
+	let checkin_flag = connected.clone();
+	spawn(async move {
+		let mut interval = time::interval(Duration::from_secs(checkin_secs()));
+		loop {
+			interval.tick().await;
+			if !checkin_flag.load(Ordering::SeqCst) { continue; }
+			let payload = build_checkin(&checkin_uid, &checkin_seed);
+			let _ = checkin_client.publish(checkin_topic.clone(), QoS::AtMostOnce, true, payload).await;
+		}
+	});
+
+	// Command deduplication (protocol §9.2): bounded ring of recent message ids.
+	let mut seen: VecDeque<String> = VecDeque::with_capacity(1024);
+
+	dbout(debug, 3, &format!("MQTT control channel starting ({}:{}, UID {})", host, port, uid));
+	loop {
+		match eventloop.poll().await {
+			Ok(Event::Incoming(Packet::ConnAck(_))) => {
+				connected.store(true, Ordering::SeqCst);
+				dbout(debug, 3, &format!("MQTT connected; subscribing to {} command topic(s)", cmd_topics.len()));
+				for topic in &cmd_topics {
+					if let Err(err) = client.subscribe(topic, QoS::AtLeastOnce).await {
+						dbout(debug, 1, &format!("MQTT subscribe failed ({}): {}", topic, err));
+					}
+				}
+				// Immediate check-in on (re)connect: lets the server see us
+				// promptly and overwrites any stale retained offline status.
+				let payload = build_checkin(&uid, &seed);
+				let _ = client.publish(&status_topic, QoS::AtMostOnce, true, payload).await;
+			}
+			Ok(Event::Incoming(Packet::Publish(p))) => {
+				if !cmd_topics.contains(&p.topic) { continue; }
+				let Ok(text) = std::str::from_utf8(&p.payload) else { continue };
+				let Ok(env) = serde_json::from_str::<Envelope>(text) else { continue };
+				// Verify the server's signature (protocol §3.3).
+				let Some(srvpub) = &srvpub else {
+					dbout(debug, 1, "No server signing key on file; cannot verify command.");
+					continue;
+				};
+				if !verify_envelope(&env, srvpub) {
+					dbout(debug, 1, "MSG_AUTH_FAIL: command signature verification failed.");
+					continue;
+				}
+				// Deduplicate by message id (protocol §9.2).
+				if seen.contains(&env.id) { continue; }
+				seen.push_back(env.id.clone());
+				while seen.len() > 1024 { seen.pop_front(); }
+				dbout(debug, 3, &format!("MQTT command received: lumy={} action={}", env.lumy, env.action));
+				// Increment 1: acknowledge receipt on the resp topic. Action
+				// handling (query/deploy/config) is a follow-on.
+				let mut resp = new_envelope("client", &uid, &env.lumy, &env.action, "OK", None);
+				sign_envelope(&mut resp, &seed);
+				let payload = serde_json::to_vec(&resp).expect("Error: unable to serialize response");
+				if let Err(err) = client.publish(&resp_topic, QoS::AtLeastOnce, false, payload).await {
+					dbout(debug, 1, &format!("MQTT response publish failed: {}", err));
+				}
+			}
+			Ok(_) => {}
+			Err(ConnectionError::ConnectionRefused(code)) => {
+				connected.store(false, Ordering::SeqCst);
+				dbout(debug, 1, &format!("MQTT connection refused (code {:?}); check credentials.", code));
+				time::sleep(Duration::from_secs(30)).await;
+			}
+			Err(err) => {
+				connected.store(false, Ordering::SeqCst);
+				dbout(debug, 2, &format!("MQTT connection error: {} (reconnecting)", err));
+				time::sleep(Duration::from_secs(5)).await;
+			}
 		}
 	}
 }
@@ -900,15 +1049,14 @@ async fn main() {
 		dbout(debug, 3, &format!("Endpoint is registered with UID {}", ccfg.get("UID").unwrap()));
 	}
 
-	// Periodic check-ins
-	let dbg = debug;
-	spawn(async move {
-		let mut interval = time::interval(Duration::from_secs(CHECKIN_SECS));
-		loop {
-			interval.tick().await;
-			checkin(dbg);
-		}
-	});
+	// Re-read the configuration: registration (above) writes UID/SID/MQTT* to
+	// the config DB, which the in-memory snapshot does not reflect.
+	let ccfg = parse_clientconfig(debug);
+
+	// MQTT control channel (protocol §4): persistent session, LWT, periodic
+	// check-ins, and command handling. Returns immediately (no-op) when the
+	// client is not yet registered or lacks MQTT parameters.
+	spawn(mqtt_run(debug, ccfg));
 
 	// Local IPC listener (Lumy channel)
 	let ipc_addr: SocketAddr = format!("127.0.0.1:{}", LPORT).parse().expect("Invalid IPC socket address");
