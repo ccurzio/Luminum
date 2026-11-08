@@ -75,7 +75,10 @@ my $log = "";
 sub do_ssl {
     my ($shost, $ssldir, $spec) = @_;
     $log = "";
-    return Luminum::Setup::prepare_ssl($shost, $ssldir, $spec, sub { $log .= $_[0] . "\n" });
+    my @r = Luminum::Setup::prepare_ssl($shost, $ssldir, $spec, sub { $log .= $_[0] . "\n" });
+    # Success: (1, $cert, $key, $pub, $signseed, $signpub)
+    # Failure: (0, undef x 5, $err) - normalize to the 5-elem legacy form.
+    return $r[0] ? @r : (0, undef, undef, undef, $r[-1]);
 }
 
 # --- generate / new ---------------------------------------------------------
@@ -94,6 +97,24 @@ check("generate/new: cert covers host (CN + SAN)",
 check("generate/new: key is unencrypted", $rc == 0, $out);
 ($rc, $out) = run_openssl("openssl x509 -in $cert -noout -checkend 0");
 check("generate/new: cert is not expired", $rc == 0, $out);
+
+# --- generate / new: Ed25519 signing certificate ----------------------------
+my $signkey  = "$tmp/d1/server-signing.key";
+my $signcert = "$tmp/d1/server-signing.crt";
+check("generate/new: signing key + cert exist", -f $signkey && -f $signcert);
+my $smode = ((stat($signkey))[2]) & 07777;
+check("generate/new: signing key is 0600", defined $smode && $smode == 0600, sprintf "%04o", $smode // 0);
+($rc, $out) = run_openssl("openssl x509 -in $signcert -noout -text");
+check("generate/new: signing cert is Ed25519",
+    $rc == 0 && $out =~ /ED25519/, $out);
+check("generate/new: signing cert covers host",
+    $rc == 0 && $out =~ /ssl\.test/, $out);
+($rc, $out) = run_openssl("openssl verify -CAfile $cert $signcert");
+check("generate/new: signing cert chains to TLS cert",
+    $rc == 0 && $out =~ /: OK/, $out);
+($rc, $out) = run_openssl("openssl x509 -in $cert -noout -text");
+check("generate/new: TLS cert is a CA (issues signing cert)",
+    $rc == 0 && $out =~ /CA:TRUE/, $out);
 
 # --- generate / new with IP host -> IP SAN ----------------------------------
 ($ok, $cert, $key, $pub, $err) = do_ssl("192.168.1.5", "$tmp/d2",
@@ -146,6 +167,22 @@ check("import: key is 0600", defined $mode2 && $mode2 == 0600, sprintf "%04o", $
 (my $c1 = $p1) =~ s/\s+//g;
 (my $c2 = $p2) =~ s/\s+//g;
 check("import: pub matches cert", $c1 ne "" && $c1 eq $c2);
+
+# --- import: self-signed Ed25519 signing certificate ------------------------
+# The operator's CA key is unavailable in import mode, so the signing
+# certificate is self-signed and travels to clients as a standalone anchor.
+$signkey  = "$tmp/d5/server-signing.key";
+$signcert = "$tmp/d5/server-signing.crt";
+check("import: signing key + cert exist", -f $signkey && -f $signcert);
+($rc, $out) = run_openssl("openssl x509 -in $signcert -noout -text");
+check("import: signing cert is Ed25519",
+    $rc == 0 && $out =~ /ED25519/, $out);
+($rc, $out) = run_openssl("openssl x509 -in $signcert -noout -issuer -subject");
+check("import: signing cert is self-signed (issuer == subject)",
+    $rc == 0 && $out =~ /issuer=(.*)\n/ && $out =~ /subject=$1/, $out);
+($rc, $out) = run_openssl("openssl verify -check_ss_sig -CAfile $signcert $signcert");
+check("import: signing cert self-signature verifies",
+    $rc == 0 && $out =~ /: OK/, $out);
 
 ($ok, $cert, $key, $pub, $err) = do_ssl("ssl.test", "$tmp/d6",
     { mode => "import",
