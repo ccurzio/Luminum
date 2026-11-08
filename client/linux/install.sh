@@ -16,7 +16,8 @@
 #   <root>/.luminum-installer      marker: installed by this script
 #   <root>/bin/start-client        start/stop scripts (non-systemd hosts)
 #   <root>/bin/stop-client
-#   <root>/config/                 client.conf.db, server.crt (wizard)
+#   <root>/config/                 client.conf.db, server.crt,
+#                                  server-signing.crt (wizard)
 #   <root>/logs/                   client-stdout.log
 #   <root>/run/                    client.pid
 #   <root>/modules/<lumy>/         Lumy module binaries
