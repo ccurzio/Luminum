@@ -30,6 +30,7 @@ use Crypt::Perl::Ed25519::PrivateKey;
 use Crypt::Perl::Ed25519::PublicKey;
 use lib "$Bin/lib";
 use Luminum::Protocol;
+use Luminum::MQTT;
 
 our $debug = 0;
 our $writelog = 1;
@@ -45,6 +46,13 @@ my $MADDR;
 my $MPORT = 8883;
 my $CMDTIMEOUT = 120;
 my $DEPLTIMEOUT = 3600;
+my $MQTTUSER;
+my $MQTTPASS;
+my $MQTTPASSWD;
+my $MQTTACL;
+my $MQTTPIDFILE;
+my $MQTTCA;
+my $workerpid;
 my $sslcert;
 my $sslprvkey;
 my $sslpubkey;
@@ -92,6 +100,7 @@ if ($writelog == 0) { Broker::debugout(2,"Writing broker logs to disk has been d
 startserver();
 startweb();
 setuplistener();
+startmqtt();
 
 Broker::debugout(1,"Server startup complete.");
 Broker::debugout(0,"- Web Console: https://$SHOST");
@@ -279,6 +288,45 @@ sub stoplistener {
 		}
 	}
 
+# Start MQTT Worker (protocol 4, 9)
+#
+# Forks a child that runs Luminum::MQTT::worker, isolated from the blocking
+# bootstrap listener loop. Before forking, the parent ensures the server user
+# is in the mosquitto password_file and the ACL file reflects the known OS
+# values and group names, then reloads the broker so the changes take effect.
+# The worker persists across SIGHUP (this is only called at initial startup,
+# not from catchhup).
+#
+sub startmqtt {
+	if (!$MQTTPASS || $MQTTPASS eq "") {
+		$MQTTPASS = encode_base64(randombytes(24), "");
+		setconfig("MQTTPASS", $MQTTPASS);
+		Broker::debugout(0,"Generated server MQTT password.");
+	}
+	unless (Luminum::MQTT::passwd_add($MQTTPASSWD, $MQTTUSER, $MQTTPASS)) {
+		Broker::debugout(2,"Unable to write the server user to the MQTT password_file: $MQTTPASSWD");
+	}
+	my $dbh = dbconnect("CLIENTS");
+	eval { Luminum::MQTT::regen_acl($dbh, sid => $SID, server_user => $MQTTUSER, acl_file => $MQTTACL, pid_file => $MQTTPIDFILE); };
+	if ($@) { Broker::debugout(2,"Unable to regenerate the MQTT ACL file: $@"); }
+	$dbh->disconnect();
+	Luminum::MQTT::reload($MQTTPIDFILE);
+	my $pid = fork();
+	if (!defined $pid) { Broker::debugout(3,"Failed to fork the MQTT worker: $!"); return; }
+	if ($pid == 0) {
+		Luminum::MQTT::worker(
+			sid => $SID, host => $MADDR, port => $MPORT, ca => $MQTTCA,
+			user => $MQTTUSER, secret => $MQTTPASS, seed => $srvseed,
+			dbname => "CLIENTS", dbuser => $dbuser, dbpass => $dbpass, dbsock => $dbsock, dbhost => $dbhost,
+			poll_secs => 1,
+			log => sub { Broker::debugout(0, "[mqtt] $_[0]"); },
+			);
+		exit 0;
+	}
+	$workerpid = $pid;
+	Broker::debugout(1,"MQTT worker started (PID $pid).");
+}
+
 # Read Broker Configuration
 #
 sub getbrokerconf {
@@ -332,6 +380,12 @@ sub readconfig {
 			elsif ($row[0] eq "MPORT") { $MPORT = $row[1]; }
 			elsif ($row[0] eq "CMDTIMEOUT") { $CMDTIMEOUT = $row[1]; }
 			elsif ($row[0] eq "DEPLTIMEOUT") { $DEPLTIMEOUT = $row[1]; }
+			elsif ($row[0] eq "MQTTUSER") { $MQTTUSER = $row[1]; }
+			elsif ($row[0] eq "MQTTPASS") { $MQTTPASS = $row[1]; }
+			elsif ($row[0] eq "MQTTPASSWD") { $MQTTPASSWD = $row[1]; }
+			elsif ($row[0] eq "MQTTACL") { $MQTTACL = $row[1]; }
+			elsif ($row[0] eq "MQTTPIDFILE") { $MQTTPIDFILE = $row[1]; }
+			elsif ($row[0] eq "MQTTCA") { $MQTTCA = $row[1]; }
 			elsif ($row[0] eq "SSLCERT") { $sslcert = $row[1]; }
 			elsif ($row[0] eq "SSLPRVKEY") { $sslprvkey = $row[1]; }
 			elsif ($row[0] eq "SSLPUBKEY") { $sslpubkey = $row[1]; }
@@ -379,6 +433,16 @@ sub readconfig {
 	if (!$MPORT || $MPORT !~ /^([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$/) { $MPORT = 8883; }
 	if (!$CMDTIMEOUT || $CMDTIMEOUT !~ /^[0-9]+$/) { $CMDTIMEOUT = 120; }
 	if (!$DEPLTIMEOUT || $DEPLTIMEOUT !~ /^[0-9]+$/) { $DEPLTIMEOUT = 3600; }
+	# MQTT broker integration (protocol 4, 9). The worker connects to the
+	# Mosquitto broker as $MQTTUSER and maintains the password_file and ACL
+	# file that Mosquitto is configured to use, reloading it (SIGHUP) after
+	# changes. Paths default under the install's config dir; set the MQTT*
+	# keys in SYSTEM.CONFIG to point at a different Mosquitto layout.
+	if (!$MQTTUSER || $MQTTUSER eq "") { $MQTTUSER = "luminum-server"; }
+	if (!$MQTTCA || $MQTTCA eq "") { $MQTTCA = $sslcert; }
+	if (!$MQTTPASSWD || $MQTTPASSWD eq "") { $MQTTPASSWD = "$mgrpath/config/mosquitto/passwd"; }
+	if (!$MQTTACL || $MQTTACL eq "") { $MQTTACL = "$mgrpath/config/mosquitto/acl"; }
+	if (!$MQTTPIDFILE || $MQTTPIDFILE eq "") { $MQTTPIDFILE = "$mgrpath/config/mosquitto/mosquitto.pid"; }
 	if (!$sslprvkey || $sslprvkey eq "") {
 		Broker::debugout(3,"Server private key file is not configured! (Run with --setup)");
 		$suerror = 1;
@@ -422,7 +486,7 @@ sub readconfig {
 	Broker::debugout(0,"- SSL Certificate: $sslcert");
 	Broker::debugout(0,"- SSL Private Key File: $sslprvkey");
 	Broker::debugout(0,"- SSL Public Key File: $sslpubkey");
-	Broker::debugout(0,"- MQTT Listener: $MADDR:$MPORT (not yet in service)");
+	Broker::debugout(0,"- MQTT Listener: $MADDR:$MPORT");
 	}
 
 # Load (or generate on first run) the server Ed25519 signing keypair
@@ -930,6 +994,11 @@ sub newreg {
 	while (my @regdata = $sth->fetchrow()) { $EPID = $regdata[0]; }
 	$sth = $dbh->prepare("insert into STATUS (ID,HOSTNAME,IPV4,OSPLATFORM,OSRELEASE,CLIENTVER,CSTATE,REGDATE,LASTSEEN) values ($EPID,'$EPNAME','$ipv4','$osplat','$osrel','$clientver','OK',now(),now())");
 	$sth->execute();
+	# MQTT: add the client's secret to the password_file and reload the broker
+	# (protocol 7.1). A new OS value may have appeared, so regenerate the ACL.
+	Luminum::MQTT::on_register($EPID, $secret, passwd_file => $MQTTPASSWD, pid_file => $MQTTPIDFILE);
+	eval { Luminum::MQTT::regen_acl($dbh, sid => $SID, server_user => $MQTTUSER, acl_file => $MQTTACL, pid_file => $MQTTPIDFILE); };
+	if ($@) { Broker::debugout(2,"Unable to regenerate the MQTT ACL file: $@"); }
 	Broker::debugout(0,"Registered Client ID $EPID\: $EPNAME ($EPADDR)");
 
 	sendresponse($cs,$env,"OK",undef,{
@@ -959,6 +1028,9 @@ sub dereg {
 		my $dbh = dbconnect("CLIENTS");
 		my $sth = $dbh->prepare("update STATUS set CSTATE = 'DEACT' where ID = $EPID");
 		$sth->execute();
+		# MQTT: remove the client's secret from the password_file and reload
+		# the broker so it can no longer authenticate (protocol 3.1).
+		Luminum::MQTT::on_deactivate($EPID, passwd_file => $MQTTPASSWD, pid_file => $MQTTPIDFILE);
 		Broker::debugout(1,"Deactivated client ID $EPID on $EPADDR");
 		sendresponse($cs,$env,"OK",undef,undef);
 		}
@@ -1033,6 +1105,7 @@ sub catchbreak {
 	if ($broken == 0) {
 		Broker::debugout (2,"Caught SIGINT! Shutting down...");
 		$broken = 1;
+		if ($workerpid) { kill("TERM", $workerpid); }
 		stopweb();
 		stoplistener();
 		stopserver();
