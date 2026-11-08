@@ -5,7 +5,10 @@
 	print "<h1>Lumy Management</h1>\n\n";
 	}
 else {
-	if ($_GET['view'] == "summary") {
+	if ($_GET['view'] == "query") {
+		include ("modules/query.php");
+		}
+	else if ($_GET['view'] == "summary") {
 		print "<div class=\"content\">\n";
 		print "<h1>Luminum Summary</h1>\n\n";
 		}
