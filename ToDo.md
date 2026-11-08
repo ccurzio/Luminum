@@ -743,9 +743,9 @@ TBD
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9654; |*In Progress*  |Main Client Process         |The primary client application process                                                  |
-| --     |Not Started    |Computer ID                 |Create a method to generate a reproduceable computer ID                                 |
-| --     |Not Started    |Parameter Functions         |Create functions to set client configuration parameters                                 |
-| --     |Not Started    |Config Save/Import          |Routines to save configuration and import an existing config on first setup             |
+|&#9654; |*In Progress*  |Computer ID                 |Create a method to generate a reproduceable computer ID                                 |
+|&#9654; |*In Progress*  |Parameter Functions         |Create functions to set client configuration parameters                                 |
+|&#9654; |*In Progress*  |Config Save/Import          |Routines to save configuration and import an existing config on first setup             |
 | --     |Not Started    |Service Management          |Routines to register the client as a service with the host operating system             |
 | --     |Not Started    |Tamper Protection           |Configure the operating system to secure the client against user access                 |
 | --     |Not Started    |Sanctioned Uninstall        |Routines to validate permission to uninstall the client against the server              |
