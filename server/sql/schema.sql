@@ -422,6 +422,33 @@ CREATE TABLE IF NOT EXISTS `STATUS` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
+-- Table structure for table `COMMANDS`
+--
+-- Outbox of server->client MQTT commands (protocol 4.2, 9). The broker's
+-- MQTT worker publishes each PENDING row to its target topic and marks it
+-- SENT; a matching client response marks it ACKED. TARGET is a numeric UID,
+-- "all", "os/{os}", or "grp/{name}". QID is the envelope message id (reused
+-- on retry so the client deduplicates a redelivered command).
+--
+
+CREATE TABLE IF NOT EXISTS `COMMANDS` (
+  `ID` int(20) NOT NULL AUTO_INCREMENT,
+  `SID` int(20) NOT NULL,
+  `TARGET` tinytext NOT NULL,
+  `LUMY` tinytext NOT NULL,
+  `ACTION` tinytext NOT NULL,
+  `DATA` text DEFAULT NULL,
+  `QID` char(36) NOT NULL,
+  `STATUS` tinytext NOT NULL DEFAULT 'PENDING',
+  `CREATED` datetime NOT NULL,
+  `SENT` datetime DEFAULT NULL,
+  `ACKED` datetime DEFAULT NULL,
+  `DEADLINE` datetime DEFAULT NULL,
+  PRIMARY KEY (`ID`),
+  KEY `IDX_COMMANDS_STATUS` (`STATUS`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
 -- Current Database: `LOGS`
 --
 
