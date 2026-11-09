@@ -7,6 +7,9 @@
 #   - receives a server-signed command on each group topic it subscribes to
 #     (own UID, all, os/linux, custom group), verifies the signature, and
 #     responds on its per-UID resp topic
+#   - applies a server-signed core/setgroups command: persists the new group
+#     list, answers commands on the newly-joined group topic, stops answering
+#     on a topic it left, and rejects an invalid group name (ERR)
 #   - does NOT respond to a command on a topic it did not subscribe to
 #   - publishes a signed offline LWT when killed
 #
@@ -171,6 +174,7 @@ pattern read  luminum/$SID/os/linux/cmd
 pattern read  luminum/$SID/os/windows/cmd
 pattern read  luminum/$SID/os/macos/cmd
 pattern read  luminum/$SID/grp/$GROUP/cmd
+pattern read  luminum/$SID/grp/newgrp/cmd
 # Server: unrestricted within the Luminum tree
 user $SERVER_USER
 topic readwrite luminum/$SID/#
@@ -265,21 +269,26 @@ if [ -n "$CHECKIN" ]; then
 fi
 
 # --- sign a server command and publish it to a topic --------------------------
-# $1 = action, $2 = topic. Signs with the server key (Luminum::Protocol) and
-# publishes as the server user.
+# $1 = action, $2 = topic, $3 = optional data (a JSON object). Signs with the
+# server key (Luminum::Protocol) and publishes as the server user.
 sign_and_pub() {
-    local action="$1" topic="$2" payload
+    local action="$1" topic="$2" data="${3:-}" payload
     payload=$(PERL5LIB="$PERL_LIBS" perl -e '
         use strict; use warnings;
         use JSON::PP;
         use Crypt::Perl::Ed25519::PrivateKey;
         use Luminum::Protocol;
-        my ($seedfile, $uid, $action) = @ARGV;
+        my ($seedfile, $uid, $action, $data) = @ARGV;
         open(my $sf, "<", $seedfile) or die "seed: $!"; binmode($sf); read($sf, my $seed, 32); close($sf);
         my $env = Luminum::Protocol::new_envelope(src=>"server", uid=>$uid, lumy=>"core", action=>$action, status=>"OK");
+        if (defined $data && length($data)) {
+            my $dh = eval { JSON::PP->new->utf8->decode($data) };
+            die "sign_and_pub: data is not a JSON object: $@" unless ref($dh) eq "HASH";
+            $env->{data} = $dh;
+        }
         Luminum::Protocol::sign_envelope($env, $seed);
         print JSON::PP->new->utf8->encode($env);
-    ' "$CERTDIR/srv.seed" "$UID_TEST" "$action") || return 1
+    ' "$CERTDIR/srv.seed" "$UID_TEST" "$action" "$data") || return 1
     mosquitto_pub -h 127.0.0.1 -p "$PORT" --cafile "$CERTDIR/ca.pem" \
         -u "$SERVER_USER" -P "$SERVER_SECRET" -t "$topic" -m "$payload"
 }
@@ -315,6 +324,41 @@ check "client verified + responded to a command on grp/$GROUP/cmd" "$?"
 sign_and_pub queryuid  "luminum/$SID/$UID_TEST/cmd"
 await_resp queryuid
 check "client verified + responded to a command on its own UID cmd topic" "$?"
+
+# --- setgroups: membership changes take effect on the endpoint ---------------
+# Pre-seeded GROUPS is "testgrp". setgroups replaces the whole list. The
+# client must: ack on resp, persist the list (config DB GROUPS), subscribe to
+# the new group topic (commands there are answered), and stop answering on a
+# topic it left. A payload with an invalid name is rejected with ERR and must
+# leave the stored list untouched.
+sign_and_pub setgrp1 "luminum/$SID/$UID_TEST/cmd" '{"groups":["testgrp","newgrp"]}'
+await_resp setgrp1
+check "client verified + responded to setgroups (join newgrp)" "$?"
+check "client persisted the new group list" $([ "$(cfgval GROUPS)" = "testgrp,newgrp" ]; echo $?) "GROUPS=$(cfgval GROUPS)"
+sign_and_pub querynewgrp "luminum/$SID/grp/newgrp/cmd"
+await_resp querynewgrp
+check "client answers commands on the newly-joined group topic" "$?"
+
+sign_and_pub setgrp2 "luminum/$SID/$UID_TEST/cmd" '{"groups":["newgrp"]}'
+await_resp setgrp2
+check "client verified + responded to setgroups (leave testgrp)" "$?"
+check "client persisted the reduced group list" $([ "$(cfgval GROUPS)" = "newgrp" ]; echo $?) "GROUPS=$(cfgval GROUPS)"
+sign_and_pub queryoldgrp "luminum/$SID/grp/$GROUP/cmd"
+sleep 3
+leftfail=0
+grep -q '"action":"queryoldgrp"' "$SCRATCH/resp.out" 2>/dev/null && leftfail=1
+check "client did NOT respond on a group topic it left (grp/$GROUP)" "$leftfail"
+
+sign_and_pub setbadgrp "luminum/$SID/$UID_TEST/cmd" '{"groups":["bad name!"]}'
+await_resp setbadgrp 2>/dev/null || true
+badresp=$(grep '"action":"setbadgrp"' "$SCRATCH/resp.out" 2>/dev/null | head -n 1)
+[ -n "$badresp" ] || badresp=$(sleep 2; grep '"action":"setbadgrp"' "$SCRATCH/resp.out" 2>/dev/null | head -n 1)
+badok=1
+if [ -n "$badresp" ]; then
+    verify_envelope "$badresp" setbadgrp ERR && badok=0
+fi
+check "client rejected an invalid setgroups payload (ERR response)" "$badok"
+check "invalid setgroups left the stored group list untouched" $([ "$(cfgval GROUPS)" = "newgrp" ]; echo $?) "GROUPS=$(cfgval GROUPS)"
 
 # --- negative: a topic the client did not subscribe to ------------------------
 sign_and_pub querywin "luminum/$SID/os/windows/cmd"

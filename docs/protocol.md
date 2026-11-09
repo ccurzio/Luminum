@@ -290,6 +290,7 @@ Both implementations MUST include a shared test vector (a fixed envelope with it
 | s→c | core | `deploy` | `aid`, `pkgid`, `ref` (§8.3), `profile` (opt) | Deploy a package. |
 | c→s | core | `report` | `event` (string), `detail` (object) | Unsolicited client report (e.g., deploy completion, local error). |
 | s→c | core | `config` | Lumy-specific key/value set | Push configuration to a Lumy (replaces the current IPC `newconfig`/`setconfig` round-trip as the server-side source of truth). |
+| s→c | core | `setgroups` | `groups` (array of names; the full replacement list, may be empty) | Update the endpoint's group membership (§4.2): the client re-subscribes its group `cmd` topics, persists the list, and responds `OK`; a name outside `[A-Za-z0-9_.-]` is rejected as a whole with `err: "INVALID_DATA"`. |
 
 ### 6.2 Lumy-defined actions
 

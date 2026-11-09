@@ -261,6 +261,13 @@ fn config_set(key: &str, value: &str) {
 	confconn.close().unwrap();
 }
 
+fn config_delete(key: &str) {
+	let confconn = Connection::open(cfg_path()).expect("Error: Could not open configuration database.");
+	confconn.execute("delete from CONFIG where KEY = ?1", params![key])
+		.expect("Error: Could not delete configuration value.");
+	confconn.close().unwrap();
+}
+
 // ---------------------------------------------------------------------------
 // Client keypair (protocol §3.1)
 // ---------------------------------------------------------------------------
@@ -643,9 +650,19 @@ async fn mqtt_run(debug: bool, ccfg: HashMap<String, String>) {
 				seen.push_back(env.id.clone());
 				while seen.len() > 1024 { seen.pop_front(); }
 				dbout(debug, 3, &format!("MQTT command received: lumy={} action={}", env.lumy, env.action));
-				// Increment 1: acknowledge receipt on the resp topic. Action
-				// handling (query/deploy/config) is a follow-on.
-				let mut resp = new_envelope("client", &uid, &env.lumy, &env.action, "OK", None);
+				// Apply the command (protocol 6). core/setgroups applies a
+				// group-membership change to this endpoint; the remaining
+				// actions (query/deploy/config) are follow-ons.
+				let cmd_err = if env.lumy == "core" && env.action == "setgroups" {
+					apply_setgroups(&client, &mut cmd_topics, &env, &sid, debug).await
+				} else {
+					None
+				};
+				// Acknowledge on the resp topic (the server's worker marks
+				// the matching outbox command ACKED).
+				let mut resp = new_envelope("client", &uid, &env.lumy, &env.action,
+					match &cmd_err { Some(_) => "ERR", None => "OK" }, None);
+				resp.err = cmd_err;
 				sign_envelope(&mut resp, &seed);
 				let payload = serde_json::to_vec(&resp).expect("Error: unable to serialize response");
 				if let Err(err) = client.publish(&resp_topic, QoS::AtLeastOnce, false, payload).await {
@@ -665,6 +682,71 @@ async fn mqtt_run(debug: bool, ccfg: HashMap<String, String>) {
 			}
 		}
 	}
+}
+
+// core/setgroups (protocol 4.2): the server pushes the endpoint's full
+// group-membership list. Applies it immediately (subscribes to newly-added
+// group command topics, unsubscribes from the ones left behind) and persists
+// it (GROUPS in the config DB) so the membership survives restarts. Returns
+// an error string for the response envelope, or None when applied.
+async fn apply_setgroups(
+	client: &rumqttc::AsyncClient,
+	cmd_topics: &mut Vec<String>,
+	env: &Envelope,
+	sid: &str,
+	debug: bool,
+) -> Option<String> {
+	// data.groups: array of strings, the full replacement list. Each name
+	// must match the charset the server's ACL generation uses
+	// (Luminum::MQTT::gen_acl); anything else is rejected as a whole.
+	let groups = match env.data.as_ref().and_then(|d| d.get("groups")).and_then(|v| v.as_array()) {
+		Some(list) => {
+			let mut out = Vec::new();
+			for g in list {
+				match g.as_str() {
+					Some(s) if !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-')) => {
+						if !out.iter().any(|x| x == s) { out.push(s.to_string()); }
+					}
+					_ => return Some(String::from("INVALID_DATA")),
+				}
+			}
+			out
+		}
+		None => return Some(String::from("INVALID_DATA")),
+	};
+
+	let old: Vec<String> = cmd_topics.iter().filter(|t| t.contains("/grp/")).cloned().collect();
+	let new: Vec<String> = groups.iter().map(|g| format!("luminum/{}/grp/{}/cmd", sid, g)).collect();
+
+	// Unsubscribe from the groups we no longer belong to; subscribe to the
+	// new ones. Subscribes happen before the receipt acknowledgment, so a
+	// response the server sees on the resp topic means the membership is
+	// already in effect (and in the config DB, below).
+	for t in &old {
+		if !new.contains(t) {
+			if let Err(err) = client.unsubscribe(t).await {
+				dbout(debug, 1, &format!("MQTT unsubscribe failed ({}): {}", t, err));
+			}
+		}
+	}
+	for t in &new {
+		if !old.contains(t) {
+			if let Err(err) = client.subscribe(t, rumqttc::QoS::AtLeastOnce).await {
+				dbout(debug, 1, &format!("MQTT subscribe failed ({}): {}", t, err));
+			}
+		}
+	}
+	cmd_topics.retain(|t| !t.contains("/grp/"));
+	cmd_topics.extend(new);
+
+	if groups.is_empty() {
+		config_delete("GROUPS");
+	} else {
+		config_set("GROUPS", &groups.join(","));
+	}
+	dbout(debug, 3, &format!("setgroups applied: {}",
+		if groups.is_empty() { String::from("(no groups)") } else { groups.join(",") }));
+	None
 }
 
 // ---------------------------------------------------------------------------
