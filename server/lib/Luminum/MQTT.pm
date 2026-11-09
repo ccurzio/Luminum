@@ -99,11 +99,14 @@ sub write_acl {
 	return 1;
 }
 
-# Add (or update) a user in the mosquitto password_file. $uid must be numeric.
-# Returns 1 on success, 0 on failure.
+# Add (or update) a user in the mosquitto password_file. $uid is the
+# mosquitto username: a client's numeric UID, or the server user (e.g.
+# "luminum-server"). Only an empty name, or one that would break the
+# password_file format (colon/newline), is rejected. Returns 1 on success,
+# 0 on failure.
 sub passwd_add {
 	my ($file, $uid, $secret) = @_;
-	return 0 unless defined $uid && $uid =~ /^[0-9]+$/ && defined $secret && length($secret);
+	return 0 unless defined $uid && length($uid) && $uid !~ /[:\n\r]/ && defined $secret && length($secret);
 	my $rc = system("mosquitto_passwd", "-b", $file, $uid, $secret);
 	return ($rc == 0) ? 1 : 0;
 }
