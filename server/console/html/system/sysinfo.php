@@ -92,11 +92,13 @@ else {
 					<table style="border: 0; margin-top: 25px;">
 						<?php
 						$dcnt = 0;
+						$allparts = array();
 						foreach ($disks as $diskval) {
 							$dcnt++;
 							//$dparts = array_filter(preg_split("/\r\n|\n|\r/",shell_exec("lsblk | /usr/bin/grep $diskval | grep part")));
 							$dcap = substr(shell_exec("lsblk -a -o name,size /dev/$diskval | /usr/bin/grep -E '$diskval\s+' | /usr/bin/sed -E 's/$diskval\s+//'"), 0, -1);
 							$dparts = array_filter(preg_split("/\r\n|\n|\r/",shell_exec("lsblk -a -o name,size,type,mountpoints /dev/$diskval --list | /usr/bin/grep -vE '(NAME|disk)' | /usr/bin/sed -E 's/part \[SWAP\]/swap/; s/\\s+/ /; s/(K|M|G|T)/\\1B/'")));
+							$allparts = array_merge($allparts, $dparts);
 							print "\t\t\t\t\t\t<tr><td colspan=\"2\" style=\"text-align: left; color: #444; background-color: transparent; border: 0;\"><u>	Disk $dcnt (/dev/$diskval)</u>:</td></tr>\n";
 							if (is_array($disksinfo)) { $hdinfo = explode(",",$disksinfo[$dcnt-1]); }
 							else { $hdinfo = explode(",",$disksinfo); }
@@ -119,7 +121,7 @@ else {
 						<div style="width: 100%; text-align: center; color: #777; font-size: 13px;"><b>Disk Usage</b></div>
 						<table style="border: 0; width: 400px; margin-top: 10px; margin-left: auto; margin-right: auto;">
 					<?php
-					foreach ($dparts as $part) {
+					foreach ($allparts as $part) {
 						$dpstats = array_filter(preg_split('/\s/',$part));
 						if (isset($dpstats[3]) && $dpstats[2] != "swap") {
 							$partused = trim((string) shell_exec("/usr/bin/df -h | /usr/bin/grep -m 1 '\/dev\/" . $dpstats[0] . "' | /usr/bin/awk '{print \$5}' | /usr/bin/sed 's/%//'"));
