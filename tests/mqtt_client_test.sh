@@ -225,7 +225,7 @@ SUB2_PID=$!
 sleep 1
 
 # --- start the client ---------------------------------------------------------
-LUMINUM_HOME="$HOME_TEST" LUMINUM_CHECKIN_SECS=2 "$CLIENT_BIN" > "$SCRATCH/client.log" 2>&1 &
+LUMINUM_HOME="$HOME_TEST" LUMINUM_CHECKIN_SECS=2 "$CLIENT_BIN" --debug > "$SCRATCH/client.log" 2>&1 &
 CLIENT_PID=$!
 sleep 1
 check "client process is alive after startup" "$(kill -0 "$CLIENT_PID" 2>/dev/null; echo $?)" "see $SCRATCH/client.log"
@@ -326,21 +326,35 @@ await_resp queryuid
 check "client verified + responded to a command on its own UID cmd topic" "$?"
 
 # --- setgroups: membership changes take effect on the endpoint ---------------
-# Pre-seeded GROUPS is "testgrp". setgroups replaces the whole list. The
-# client must: ack on resp, persist the list (config DB GROUPS), subscribe to
-# the new group topic (commands there are answered), and stop answering on a
-# topic it left. A payload with an invalid name is rejected with ERR and must
-# leave the stored list untouched.
-sign_and_pub setgrp1 "luminum/$SID/$UID_TEST/cmd" '{"groups":["testgrp","newgrp"]}'
-await_resp setgrp1
+# Pre-seeded GROUPS is "testgrp". setgroups replaces the whole list. The client
+# matches on the exact action name, so all three commands carry action
+# "setgroups"; the responses are told apart by order (the client processes
+# commands sequentially on its single MQTT connection, and each response is
+# signed). The client must: ack, persist the list (config DB GROUPS), answer
+# commands on the newly-joined group topic, stop answering on a topic it left,
+# and reject an invalid name with ERR/INVALID_DATA leaving the list untouched.
+# await_setgroups N: wait for the Nth "setgroups" response; prints its JSON.
+await_setgroups() {
+    local n="$1" i
+    for i in $(seq 1 30); do
+        [ "$(grep -c '"action":"setgroups"' "$SCRATCH/resp.out" 2>/dev/null)" -ge "$n" ] && break
+        sleep 0.5
+    done
+    grep '"action":"setgroups"' "$SCRATCH/resp.out" 2>/dev/null | sed -n "${n}p"
+}
+
+sign_and_pub setgroups "luminum/$SID/$UID_TEST/cmd" '{"groups":["testgrp","newgrp"]}'
+sg1=$(await_setgroups 1)
+[ -n "$sg1" ] && verify_envelope "$sg1" setgroups OK
 check "client verified + responded to setgroups (join newgrp)" "$?"
 check "client persisted the new group list" $([ "$(cfgval GROUPS)" = "testgrp,newgrp" ]; echo $?) "GROUPS=$(cfgval GROUPS)"
 sign_and_pub querynewgrp "luminum/$SID/grp/newgrp/cmd"
 await_resp querynewgrp
 check "client answers commands on the newly-joined group topic" "$?"
 
-sign_and_pub setgrp2 "luminum/$SID/$UID_TEST/cmd" '{"groups":["newgrp"]}'
-await_resp setgrp2
+sign_and_pub setgroups "luminum/$SID/$UID_TEST/cmd" '{"groups":["newgrp"]}'
+sg2=$(await_setgroups 2)
+[ -n "$sg2" ] && verify_envelope "$sg2" setgroups OK
 check "client verified + responded to setgroups (leave testgrp)" "$?"
 check "client persisted the reduced group list" $([ "$(cfgval GROUPS)" = "newgrp" ]; echo $?) "GROUPS=$(cfgval GROUPS)"
 sign_and_pub queryoldgrp "luminum/$SID/grp/$GROUP/cmd"
@@ -349,15 +363,15 @@ leftfail=0
 grep -q '"action":"queryoldgrp"' "$SCRATCH/resp.out" 2>/dev/null && leftfail=1
 check "client did NOT respond on a group topic it left (grp/$GROUP)" "$leftfail"
 
-sign_and_pub setbadgrp "luminum/$SID/$UID_TEST/cmd" '{"groups":["bad name!"]}'
-await_resp setbadgrp 2>/dev/null || true
-badresp=$(grep '"action":"setbadgrp"' "$SCRATCH/resp.out" 2>/dev/null | head -n 1)
-[ -n "$badresp" ] || badresp=$(sleep 2; grep '"action":"setbadgrp"' "$SCRATCH/resp.out" 2>/dev/null | head -n 1)
+sign_and_pub setgroups "luminum/$SID/$UID_TEST/cmd" '{"groups":["bad name!"]}'
+sg3=$(await_setgroups 3)
 badok=1
-if [ -n "$badresp" ]; then
-    verify_envelope "$badresp" setbadgrp ERR && badok=0
+if [ -n "$sg3" ]; then
+    if verify_envelope "$sg3" setgroups ERR && printf '%s' "$sg3" | grep -q 'INVALID_DATA'; then
+        badok=0
+    fi
 fi
-check "client rejected an invalid setgroups payload (ERR response)" "$badok"
+check "client rejected an invalid setgroups payload (ERR/INVALID_DATA)" "$badok"
 check "invalid setgroups left the stored group list untouched" $([ "$(cfgval GROUPS)" = "newgrp" ]; echo $?) "GROUPS=$(cfgval GROUPS)"
 
 # --- negative: a topic the client did not subscribe to ------------------------

@@ -238,6 +238,16 @@ fn parse_clientconfig(debug: bool) -> HashMap<String, String> {
 			fs::set_permissions(cfg_path(), fs::Permissions::from_mode(0o600))
 				.expect("Error: Could not secure configuration database");
 		}
+		// CONFIG is keyed by KEY: config_set uses INSERT OR REPLACE, which
+		// only replaces when KEY is unique (without the constraint it
+		// appends a duplicate row on every write - e.g. each setgroups).
+		// Enforce it on open; pre-existing duplicates keep the newest row.
+		if confconn.execute("create unique index if not exists IDX_CONFIG_KEY on CONFIG (KEY)", []).is_err() {
+			confconn.execute("delete from CONFIG where rowid not in (select max(rowid) from CONFIG group by KEY)", [])
+				.expect("Error: Could not deduplicate the CONFIG table.");
+			confconn.execute("create unique index if not exists IDX_CONFIG_KEY on CONFIG (KEY)", [])
+				.expect("Error: Could not create the unique index on the CONFIG table.");
+		}
 		let mut stmt = confconn.prepare("select KEY,VALUE from CONFIG").expect("Error: Could not prepare CONFIG query");
 		let cfg_iter = stmt.query_map(params![], |row| {
 			Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
@@ -994,7 +1004,8 @@ fn clientsetup() {
 		fs::write(signing_crt_path(), pem).expect("Error: Could not save server signing certificate");
 	}
 	let confconn = Connection::open(cfg_path()).expect("Error: Could not initialize configuration database");
-	confconn.execute("create table if not exists CONFIG ( KEY text not null, VALUE text not null )", [])
+	// KEY is unique: config_set relies on INSERT OR REPLACE semantics.
+	confconn.execute("create table if not exists CONFIG ( KEY text not null unique, VALUE text not null )", [])
 		.expect("Error: Could not create CONFIG table in configuration database");
 	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)", params!["SHOST", server.as_str()])
 		.expect("Error: Could not insert SHOST into CONFIG table.");

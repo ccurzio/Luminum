@@ -196,6 +196,9 @@ sub run {
 	unless (migrate_clients_auth($dbh, $log)) {
 		return $fail->("CLIENTS.AUTH migration failed");
 		}
+	unless (migrate_commands($dbh, $log)) {
+		return $fail->("CLIENTS.COMMANDS migration failed");
+		}
 	unless (setup_dbuser($dbh, $dbuser, $dbpass)) {
 		return $fail->("database user setup failed");
 		}
@@ -525,6 +528,23 @@ sub migrate_clients_auth {
 		unless ($rc) { $log->("  CLIENTS.AUTH migration failed for $col: $@"); return 0; }
 		$log->("  CLIENTS.AUTH: added missing column $col");
 		}
+	return 1;
+	}
+
+# COMMANDS.SID stores the Luminum Server ID (the SYSTEM.CONFIG SID value,
+# which is also used to build the MQTT topic tree) - an alphanumeric
+# string. The original schema declared it int, under which strict mode
+# refused every real insert; change the column on existing installs.
+#
+sub migrate_commands {
+	my ($dbh, $log) = @_;
+	my ($type) = map { $_->[0] }
+		@{ $dbh->selectall_arrayref(qq{select COLUMN_TYPE from information_schema.COLUMNS where TABLE_SCHEMA = 'CLIENTS' and TABLE_NAME = 'COMMANDS' and COLUMN_NAME = 'SID'}) || [] };
+	return 1 unless defined $type; # table absent: nothing to migrate
+	return 1 unless $type =~ /^int/; # already the string type
+	my $rc = eval { $dbh->do("alter table CLIENTS.COMMANDS modify SID tinytext NOT NULL"); 1 };
+	unless ($rc) { $log->("  CLIENTS.COMMANDS migration failed for SID: $@"); return 0; }
+	$log->("  CLIENTS.COMMANDS: changed SID from int to tinytext");
 	return 1;
 	}
 

@@ -1,16 +1,19 @@
 #!/usr/bin/perl
 #
 # setup_clients_auth_test.pl - offline test for the CLIENTS.AUTH
-# MQTTSECRET column (protocol 3.1): both the migration of an existing
-# pre-v1 table and the fresh-install layout from schema.sql.
+# MQTTSECRET column (protocol 3.1) and the CLIENTS.COMMANDS.SID column:
+# both the migration of an existing pre-v1 table and the fresh-install
+# layout from schema.sql.
 #
 # Spins up a scratch MariaDB, then:
 #   1. pre-creates a pre-v1 CLIENTS.AUTH (no MQTTSECRET) with one
-#      registered-client row and runs setup.pl against it:
-#      the install must succeed, the column must be added, and the
-#      existing row must survive with an empty hash
+#      registered-client row and a pre-v1 CLIENTS.COMMANDS (SID int)
+#      with one outbox row, and runs setup.pl against it:
+#      the install must succeed, the AUTH column must be added (row
+#      surviving with an empty hash) and COMMANDS.SID must change from
+#      int to tinytext (row surviving)
 #   2. drops the CLIENTS database and runs setup.pl again:
-#      schema.sql must create the table with the column already present
+#      schema.sql must create both tables with the current layout
 #
 # Usage: perl tests/setup_clients_auth_test.pl
 # Exit code: 0 if all checks pass, 1 otherwise.
@@ -120,9 +123,9 @@ $out = `$cli -S $sock -u root -e "ALTER USER 'root'\@'localhost' IDENTIFIED BY '
 check("root password set", $? == 0, $out);
 skip_all("could not set root password: $out") unless $? == 0;
 
-# --- pre-v1 CLIENTS.AUTH with a registered client ----------------------------
-# The pre-1.0 layout lacks MQTTSECRET; one row simulates an installation
-# that already registered a client before the column existed.
+# --- pre-v1 CLIENTS tables with a registered client ---------------------------
+# The pre-1.0 layout lacks AUTH.MQTTSECRET and declares COMMANDS.SID as int
+# (with one outbox row, so the migration must not lose data).
 #
 my $fpnt = "cfd346d21ef5690deb109beef00000000000000000000000000000000000000ab";
 $out = `$cli -S $sock -u root -ptestrootpw -e "
@@ -135,9 +138,26 @@ $out = `$cli -S $sock -u root -ptestrootpw -e "
       PRIMARY KEY (ID)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
     INSERT INTO CLIENTS.AUTH (NAME,FINGERPRINT,PUBKEY) VALUES ('oldhost','$fpnt','cHViay==');
+    CREATE TABLE CLIENTS.COMMANDS (
+      ID int(20) NOT NULL AUTO_INCREMENT,
+      SID int(20) NOT NULL,
+      TARGET tinytext NOT NULL,
+      LUMY tinytext NOT NULL,
+      ACTION tinytext NOT NULL,
+      DATA text DEFAULT NULL,
+      QID char(36) NOT NULL,
+      STATUS tinytext NOT NULL DEFAULT 'PENDING',
+      CREATED datetime NOT NULL,
+      SENT datetime DEFAULT NULL,
+      ACKED datetime DEFAULT NULL,
+      DEADLINE datetime DEFAULT NULL,
+      PRIMARY KEY (ID)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+    INSERT INTO CLIENTS.COMMANDS (SID,TARGET,LUMY,ACTION,QID,STATUS,CREATED)
+      VALUES (1,'42','core','queryold','a0e1f2d3-4b5c-4a6b-8c7d-9e0f1a2b3c4d','ACKED',now());
 " 2>&1`;
-check("pre-v1 CLIENTS.AUTH seeded", $? == 0, $out);
-skip_all("could not seed pre-v1 CLIENTS.AUTH: $out") unless $? == 0;
+check("pre-v1 CLIENTS tables seeded", $? == 0, $out);
+skip_all("could not seed pre-v1 CLIENTS tables: $out") unless $? == 0;
 
 # --- installer runs -----------------------------------------------------------
 sub run_setup {
@@ -168,6 +188,15 @@ my $row = `$cli -S $sock -u root -ptestrootpw -N -e "select NAME, MQTTSECRET fro
 chomp($row);
 check("migration: pre-existing row preserved with empty hash",
     $row eq "oldhost\t", "row=[$row]");
+my $sidtype = `$cli -S $sock -u root -ptestrootpw -N -e "select COLUMN_TYPE from information_schema.COLUMNS where TABLE_SCHEMA = 'CLIENTS' and TABLE_NAME = 'COMMANDS' and COLUMN_NAME = 'SID'" 2>&1`;
+chomp($sidtype);
+check("migration: COMMANDS.SID is tinytext", $sidtype eq "tinytext", "type=[$sidtype]");
+check("migration: COMMANDS.SID change logged",
+    $o =~ /CLIENTS\.COMMANDS: changed SID from int to tinytext/, $o);
+my $crow = `$cli -S $sock -u root -ptestrootpw -N -e "select SID, ACTION, STATUS from CLIENTS.COMMANDS where QID = 'a0e1f2d3-4b5c-4a6b-8c7d-9e0f1a2b3c4d'" 2>&1`;
+chomp($crow);
+check("migration: pre-existing COMMANDS row preserved",
+    $crow eq "1\tqueryold\tACKED", "row=[$crow]");
 
 # 2. fresh install -> schema.sql creates the table with the column
 $out = `$cli -S $sock -u root -ptestrootpw -e "DROP DATABASE CLIENTS" 2>&1`;
@@ -180,6 +209,11 @@ check("fresh install: no migration needed",
     $o !~ /CLIENTS\.AUTH: added missing column MQTTSECRET/, $o);
 %cols = map { $_ => 1 } auth_columns();
 check("fresh install: MQTTSECRET column present", $cols{MQTTSECRET});
+$sidtype = `$cli -S $sock -u root -ptestrootpw -N -e "select COLUMN_TYPE from information_schema.COLUMNS where TABLE_SCHEMA = 'CLIENTS' and TABLE_NAME = 'COMMANDS' and COLUMN_NAME = 'SID'" 2>&1`;
+chomp($sidtype);
+check("fresh install: COMMANDS.SID is tinytext", $sidtype eq "tinytext", "type=[$sidtype]");
+check("fresh install: no COMMANDS migration logged",
+    $o !~ /CLIENTS\.COMMANDS: changed SID/, $o);
 
 # ---------------------------------------------------------------------------
 print "-" x 60, "\n";
