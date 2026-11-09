@@ -945,14 +945,23 @@ sub prepare_mqtt_tls {
 	my $mkey = "$ssldir/mosquitto.key";
 	my $mcsr = "$ssldir/mosquitto.csr";
 	my $mext = "$ssldir/mosquitto.ext";
-	my $san = $shost =~ /^\d+\.\d+\.\d+\.\d+$/ ? "IP:$shost" : "DNS:$shost";
+	# The client's MQTT stack (rustls) verifies the hostname as a DNS name even
+	# when it is an IP literal, so an IP host needs a DNS: entry as well as the
+	# IP: entry (the latter covers IP-aware clients such as mosquitto_sub).
+	my $san = $shost =~ /^\d+\.\d+\.\d+\.\d+$/ ? "DNS:$shost,IP:$shost" : "DNS:$shost";
 	my $fail = sub { return (0, undef, undef, $_[0]) };
 	unless (system("openssl", "genpkey", "-algorithm", "rsa",
 		"-pkeyopt", "rsa_keygen_bits:2048", "-out", $mkey) == 0) {
 		return $fail->("mosquitto key generation failed");
 		}
+	# The leaf's subject must differ from the CA's subject (the server
+	# certificate's CN is $shost). If the leaf also used /CN=$shost, its
+	# subject would equal its issuer, making it look self-signed and breaking
+	# chain building in rustls/webpki (and OpenSSL) even though the signature
+	# is valid. Hostname verification uses the SAN, not the CN, so a fixed
+	# descriptive CN is safe.
 	unless (system("openssl", "req", "-new", "-key", $mkey,
-		"-subj", "/CN=$shost", "-out", $mcsr) == 0) {
+		"-subj", "/CN=Luminum MQTT Broker", "-out", $mcsr) == 0) {
 		return $fail->("mosquitto CSR generation failed");
 		}
 	open(my $ef, ">", $mext) or return $fail->("cannot write $mext");
