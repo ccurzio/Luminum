@@ -67,14 +67,22 @@ else {
 		<div id="General" class="configtab" style="width: 75%; margin-left: auto; margin-right: auto; text-align: center;">
 			<table style="border: 0; margin-top: 20px;">
 				<?php
-					$connected = @fsockopen("www.google.com", 443);
+					$netcheck = array("www.google.com", "");
+					$ncquery = mysqli_query($db, "select CKEY,CVAL from CONFIG where CKEY in ('PNETCHECK','SNETCHECK')");
+					while ($ncrow = mysqli_fetch_assoc($ncquery)) {
+						if ($ncrow["CKEY"] == "PNETCHECK" && $ncrow["CVAL"] != "") { $netcheck[0] = $ncrow["CVAL"]; }
+						elseif ($ncrow["CKEY"] == "SNETCHECK" && $ncrow["CVAL"] != "") { $netcheck[1] = $ncrow["CVAL"]; }
+						}
+					$testsock = @fsockopen($netcheck[0], 443, $connerr, $connerrno, 3);
+					if (!$testsock && $netcheck[1] != "") { $testsock = @fsockopen($netcheck[1], 443, $connerr, $connerrno, 3); }
+					$connected = false;
+					if ($testsock) { $connected = true; fclose($testsock); }
 					print "\t\t\t<tr style=\"pointer-events: none; user-select: none;\"><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; font-size: 10px;\"><img src=\"/icons/server.png\" style=\"width: 125px; height: 125px;\"><br>$hostname<br>" . $netifaces[0] . "</td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal;\">";
 					if (shell_exec("/usr/bin/ping -c1 $gateway -W1 | /usr/bin/grep ttl") != "") {
 						print "<img src=\"/icons/greenlink.png\"></td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; font-size: 10px;\"><img src=\"/icons/firewall.png\" style=\"width: 125px; height: 125px;\">";
 						print "<br>$gwhostname<br>$gateway</td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; font-size: 10px;\">";
 						if ($connected) { print "<img src=\"/icons/greenlink.png\"></td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; font-size: 10px;\"><img src=\"/icons/internet.png\" style=\"width: 125px; height: 125px;\"><br>Internet<br>Connected</td></tr>\n"; }
 						else { print "<img src=\"/icons/redlink.png\"></td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; font-size: 10px;\"><img src=\"/icons/internet.png\" style=\"width: 125px; height: 125px; opacity: 0.25;\"><br>Internet<br>Unreachable</td></tr>\n"; }
-						fclose($connected);
 						}
 					else {
 						print "<img src=\"/icons/redlink.png\"></td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; font-size: 10px;\"><img src=\"/icons/firewall.png\" style=\"width: 125px; height: 125px; opacity: 0.25\"><br>$gwhostname<br>$gateway</td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; font-size: 10px;\"><img src=\"/icons/redlink.png\"></td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal; font-size: 10px;\"><img src=\"/icons/internet.png\" style=\"width: 125px; height: 125px; opacity: 0.25;\"><br>Internet<br>Unreachable</td></tr>\n";
@@ -90,7 +98,8 @@ else {
 				<?php print "<tr><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\">Default Gateway:</td><td style=\"color: #444; background-color: transparent; border: 0;\"><input id=\"dgateway\" type=\"text\" style=\"width: 150px; font-size: 15px; padding: 3px; margin-top: 0; margin-right: 20px;\" maxlength=\"39\" value=\"$gateway\" onchange=\"formCheck();\" tabindex=\"3\"></td></tr>\n"; ?>
 				<?php print "<tr><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\">Primary DNS Server:</td><td style=\"color: #444; background-color: transparent; border: 0;\"><input id=\"dnsserver\" type=\"text\" style=\"width: 150px; font-size: 15px; padding: 3px; margin-top: 0; margin-right: 20px;\" maxlength=\"39\" value=\"$dnscfg[1]\" onchange=\"formCheck();\" tabindex=\"4\"></td></tr>\n"; ?>
 				<?php print "<tr><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\">Secondary DNS Server:</td><td style=\"color: #444; background-color: transparent; border: 0;\"><input id=\"dns2server\" type=\"text\" style=\"width: 150px; font-size: 15px; padding: 3px; margin-top: 0; margin-right: 20px;\" maxlength=\"39\" value=\"$dnscfg[2]\" onchange=\"formCheck();\" tabindex=\"5\"></td></tr>\n"; ?>
-				<?php print "<tr><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\">DNS Search Suffix:</td><td style=\"color: #444; background-color: transparent; border: 0;\"><input id=\"suffix\" type=\"text\" style=\"width: 150px; font-size: 15px; padding: 3px; margin-top: 0; margin-right: 20px;\" maxlength=\"39\" value=\"$dnscfg[0]\" onchange=\"formCheck();\" tabindex=\"6\"></td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\">Connectivity Test:</td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\"><input id=\"connchk\" type=\"text\" style=\"width: 150px; font-size: 15px; padding: 3px; margin-top: 0; margin-right: 20px;\" maxlength=\"128\" value=\"www.google.com\" onchange=\"formCheck();\" tabindex=\"9\"></td></tr>\n"; ?>
+				<?php print "<tr><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\">DNS Search Suffix:</td><td style=\"color: #444; background-color: transparent; border: 0;\"><input id=\"suffix\" type=\"text\" style=\"width: 150px; font-size: 15px; padding: 3px; margin-top: 0; margin-right: 20px;\" maxlength=\"39\" value=\"$dnscfg[0]\" onchange=\"formCheck();\" tabindex=\"6\"></td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\">Connectivity Test (Primary):</td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\"><input id=\"connchk\" type=\"text\" style=\"width: 150px; font-size: 15px; padding: 3px; margin-top: 0; margin-right: 20px;\" maxlength=\"128\" value=\"$netcheck[0]\" onchange=\"formCheck();\" tabindex=\"9\"></td></tr>\n"; ?>
+				<?php print "<tr><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\">Connectivity Test (Secondary):</td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\"><input id=\"sconnchk\" type=\"text\" style=\"width: 150px; font-size: 15px; padding: 3px; margin-top: 0; margin-right: 20px;\" maxlength=\"128\" value=\"$netcheck[1]\" onchange=\"formCheck();\" tabindex=\"10\"></td></tr>\n"; ?>
 			</table>
 			<br>
 		</div>
