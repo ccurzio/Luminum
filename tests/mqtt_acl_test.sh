@@ -1,0 +1,305 @@
+#!/usr/bin/env bash
+# MQTT auth + ACL + session verification (protocol 4.1, 4.3, 12) on a real
+# mosquitto.
+#
+# This closes the "Still open / to verify" item in protocol.md section 12 and
+# empirically confirms the auth + ACL mechanism that section 12 lists as
+# resolved:
+#
+#   - login is enforced by the built-in password_file (allow_anonymous false):
+#     a valid secret is accepted; a wrong secret, an unknown user, and an
+#     anonymous client are all rejected at CONNACK;
+#   - access control is enforced by the static 'pattern' rules that
+#     Luminum::MQTT::gen_acl() generates (the exact code the broker uses):
+#     a client may read its own cmd and write its own resp/status/events, may
+#     read the group cmd topics, but may NOT publish to any cmd topic and may
+#     NOT read or write another client's per-UID topics; the server user is
+#     unrestricted within the Luminum tree;
+#   - the Mosquitto session timeout is not shorter than the check-in interval
+#     plus margin: the installer never sets persistent_client_expiration, so
+#     Mosquitto's default (never expire) applies and an offline client's
+#     persistent session (and any queued QoS 1 command) is retained
+#     indefinitely; and a client that only sends keepalive PINGREQ (no
+#     application messages) stays connected across a gap longer than
+#     1.5x keepalive, so the connection is held by keepalive -- not by the
+#     5-minute check-in.
+#
+# The ACL file is produced by Luminum::MQTT::gen_acl() and the password_file by
+# mosquitto_passwd, so this exercises the real production code paths, not a
+# hand-written stand-in.
+#
+# Usage: bash tests/mqtt_acl_test.sh
+set -u
+REPO=$(cd "$(dirname "$0")/.." && pwd)
+PERL_LIBS="$REPO/server/lib${PERL5LIB:+:$PERL5LIB}"
+
+SID="TESTSID"
+SERVER_USER="luminum-server"
+SERVER_PASS="serverpass"
+MPORT=18883
+
+RUN="$HOME/.lummqtt-acl-test.$$"
+CERT="$RUN/cert.pem"
+KEY="$RUN/key.pem"
+PASSWD="$RUN/passwd"
+ACL="$RUN/acl"
+MOSQCONF="$RUN/mosquitto.conf"
+MOSQLOG="$RUN/mosquitto.log"
+MOSQ_PID=""
+KA_MOSQ_PID=""
+KA_SUB_PID=""
+FAILURES=0
+
+check() {
+    local name="$1" ok="$2" detail="${3:-}"
+    if [ "$ok" -eq 0 ]; then
+        echo "ok   - $name"
+    else
+        FAILURES=$((FAILURES + 1))
+        echo "FAIL - $name${detail:+ ($detail)}"
+    fi
+}
+
+cleanup() {
+    [ -n "$KA_SUB_PID" ] && kill "$KA_SUB_PID" 2>/dev/null
+    [ -n "$KA_MOSQ_PID" ] && kill "$KA_MOSQ_PID" 2>/dev/null
+    [ -n "$MOSQ_PID" ] && kill "$MOSQ_PID" 2>/dev/null
+    # Give mosquitto a moment to release the port, then force it if needed.
+    sleep 0.3
+    [ -n "$KA_MOSQ_PID" ] && kill -9 "$KA_MOSQ_PID" 2>/dev/null
+    [ -n "$MOSQ_PID" ] && kill -9 "$MOSQ_PID" 2>/dev/null
+    rm -rf "$RUN"
+}
+trap cleanup EXIT
+
+# --- prerequisites -----------------------------------------------------------
+[ -x "$(command -v mosquitto)" ]        || { echo "SKIP - mosquitto not available"; exit 0; }
+[ -x "$(command -v mosquitto_pub)" ]    || { echo "SKIP - mosquitto_pub not available"; exit 0; }
+[ -x "$(command -v mosquitto_sub)" ]    || { echo "SKIP - mosquitto_sub not available"; exit 0; }
+[ -x "$(command -v mosquitto_passwd)" ] || { echo "SKIP - mosquitto_passwd not available"; exit 0; }
+[ -x "$(command -v openssl)" ]          || { echo "SKIP - openssl not available"; exit 0; }
+PERL5LIB="$PERL_LIBS" perl -e 'use Luminum::MQTT;' 2>/dev/null \
+    || { echo "SKIP - Perl dependencies for Luminum::MQTT are missing"; exit 0; }
+
+# Fail fast if the port is already held (a stale broker would skew results).
+if (exec 3<>/dev/tcp/127.0.0.1/$MPORT) 2>/dev/null; then
+    exec 3>&- 3<&- 2>/dev/null
+    echo "SKIP - port $MPORT is already in use; stop it and re-run"
+    exit 0
+fi
+
+mkdir -p "$RUN" || exit 1
+
+# --- self-signed TLS cert (CA == leaf; OpenSSL clients accept this) ---------
+openssl req -x509 -newkey rsa:2048 -sha256 -nodes \
+    -keyout "$KEY" -out "$CERT" -days 1 \
+    -subj "/CN=127.0.0.1" \
+    -addext "subjectAltName=IP:127.0.0.1,DNS:127.0.0.1" \
+    > "$RUN/openssl.log" 2>&1
+check "self-signed TLS cert generated" $([ -s "$CERT" ]; echo $?) "see $RUN/openssl.log"
+
+# --- password_file: server user + two client UIDs ---------------------------
+: > "$PASSWD"
+mosquitto_passwd -b "$PASSWD" "$SERVER_USER" "$SERVER_PASS" >/dev/null 2>&1
+mosquitto_passwd -b "$PASSWD" 100 client100 >/dev/null 2>&1
+mosquitto_passwd -b "$PASSWD" 200 client200 >/dev/null 2>&1
+check "password_file has server + 2 client users" \
+    $([ "$(grep -c ':' "$PASSWD")" -eq 3 ]; echo $?)
+
+# --- ACL from the real generator (the exact code the broker uses) -----------
+PERL5LIB="$PERL_LIBS" perl -MLuminum::MQTT -e '
+    my $acl = Luminum::MQTT::gen_acl(
+        sid => "TESTSID", server_user => "luminum-server",
+        os_list => ["linux", "windows"], groups => ["ops"],
+    );
+    open(my $fh, ">", $ARGV[0]) or die "cannot write $ARGV[0]: $!";
+    print $fh $acl;
+    close($fh);
+' "$ACL"
+check "ACL generated by Luminum::MQTT::gen_acl" $([ -s "$ACL" ]; echo $?)
+grep -q "pattern read  luminum/$SID/%u/cmd" "$ACL"
+check "ACL grants each client read of its own cmd (%u)" "$?"
+grep -q "pattern write luminum/$SID/%u/resp" "$ACL"
+check "ACL grants each client write of its own resp (%u)" "$?"
+grep -q "user $SERVER_USER" "$ACL"
+check "ACL grants the server user unrestricted access" "$?"
+
+# --- mosquitto.conf + start --------------------------------------------------
+cat > "$MOSQCONF" <<EOF
+listener $MPORT 127.0.0.1
+cafile $CERT
+certfile $CERT
+keyfile $KEY
+password_file $PASSWD
+acl_file $ACL
+allow_anonymous false
+max_packet_size 65536
+log_dest file $MOSQLOG
+log_type debug
+EOF
+
+mosquitto -c "$MOSQCONF" > "$RUN/mosquitto-stderr.log" 2>&1 &
+MOSQ_PID=$!
+mosq_up=1
+for i in $(seq 1 20); do
+    if (exec 3<>/dev/tcp/127.0.0.1/$MPORT) 2>/dev/null; then exec 3>&- 3<&- 2>/dev/null; mosq_up=0; break; fi
+    sleep 0.25
+done
+check "mosquitto is listening on $MPORT" "$mosq_up" "see $RUN/mosquitto-stderr.log"
+[ "$mosq_up" -eq 0 ] || exit 1
+
+# --- helpers -----------------------------------------------------------------
+# auth_ok <user> <pass>: 0 if CONNACK is accepted, 1 if rejected. Uses a topic
+# the user may subscribe to, so the result reflects the login (CONNACK), not
+# the ACL (SUBACK). No one publishes to the topic, so an accepted login simply
+# times out waiting for a message (mosquitto_sub exit 27); a refused login
+# exits 5 ("not authorised").
+auth_ok() {
+    local user="$1" pass="$2"
+    mosquitto_sub -h 127.0.0.1 -p "$MPORT" --cafile "$CERT" \
+        -u "$user" -P "$pass" -t "luminum/$SID/100/cmd" -C 1 -W 2 \
+        > /dev/null 2>&1
+    [ "$?" -eq 27 ]
+}
+
+# deliver <sub_user> <sub_pass> <topic> <pub_user> <pub_pass>: 0 if the
+# subscriber receives the published message, 1 if not. The subscriber exits
+# after one message or a 3s wait; the publish happens after a 1s settle so the
+# subscription is in place first.
+deliver() {
+    local sub_user="$1" sub_pass="$2" topic="$3" pub_user="$4" pub_pass="$5"
+    local out="$RUN/out.$$"
+    : > "$out"
+    mosquitto_sub -h 127.0.0.1 -p "$MPORT" --cafile "$CERT" \
+        -u "$sub_user" -P "$sub_pass" -t "$topic" -C 1 -W 3 \
+        > "$out" 2>/dev/null &
+    local subpid=$!
+    sleep 1
+    mosquitto_pub -h 127.0.0.1 -p "$MPORT" --cafile "$CERT" \
+        -u "$pub_user" -P "$pub_pass" -t "$topic" -m "probe" -q 1 \
+        > /dev/null 2>&1
+    wait "$subpid" 2>/dev/null
+    local rc=1
+    [ -s "$out" ] && rc=0
+    rm -f "$out"
+    return "$rc"
+}
+
+# --- authentication (password_file, allow_anonymous false) -------------------
+# auth_ok returns 0 when the login is ACCEPTED, 1 when rejected. The "accepted"
+# check wants 0; the "rejected" checks want the inverse.
+auth_ok 100 client100; rc=$?
+check "auth: valid client secret accepted" "$rc"
+auth_ok 100 WRONGPASS; rc=$?
+check "auth: wrong client secret rejected" $([ "$rc" -ne 0 ]; echo $?)
+auth_ok 999 whatever; rc=$?
+check "auth: unknown user rejected" $([ "$rc" -ne 0 ]; echo $?)
+# Anonymous: no -u/-P. allow_anonymous false must refuse the CONNACK (exit 5,
+# not the 27 "timed out" of an accepted login).
+mosquitto_sub -h 127.0.0.1 -p "$MPORT" --cafile "$CERT" \
+    -t "luminum/$SID/100/cmd" -C 1 -W 2 > /dev/null 2>&1
+check "auth: anonymous client rejected" $([ "$?" -ne 27 ]; echo $?)
+
+# --- ACL: allowed reads/writes -----------------------------------------------
+deliver 100 client100 "luminum/$SID/100/cmd"    "$SERVER_USER" "$SERVER_PASS"
+check "acl: client reads its own cmd" "$?"
+deliver "$SERVER_USER" "$SERVER_PASS" "luminum/$SID/100/resp"   100 client100
+check "acl: client writes its own resp" "$?"
+deliver "$SERVER_USER" "$SERVER_PASS" "luminum/$SID/100/status" 100 client100
+check "acl: client writes its own status" "$?"
+deliver "$SERVER_USER" "$SERVER_PASS" "luminum/$SID/100/events" 100 client100
+check "acl: client writes its own events" "$?"
+deliver 100 client100 "luminum/$SID/all/cmd"      "$SERVER_USER" "$SERVER_PASS"
+check "acl: client reads the all/cmd group topic" "$?"
+deliver 100 client100 "luminum/$SID/os/linux/cmd" "$SERVER_USER" "$SERVER_PASS"
+check "acl: client reads its OS group topic" "$?"
+
+# --- ACL: denials (the security boundary) ------------------------------------
+# A client must not publish to any cmd topic (its own included).
+deliver "$SERVER_USER" "$SERVER_PASS" "luminum/$SID/100/cmd" 100 client100
+[ $? -ne 0 ]; check "acl: client CANNOT publish to its own cmd" "$?"
+# A client must not read another client's per-UID topics.
+deliver 100 client100 "luminum/$SID/200/cmd" "$SERVER_USER" "$SERVER_PASS"
+[ $? -ne 0 ]; check "acl: client CANNOT read another client's cmd" "$?"
+# A client must not write another client's per-UID topics.
+deliver "$SERVER_USER" "$SERVER_PASS" "luminum/$SID/200/resp" 100 client100
+[ $? -ne 0 ]; check "acl: client CANNOT write another client's resp" "$?"
+
+# --- ACL: server is unrestricted within the tree -----------------------------
+deliver 200 client200 "luminum/$SID/200/cmd" "$SERVER_USER" "$SERVER_PASS"
+check "acl: server publishes to any client's cmd" "$?"
+
+# --- session timeout vs. check-in interval -----------------------------------
+# (a) The installer never sets persistent_client_expiration, so Mosquitto's
+# default (never expire) applies: an offline client's persistent session and
+# any queued QoS 1 command are retained indefinitely -- far longer than the
+# 5-minute check-in interval plus margin.
+if grep -q 'persistent_client_expiration' "$REPO/server/lib/Luminum/Setup.pm"; then
+    check "session: installer leaves persistent_client_expiration unset (never expire)" 1 \
+        "Setup.pm sets persistent_client_expiration"
+else
+    check "session: installer leaves persistent_client_expiration unset (never expire)" 0
+fi
+
+# (b) A client that only sends keepalive PINGREQ (no application messages)
+# stays connected across a gap longer than 1.5x keepalive. This is what keeps
+# the session alive between the 5-minute check-ins. We use a dedicated
+# mosquitto (so its log can be read after a clean shutdown -- mosquitto buffers
+# log output and only flushes on shutdown) and a conformant client with
+# keepalive=5 (the CLI minimum; the broker's dead-connection timeout is then
+# 7.5s). We observe for 15s (3x keepalive, 2x the dead-timeout) with no
+# application traffic: if the broker dropped the client for lack of PINGREQ,
+# the client would reconnect and the log would show a second CONNACK. Exactly
+# one CONNACK proves keepalive -- not the check-in -- held the connection.
+KPORT=18899
+KCONF="$RUN/ka-mosquitto.conf"
+KLOG="$RUN/ka-mosquitto.log"
+cat > "$KCONF" <<EOF
+listener $KPORT 127.0.0.1
+cafile $CERT
+certfile $CERT
+keyfile $KEY
+password_file $PASSWD
+acl_file $ACL
+allow_anonymous false
+log_dest file $KLOG
+log_type debug
+EOF
+mosquitto -c "$KCONF" > "$RUN/ka-mosq-stderr.log" 2>&1 &
+KA_MOSQ_PID=$!
+ka_up=1
+for i in $(seq 1 20); do
+    if (exec 3<>/dev/tcp/127.0.0.1/$KPORT) 2>/dev/null; then exec 3>&- 3<&- 2>/dev/null; ka_up=0; break; fi
+    sleep 0.25
+done
+if [ "$ka_up" -eq 0 ]; then
+    mosquitto_sub -i ka-probe -k 5 -h 127.0.0.1 -p "$KPORT" --cafile "$CERT" \
+        -u 100 -P client100 -t "luminum/$SID/100/cmd" > /dev/null 2>&1 &
+    KA_SUB_PID=$!
+    sleep 15
+    kill "$KA_SUB_PID" 2>/dev/null
+    KA_SUB_PID=""
+    # Clean shutdown so the log flushes before we read it.
+    kill "$KA_MOSQ_PID" 2>/dev/null
+    KA_MOSQ_PID=""
+    sleep 2
+    ka_conns=$(grep -c "Sending CONNACK to ka-probe" "$KLOG" 2>/dev/null)
+    ka_conns=${ka_conns:-0}
+    check "session: keepalive PINGREQ holds the connection (no app traffic)" \
+        $([ "$ka_conns" -eq 1 ]; echo $?) \
+        "CONNACK count=$ka_conns (want 1; >1 means the broker dropped it) (see $KLOG)"
+else
+    check "session: keepalive PINGREQ holds the connection (no app traffic)" 1 \
+        "keepalive mosquitto did not start (see $RUN/ka-mosq-stderr.log)"
+    kill "$KA_MOSQ_PID" 2>/dev/null
+    KA_MOSQ_PID=""
+fi
+
+echo "------------------------------------------------------------"
+if [ "$FAILURES" -gt 0 ]; then
+    echo "FAILED: $FAILURES check(s) failed"
+    echo "Artifacts left in $RUN for inspection (mosquitto.log, acl, passwd)."
+    exit 1
+fi
+echo "All checks passed."
+exit 0
