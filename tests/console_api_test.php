@@ -78,6 +78,65 @@ ok('uuid4: matches the envelope id format',
 	$qid);
 ok('uuid4: distinct across calls', luminum_uuid4() !== $qid);
 
+// --- luminum_os_script_cols -------------------------------------------------
+ok('script cols: Linux -> L pair', luminum_os_script_cols('Linux') === ['LSTYPE', 'LSCRIPT']);
+ok('script cols: lowercase linux', luminum_os_script_cols('linux') === ['LSTYPE', 'LSCRIPT']);
+ok('script cols: macOS -> M pair', luminum_os_script_cols('macOS') === ['MSTYPE', 'MSCRIPT']);
+ok('script cols: Windows -> W pair', luminum_os_script_cols('Windows') === ['WSTYPE', 'WSCRIPT']);
+ok('script cols: unknown platform -> null', luminum_os_script_cols('FreeBSD') === null);
+ok('script cols: non-string -> null', luminum_os_script_cols(42) === null);
+ok('script cols: null -> null', luminum_os_script_cols(null) === null);
+
+// --- luminum_validate_query_sensors -----------------------------------------
+ok('query sensors: valid single entry',
+	luminum_validate_query_sensors([['sid' => 7]]) === [['sid' => 7, 'params' => []]]);
+ok('query sensors: valid with params',
+	luminum_validate_query_sensors([['sid' => 9, 'params' => ['host' => 'db-01', 'p_2' => 'x']]])
+		=== [['sid' => 9, 'params' => ['host' => 'db-01', 'p_2' => 'x']]]);
+ok('query sensors: explicit null params normalized to empty',
+	luminum_validate_query_sensors([['sid' => 1, 'params' => null]]) === [['sid' => 1, 'params' => []]]);
+ok('query sensors: rejects null', luminum_validate_query_sensors(null) === null);
+ok('query sensors: rejects non-array', luminum_validate_query_sensors('nope') === null);
+ok('query sensors: rejects empty list', luminum_validate_query_sensors([]) === null);
+ok('query sensors: rejects over-long list',
+	luminum_validate_query_sensors(array_map(fn($i) => ['sid' => $i], range(1, 26))) === null);
+ok('query sensors: rejects non-array element', luminum_validate_query_sensors([7]) === null);
+ok('query sensors: rejects string sid', luminum_validate_query_sensors([['sid' => '7']]) === null);
+ok('query sensors: rejects float sid', luminum_validate_query_sensors([['sid' => 7.5]]) === null);
+ok('query sensors: rejects zero sid', luminum_validate_query_sensors([['sid' => 0]]) === null);
+ok('query sensors: rejects missing sid', luminum_validate_query_sensors([['params' => []]]) === null);
+ok('query sensors: rejects duplicate sids',
+	luminum_validate_query_sensors([['sid' => 7], ['sid' => 7]]) === null);
+ok('query sensors: rejects non-string param value',
+	luminum_validate_query_sensors([['sid' => 7, 'params' => ['n' => 3]]]) === null);
+ok('query sensors: rejects bad param key',
+	luminum_validate_query_sensors([['sid' => 7, 'params' => ['bad key' => 'x']]]) === null);
+ok('query sensors: rejects over-long param value',
+	luminum_validate_query_sensors([['sid' => 7, 'params' => ['k' => str_repeat('a', 1025)]]]) === null);
+
+// --- luminum_query_command_data ---------------------------------------------
+$data = luminum_query_command_data('qid-1', [
+	['sid' => 7, 'params' => []],
+	['sid' => 9, 'params' => ['host' => 'db-01']],
+]);
+$decoded = json_decode($data, true);
+ok('query data: qid + sensors shape',
+	$decoded === ['qid' => 'qid-1', 'sensors' => [['sid' => 7], ['sid' => 9, 'params' => ['host' => 'db-01']]]],
+	$data);
+ok('query data: params omitted when empty', strpos($data, '"params":[]') === false);
+
+// --- luminum_sensor_config_data ---------------------------------------------
+$defs = [
+	['sid' => 7, 'name' => 'probe', 'lstype' => 'shell', 'lscript' => 'echo ok',
+	 'mstype' => null, 'mscript' => null, 'wstype' => null, 'wscript' => null],
+];
+$sdata = luminum_sensor_config_data($defs);
+$decoded = json_decode($sdata, true);
+ok('sensor config data: sensors array shape',
+	$decoded === ['sensors' => [['sid' => 7, 'name' => 'probe', 'lstype' => 'shell', 'lscript' => 'echo ok',
+		'mstype' => null, 'mscript' => null, 'wstype' => null, 'wscript' => null]]],
+	$sdata);
+
 // --- luminum_platform_tally -------------------------------------------------
 $tally = ['linux' => 0, 'macos' => 0, 'windows' => 0];
 luminum_platform_tally($tally, 'Linux');

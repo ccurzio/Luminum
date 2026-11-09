@@ -285,11 +285,11 @@ Both implementations MUST include a shared test vector (a fixed envelope with it
 | s→c (bootstrap) | core | `register` | `uid`, `sid`, `mqtthost`, `mqttport`, `mqttsecret`, `serverpubkey` (base64 SPKI/DER) | Registration response. Only valid over the bootstrap channel. `sid` is the Luminum Server ID used to build MQTT topics (§4.2). |
 | c→s | core | `checkin` | `hostname`, `osplat`, `osrel`, `clientver`, `ipv4` (opt), `ipv6` (opt) | Periodic liveness + state refresh. Interval = `CHECKININT`. |
 | c→s | core | `unregister` | — | Client-initiated deactivation request (sanctioned uninstall flow). |
-| s→c | core | `query` | `qid`, `sensors` (array of `{sid, params}`) | Run named sensors, return results. |
-| c→s | core | `answer` | `qid`, `results` (array of `{sid, output}`) or `ref` (§8.3) | Response to `query`. Correlated by `qid` inside `data`; message `id` still unique per message. |
+| s→c | core | `query` | `qid`, `sensors` (array of `{sid, params}`) | Run named sensors, return results. Definitions arrive via `config` (§7.3). |
+| c→s | core | `answer` | `qid`, `results` (array of `{sid, output}` on success or `{sid, err}` on per-sensor failure) or `ref` (§8.3) | Response to `query`. `status` is `OK` (all succeeded), `PARTIAL` (some failed), or `ERR` (malformed/none succeeded). Correlated by `qid` inside `data`; message `id` still unique per message. |
 | s→c | core | `deploy` | `aid`, `pkgid`, `ref` (§8.3), `profile` (opt) | Deploy a package. |
 | c→s | core | `report` | `event` (string), `detail` (object) | Unsolicited client report (e.g., deploy completion, local error). |
-| s→c | core | `config` | Lumy-specific key/value set | Push configuration to a Lumy (replaces the current IPC `newconfig`/`setconfig` round-trip as the server-side source of truth). |
+| s→c | core | `config` | Lumy-specific key/value set; for `lumy` = `core`, `data.sensors` (array of sensor definitions: `sid`, `name`, and the per-OS script type/script fields) | Push configuration to a Lumy (replaces the current IPC `newconfig`/`setconfig` round-trip as the server-side source of truth). Core sensor definitions are upserted by the client into its local sensor table (§7.3). |
 | s→c | core | `setgroups` | `groups` (array of names; the full replacement list, may be empty) | Update the endpoint's group membership (§4.2): the client re-subscribes its group `cmd` topics, persists the list, and responds `OK`; a name outside `[A-Za-z0-9_.-]` is rejected as a whole with `err: "INVALID_DATA"`. |
 
 ### 6.2 Lumy-defined actions
@@ -337,12 +337,17 @@ Client                              Server
 
 ```
 Server                          Client
-  |-- publish cmd: query (QoS1) ->|
+  |-- publish cmd: config (QoS1) ->|  (sensor definitions, when the client
+  |-- publish cmd: query (QoS1) ->|    does not already have them)
   |                               | execute sensors
   |<-- publish resp: answer ------|   (same data.qid)
 ```
 
-- Server tracks outstanding `query` commands with a deadline. No `answer` by deadline ⇒ command marked timed out; server may retry per its action policy.
+- **Sensor definitions.** A `query` names sensors by `sid` only, so the client must already hold their definitions (script + type, from the server's sensor store). The console delivers them per query: it enqueues a `core/config` command carrying `data.sensors` for exactly the sensors in the query immediately before the `core/query` (same outbox, lower row ID). Outbox publish order (ID ascending), QoS 1 to the same topic, and the client's sequential processing guarantee the definitions reach the client first. The client upserts them into a local sensor table (`SID`, name, script type, script) and answers the query.
+- **Parameter injection.** `params` values are resolved server-side (provided values merged with the sensor's declared defaults) and carried in the `query`; the client substitutes each value at the `${name}` points in the sensor script before execution.
+- **Per-sensor results.** Each `results` entry is `{sid, output}` on success or `{sid, err}` on failure (e.g. `UNKNOWN_SENSOR`, `EXEC_ERROR`, `TIMEOUT`); the answer `status` is `OK` / `PARTIAL` / `ERR` (§6.1). A single sensor cap (30 s) bounds one script; the server's command deadline (`CMDTIMEOUT`) bounds the whole query.
+- **Deadlines.** The server tracks outstanding `query` commands with a deadline. No `answer` by deadline ⇒ command marked `TIMEDOUT`; v1 does not republish a timed-out query (a redelivered query would be deduplicated client-side and never re-answered) — the console re-enqueues it if it wants a retry. Other commands are republished past their deadline per the action policy (§9.1).
+- **Size.** Small results ride MQTT. An answer that would exceed the broker's maximum packet size is answered `ERR` with `err: "OUTPUT_TOO_LARGE"`; oversized results travel via the data channel reference pattern (§8.3).
 - Client deduplicates by message `id` (§9.2) — a redelivered `query` after a partial MQTT outage must not double-execute sensors with side effects. Sensors must be written idempotently; the spec cannot guarantee it.
 
 ### 7.4 Deploy

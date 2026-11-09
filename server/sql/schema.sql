@@ -449,6 +449,31 @@ CREATE TABLE IF NOT EXISTS `COMMANDS` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
+-- Table structure for table `QUERYRESULTS`
+--
+-- Sensor results from a client's answer to a query command (protocol 6.1,
+-- 7.3). One row per results entry: a successful sensor (STATUS 'OK', OUTPUT
+-- set) or a per-sensor failure (STATUS 'ERR', ERR set). QID is the query
+-- command's QID, which the client echoes in data.qid (the outbox QID, the
+-- envelope id, and data.qid are the same value). Filled in by the broker's
+-- MQTT worker.
+--
+
+CREATE TABLE IF NOT EXISTS `QUERYRESULTS` (
+  `ID` int(20) NOT NULL AUTO_INCREMENT,
+  `CMDID` int(20) NOT NULL,
+  `QID` char(36) NOT NULL,
+  `UID` int(20) NOT NULL,
+  `SENSORID` int(20) NOT NULL,
+  `STATUS` tinytext NOT NULL,
+  `OUTPUT` mediumtext DEFAULT NULL,
+  `ERR` tinytext DEFAULT NULL,
+  `TS` datetime NOT NULL,
+  PRIMARY KEY (`ID`),
+  KEY `IDX_QUERYRESULTS_QID` (`QID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
 -- Current Database: `LOGS`
 --
 

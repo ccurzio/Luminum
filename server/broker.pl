@@ -12,9 +12,11 @@
 #    signed response carrying the server signing public key.
 #  - Check-in (7.2), deactivation, and Lumy configuration requests
 #    (newconfig) are handled on the same channel.
-#  - MQTT (MPORT) and bulk data channel transfers (8.3) are not yet
-#    implemented; the registration response carries the MQTT
-#    parameters so clients can connect once the broker is in place.
+#  - MQTT (MPORT): a forked Luminum::MQTT worker publishes commands from
+#    the CLIENTS.COMMANDS outbox and correlates client responses -
+#    setgroups/config by action, query answers by data.qid with per-sensor
+#    result storage (QUERYRESULTS) and per-action deadlines (7.3, 9.3).
+#  - Bulk data channel transfers (8.3) are not yet implemented.
 
 use strict;
 use Cwd qw(abs_path);
@@ -319,6 +321,7 @@ sub startmqtt {
 			user => $MQTTUSER, secret => $MQTTPASS, seed => $srvseed,
 			dbname => "CLIENTS", dbuser => $dbuser, dbpass => $dbpass, dbsock => $dbsock, dbhost => $dbhost,
 			poll_secs => 1,
+			cmd_timeout => $CMDTIMEOUT, depl_timeout => $DEPLTIMEOUT,
 			log => sub { Broker::debugout(0, "[mqtt] $_[0]"); },
 			);
 		exit 0;

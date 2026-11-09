@@ -8,10 +8,11 @@
 // Protocol notes (docs/protocol.md v1.0-draft):
 //  - All direct channels use length-prefixed frames: 4-byte big-endian
 //    length followed by a JSON envelope (§8.2).
-//  - The envelope format is §5.1. MQTT transport is not yet available
-//    (Mosquitto + broker integration pending), so registration,
-//    check-ins, and Lumy traffic currently ride the bootstrap/direct
-//    channel to the server listener (LPORT 10465).
+//  - The envelope format is §5.1. The MQTT control channel (Mosquitto) is
+//    the home for commands, responses, check-ins, and events (§4); the
+//    bootstrap/direct channel to the server listener (LPORT 10465) carries
+//    registration and the Lumy newconfig fetch. The bulk data channel
+//    (§8.3) and Lumy-namespaced MQTT routing (§6.2) are not implemented yet.
 //  - Every outgoing envelope is signed with the client's Ed25519 key
 //    over the canonical JSON (§5.3). Server responses are verified
 //    against the server signing key extracted from the validated
@@ -55,6 +56,10 @@ const IPORT: u16 = 10704;
 const DPORT: u16 = 10465;
 const LPORT: u16 = 10461;
 const CHECKIN_SECS: u64 = 300;
+// Per-sensor execution cap (protocol §7.3): the safety valve for a single
+// sensor script; the server's command deadline (CMDTIMEOUT) governs the
+// whole query.
+const SENSOR_TIMEOUT_SECS: u64 = 30;
 // This client's OS platform (protocol §4.2 / §6.1). Used both in the check-in
 // payload (osplat) and to build the OS group topic luminum/{SID}/os/{os}/cmd.
 const OSPLAT: &str = "Linux";
@@ -516,6 +521,265 @@ fn register_with_server(debug: bool, ccfg: &HashMap<String, String>) {
 }
 
 // ---------------------------------------------------------------------------
+// Sensors (protocol §6.1, §7.3)
+//
+// The client-side home for sensor definitions. The server delivers them in a
+// core/config command (data.sensors) immediately before the core/query that
+// uses them; the client upserts each entry into the SENSORS table of its
+// config DB and later executes the named sensors, answering with their
+// output.
+// ---------------------------------------------------------------------------
+
+// Ensure the SENSORS table exists in the client config DB.
+fn ensure_sensors_table(debug: bool) {
+	let conn = match Connection::open(cfg_path()) {
+		Ok(conn) => conn,
+		Err(err) => {
+			dbout(debug, 1, &format!("Could not open the configuration database for the sensor table: {}", err));
+			return;
+		}
+	};
+	conn.execute(
+		"create table if not exists SENSORS ( SID integer not null primary key, NAME text not null, LSTYPE text not null, LSCRIPT text not null )",
+		[],
+	).expect("Error: Could not create the SENSORS table.");
+	conn.close().unwrap();
+}
+
+// The sensors currently on file: SID -> (lstype, lscript).
+fn sensor_definitions(debug: bool) -> HashMap<i64, (String, String)> {
+	let mut defs: HashMap<i64, (String, String)> = HashMap::new();
+	let conn = match Connection::open(cfg_path()) {
+		Ok(conn) => conn,
+		Err(err) => {
+			dbout(debug, 1, &format!("Could not open the configuration database for sensors: {}", err));
+			return defs;
+		}
+	};
+	let mut stmt = match conn.prepare("select SID, LSTYPE, LSCRIPT from SENSORS") {
+		Ok(stmt) => stmt,
+		Err(err) => {
+			dbout(debug, 1, &format!("Could not read the SENSORS table: {}", err));
+			return defs;
+		}
+	};
+	let rows = match stmt.query_map(params![], |row| {
+		Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
+	}) {
+		Ok(rows) => rows,
+		Err(err) => {
+			dbout(debug, 1, &format!("Could not read the SENSORS table: {}", err));
+			return defs;
+		}
+	};
+	for row in rows {
+		if let Ok((sid, lstype, lscript)) = row {
+			defs.insert(sid, (lstype, lscript));
+		}
+	}
+	defs
+}
+
+// core/config (protocol §6.1, §7.3): the server pushes the sensor
+// definitions this endpoint will be asked to run. data.sensors is an array
+// of {sid, name, lstype, lscript} (plus per-OS fields this client ignores);
+// every entry is validated first, then upserted into the SENSORS table.
+// Returns an error string for the response envelope, or None when applied.
+fn apply_sensor_config(env: &Envelope, debug: bool) -> Option<String> {
+	let list = match env.data.as_ref().and_then(|d| d.get("sensors")).and_then(|v| v.as_array()) {
+		Some(list) => list,
+		None => return Some(String::from("INVALID_DATA")),
+	};
+	let mut defs: Vec<(i64, String, String, String)> = Vec::new();
+	for entry in list {
+		let sid = match entry.get("sid").and_then(|v| v.as_i64()) {
+			Some(s) if s > 0 && s <= i32::MAX as i64 => s,
+			_ => return Some(String::from("INVALID_DATA")),
+		};
+		let name = match entry.get("name").and_then(|v| v.as_str()) {
+			Some(n) if !n.is_empty() => n.to_string(),
+			_ => return Some(String::from("INVALID_DATA")),
+		};
+		let lstype = match entry.get("lstype").and_then(|v| v.as_str()) {
+			Some(t) if t == "shell" || t == "perl" || t == "python" => t.to_string(),
+			_ => return Some(String::from("INVALID_DATA")),
+		};
+		let lscript = match entry.get("lscript").and_then(|v| v.as_str()) {
+			Some(s) if !s.is_empty() => s.to_string(),
+			_ => return Some(String::from("INVALID_DATA")),
+		};
+		defs.push((sid, name, lstype, lscript));
+	}
+	let conn = match Connection::open(cfg_path()) {
+		Ok(conn) => conn,
+		Err(_) => return Some(String::from("DB_ERROR")),
+	};
+	let mut stmt = match conn.prepare("insert or replace into SENSORS (SID,NAME,LSTYPE,LSCRIPT) values (?1,?2,?3,?4)") {
+		Ok(stmt) => stmt,
+		Err(_) => return Some(String::from("DB_ERROR")),
+	};
+	for (sid, name, lstype, lscript) in &defs {
+		if stmt.execute(params![sid, name, lstype, lscript]).is_err() {
+			return Some(String::from("DB_ERROR"));
+		}
+	}
+	dbout(debug, 3, &format!("sensor definitions applied ({} sensor(s))", defs.len()));
+	None
+}
+
+// A UUID v4 in the envelope id format (protocol §5.1).
+fn is_uuid4(s: &str) -> bool {
+	let b = s.as_bytes();
+	b.len() == 36
+		&& b[8] == b'-' && b[13] == b'-' && b[18] == b'-' && b[23] == b'-'
+		&& b[0..8].iter().all(|c| c.is_ascii_hexdigit())
+		&& b[9..13].iter().all(|c| c.is_ascii_hexdigit())
+		&& b[14..18].iter().all(|c| c.is_ascii_hexdigit())
+		&& b[19..23].iter().all(|c| c.is_ascii_hexdigit())
+		&& b[24..36].iter().all(|c| c.is_ascii_hexdigit())
+}
+
+// Run one sensor script to completion: $prog is the interpreter for the
+// stored LSTYPE, and the script rides on stdin (shell, perl, and python all
+// read a script from stdin).
+async fn run_sensor_script(prog: &str, script: &str) -> Result<String, Box<dyn Error>> {
+	use tokio::io::AsyncWriteExt;
+	use tokio::process::Command;
+	let mut child = Command::new(prog)
+		.stdin(Stdio::piped())
+		.stdout(Stdio::piped())
+		.stderr(Stdio::piped())
+		.kill_on_drop(true)
+		.spawn()?;
+	if let Some(mut stdin) = child.stdin.take() {
+		stdin.write_all(script.as_bytes()).await?;
+	}
+	let out = child.wait_with_output().await?;
+	if !out.status.success() {
+		return Err(Box::from(format!("exit status: {}", out.status)));
+	}
+	Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+// Execute one sensor of a query; returns its results entry: {sid, output}
+// on success, {sid, err} on failure (protocol §6.1). Parameter injection
+// (§7.3): the server resolved the final values (defaults merged); the client
+// substitutes each ${name} point in the script.
+async fn run_sensor(sid: i64, params: &HashMap<String, String>, defs: &HashMap<i64, (String, String)>, debug: bool) -> serde_json::Value {
+	let (lstype, lscript) = match defs.get(&sid) {
+		Some(def) => def,
+		None => return serde_json::json!({ "sid": sid, "err": "UNKNOWN_SENSOR" }),
+	};
+	let prog = match lstype.as_str() {
+		"shell" => "/bin/sh",
+		"perl" => "perl",
+		"python" => "python3",
+		_ => return serde_json::json!({ "sid": sid, "err": "UNKNOWN_SENSOR" }),
+	};
+	let mut script = lscript.clone();
+	for (k, v) in params {
+		script = script.replace(&format!("${{{}}}", k), v);
+	}
+	match tokio::time::timeout(Duration::from_secs(SENSOR_TIMEOUT_SECS), run_sensor_script(prog, &script)).await {
+		Ok(Ok(output)) => serde_json::json!({ "sid": sid, "output": output }),
+		Ok(Err(err)) => {
+			dbout(debug, 1, &format!("sensor {} failed to run: {}", sid, err));
+			serde_json::json!({ "sid": sid, "err": "EXEC_ERROR" })
+		}
+		Err(_) => {
+			dbout(debug, 1, &format!("sensor {} timed out after {}s", sid, SENSOR_TIMEOUT_SECS));
+			serde_json::json!({ "sid": sid, "err": "TIMEOUT" })
+		}
+	}
+}
+
+// core/query (protocol §6.1, §7.3): execute the named sensors and build the
+// answer envelope (action=answer, data.qid echoed, one results entry per
+// sensor). A malformed query is answered with the qid echoed when it is
+// recoverable, so the server can still correlate it. An answer that would
+// exceed the 64 KiB MQTT cap comes back as ERR/OUTPUT_TOO_LARGE until the
+// data channel (§8.3) is in place.
+async fn apply_query(env: &Envelope, uid: &str, debug: bool) -> Envelope {
+	let (qid, sensors) = match env.data.as_ref() {
+		Some(d) => {
+			let qid = match d.get("qid").and_then(|v| v.as_str()).filter(|q| is_uuid4(q)) {
+				Some(q) => q.to_string(),
+				None => return query_err(uid, None, "INVALID_DATA"),
+			};
+			match d.get("sensors").and_then(|v| v.as_array()) {
+				Some(list) if !list.is_empty() => (qid, list.clone()),
+				_ => return query_err(uid, Some(&qid), "INVALID_DATA"),
+			}
+		}
+		None => return query_err(uid, None, "INVALID_DATA"),
+	};
+	let defs = sensor_definitions(debug);
+	let mut results: Vec<serde_json::Value> = Vec::new();
+	let mut ok_count = 0usize;
+	for entry in sensors {
+		let sid = match entry.get("sid").and_then(|v| v.as_i64()).filter(|s| *s > 0) {
+			Some(sid) => sid,
+			None => {
+				results.push(serde_json::json!({
+					"sid": entry.get("sid").cloned().unwrap_or(serde_json::Value::Null),
+					"err": "INVALID_DATA"
+				}));
+				continue;
+			}
+		};
+		let mut params: HashMap<String, String> = HashMap::new();
+		let params_ok = match entry.get("params") {
+			None | Some(serde_json::Value::Null) => true,
+			Some(serde_json::Value::Object(obj)) => {
+				let mut ok = true;
+				for (k, v) in obj {
+					if k.is_empty() || k.len() > 64 || !k.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+						ok = false;
+						break;
+					}
+					match v.as_str() {
+						Some(s) if s.len() <= 1024 => { params.insert(k.clone(), s.to_string()); }
+						_ => { ok = false; break; }
+					}
+				}
+				ok
+			}
+			Some(_) => false,
+		};
+		if !params_ok {
+			results.push(serde_json::json!({ "sid": sid, "err": "INVALID_DATA" }));
+			continue;
+		}
+		let result = run_sensor(sid, &params, &defs, debug).await;
+		if result.get("output").is_some() {
+			ok_count += 1;
+		}
+		results.push(result);
+	}
+	let status = if ok_count == results.len() { "OK" } else if ok_count > 0 { "PARTIAL" } else { "ERR" };
+	let mut resp = new_envelope("client", uid, "core", "answer", status, Some(serde_json::json!({ "qid": qid, "results": results })));
+	if status == "ERR" {
+		resp.err = Some(String::from("SENSOR_ERROR"));
+	}
+	let payload = serde_json::to_vec(&resp).expect("Error: unable to serialize the answer envelope");
+	if payload.len() > 65536 {
+		let mut oob = new_envelope("client", uid, "core", "answer", "ERR", Some(serde_json::json!({ "qid": qid })));
+		oob.err = Some(String::from("OUTPUT_TOO_LARGE"));
+		dbout(debug, 1, &format!("answer for qid {} is {} bytes, over the MQTT limit; reporting OUTPUT_TOO_LARGE", qid, payload.len()));
+		return oob;
+	}
+	resp
+}
+
+// A malformed query is answered on the answer action, echoing the qid when
+// one was recoverable so the server can still correlate by data.qid.
+fn query_err(uid: &str, qid: Option<&str>, err: &str) -> Envelope {
+	let mut resp = new_envelope("client", uid, "core", "answer", "ERR", qid.map(|q| serde_json::json!({ "qid": q })));
+	resp.err = Some(err.to_string());
+	resp
+}
+
+// ---------------------------------------------------------------------------
 // MQTT control channel (protocol §4)
 // ---------------------------------------------------------------------------
 
@@ -660,19 +924,12 @@ async fn mqtt_run(debug: bool, ccfg: HashMap<String, String>) {
 				seen.push_back(env.id.clone());
 				while seen.len() > 1024 { seen.pop_front(); }
 				dbout(debug, 3, &format!("MQTT command received: lumy={} action={}", env.lumy, env.action));
-				// Apply the command (protocol 6). core/setgroups applies a
-				// group-membership change to this endpoint; the remaining
-				// actions (query/deploy/config) are follow-ons.
-				let cmd_err = if env.lumy == "core" && env.action == "setgroups" {
-					apply_setgroups(&client, &mut cmd_topics, &env, &sid, debug).await
-				} else {
-					None
-				};
-				// Acknowledge on the resp topic (the server's worker marks
-				// the matching outbox command ACKED).
-				let mut resp = new_envelope("client", &uid, &env.lumy, &env.action,
-					match &cmd_err { Some(_) => "ERR", None => "OK" }, None);
-				resp.err = cmd_err;
+				// Apply the command (protocol 6) and build the response
+				// envelope; the response is signed and published on the
+				// per-UID resp topic (the server's worker correlates it back
+				// to the outbox: setgroups/config by action, answers by
+				// data.qid).
+				let mut resp = handle_command(&client, &mut cmd_topics, &env, &uid, &sid, debug).await;
 				sign_envelope(&mut resp, &seed);
 				let payload = serde_json::to_vec(&resp).expect("Error: unable to serialize response");
 				if let Err(err) = client.publish(&resp_topic, QoS::AtLeastOnce, false, payload).await {
@@ -692,6 +949,54 @@ async fn mqtt_run(debug: bool, ccfg: HashMap<String, String>) {
 			}
 		}
 	}
+}
+
+// Dispatch a verified command and build its response envelope (protocol 6).
+// The response is signed and published by the caller. Core actions:
+// setgroups/config/query are applied; deploy awaits the data channel (§8.3);
+// client-originated actions and unknown actions/lumys are rejected per §6.3.
+// Lumy namespaces are routed over MQTT as a follow-on (§6.2); until then a
+// non-core lumy is answered UNKNOWN_LUMY.
+async fn handle_command(
+	client: &rumqttc::AsyncClient,
+	cmd_topics: &mut Vec<String>,
+	env: &Envelope,
+	uid: &str,
+	sid: &str,
+	debug: bool,
+) -> Envelope {
+	if env.lumy != "core" {
+		return cmd_error(uid, &env.lumy, &env.action, "UNKNOWN_LUMY");
+	}
+	match env.action.as_str() {
+		"setgroups" => match apply_setgroups(client, cmd_topics, env, sid, debug).await {
+			Some(err) => cmd_error(uid, &env.lumy, &env.action, &err),
+			None => cmd_ok(uid, &env.lumy, &env.action),
+		},
+		"config" => match apply_sensor_config(env, debug) {
+			Some(err) => cmd_error(uid, &env.lumy, &env.action, &err),
+			None => cmd_ok(uid, &env.lumy, &env.action),
+		},
+		"query" => apply_query(env, uid, debug).await,
+		"deploy" => cmd_error(uid, &env.lumy, &env.action, "NOT_IMPLEMENTED"),
+		// Client-originated actions (protocol §6.1): never valid on a cmd topic.
+		"register" | "checkin" | "unregister" | "report" | "answer" => {
+			cmd_error(uid, &env.lumy, &env.action, "INVALID_DIRECTION")
+		}
+		_ => cmd_error(uid, &env.lumy, &env.action, "UNKNOWN_ACTION"),
+	}
+}
+
+// An OK response echoing the command's lumy/action (§6).
+fn cmd_ok(uid: &str, lumy: &str, action: &str) -> Envelope {
+	new_envelope("client", uid, lumy, action, "OK", None)
+}
+
+// An ERR response echoing the command's lumy/action, with the given error.
+fn cmd_error(uid: &str, lumy: &str, action: &str, err: &str) -> Envelope {
+	let mut resp = new_envelope("client", uid, lumy, action, "ERR", None);
+	resp.err = Some(err.to_string());
+	resp
 }
 
 // core/setgroups (protocol 4.2): the server pushes the endpoint's full
@@ -1145,6 +1450,10 @@ async fn main() {
 	// Re-read the configuration: registration (above) writes UID/SID/MQTT* to
 	// the config DB, which the in-memory snapshot does not reflect.
 	let ccfg = parse_clientconfig(debug);
+
+	// Sensor definitions table (protocol §7.3): the home for sensor scripts
+	// pushed by the server in core/config commands.
+	ensure_sensors_table(debug);
 
 	// MQTT control channel (protocol §4): persistent session, LWT, periodic
 	// check-ins, and command handling. Returns immediately (no-op) when the

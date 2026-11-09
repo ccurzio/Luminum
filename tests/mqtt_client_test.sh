@@ -10,6 +10,12 @@
 #   - applies a server-signed core/setgroups command: persists the new group
 #     list, answers commands on the newly-joined group topic, stops answering
 #     on a topic it left, and rejects an invalid group name (ERR)
+#   - answers core/config with a sensor-definition push (applies it to its
+#     SENSORS table, rejects a malformed payload) and core/query with an
+#     answer (action=answer, data.qid echoed, per-sensor output with
+#     ${param} injection, UNKNOWN_SENSOR for an undefined sensor,
+#     INVALID_DATA for a malformed query); unknown core actions get
+#     ERR/UNKNOWN_ACTION (protocol 6.3)
 #   - does NOT respond to a command on a topic it did not subscribe to
 #   - publishes a signed offline LWT when killed
 #
@@ -294,36 +300,39 @@ sign_and_pub() {
 }
 
 # Wait for a response with the given action on the resp topic; verify it.
-# $1 = action. Returns 0 if a valid signed response arrived.
+# $1 = action, $2 = expected status (default OK). Returns 0 if a valid
+# signed response with that status arrived.
 await_resp() {
-    local action="$1" resp
+    local action="$1" status="${2:-OK}" resp
     for i in $(seq 1 30); do
         resp=$(grep "\"action\":\"$action\"" "$SCRATCH/resp.out" 2>/dev/null | head -n 1)
         [ -n "$resp" ] && break
         sleep 0.5
     done
     [ -n "$resp" ] || return 1
-    verify_envelope "$resp" "$action" OK
+    verify_envelope "$resp" "$action" "$status"
 }
 
 # --- group command round trips ------------------------------------------------
 # Each of the topics the client subscribes to must deliver a signed command
-# that the client verifies and acknowledges on its resp topic.
+# that the client verifies and answers on its resp topic. The actions below
+# do not exist in core, so the answer is ERR/UNKNOWN_ACTION (protocol 6.3);
+# the point of the check is delivery on each subscribed topic.
 sign_and_pub queryall  "luminum/$SID/all/cmd"
-await_resp queryall
-check "client verified + responded to a command on all/cmd" "$?"
+await_resp queryall ERR
+check "client verified + answered ERR/UNKNOWN_ACTION on all/cmd" "$?"
 
 sign_and_pub queryos   "luminum/$SID/os/linux/cmd"
-await_resp queryos
-check "client verified + responded to a command on os/linux/cmd" "$?"
+await_resp queryos ERR
+check "client verified + answered ERR/UNKNOWN_ACTION on os/linux/cmd" "$?"
 
 sign_and_pub querygrp  "luminum/$SID/grp/$GROUP/cmd"
-await_resp querygrp
-check "client verified + responded to a command on grp/$GROUP/cmd" "$?"
+await_resp querygrp ERR
+check "client verified + answered ERR/UNKNOWN_ACTION on grp/$GROUP/cmd" "$?"
 
 sign_and_pub queryuid  "luminum/$SID/$UID_TEST/cmd"
-await_resp queryuid
-check "client verified + responded to a command on its own UID cmd topic" "$?"
+await_resp queryuid ERR
+check "client verified + answered ERR/UNKNOWN_ACTION on its own UID cmd topic" "$?"
 
 # --- setgroups: membership changes take effect on the endpoint ---------------
 # Pre-seeded GROUPS is "testgrp". setgroups replaces the whole list. The client
@@ -349,7 +358,7 @@ sg1=$(await_setgroups 1)
 check "client verified + responded to setgroups (join newgrp)" "$?"
 check "client persisted the new group list" $([ "$(cfgval GROUPS)" = "testgrp,newgrp" ]; echo $?) "GROUPS=$(cfgval GROUPS)"
 sign_and_pub querynewgrp "luminum/$SID/grp/newgrp/cmd"
-await_resp querynewgrp
+await_resp querynewgrp ERR
 check "client answers commands on the newly-joined group topic" "$?"
 
 sign_and_pub setgroups "luminum/$SID/$UID_TEST/cmd" '{"groups":["newgrp"]}'
@@ -383,6 +392,102 @@ sleep 3
 negfail=0
 grep -q '"action":"querywin"' "$SCRATCH/resp.out" 2>/dev/null && negfail=1
 check "client did NOT respond to a command on an unsubscribed topic (os/windows)" "$negfail"
+
+# --- sensor definitions + query (protocol 6.1, 7.3) ---------------------------
+# core/config pushes sensor definitions (the client upserts them into its
+# SENSORS table); core/query executes them and answers on the answer action
+# with data.qid echoed. Answers are told apart by their data.qid.
+sensors_dump() {
+    python3 - "$HOME_TEST" <<'EOF'
+import sqlite3, sys
+conn = sqlite3.connect(sys.argv[1] + "/config/client.conf.db")
+try:
+    print(conn.execute("select SID,NAME,LSTYPE from SENSORS order by SID").fetchall())
+except Exception:
+    print("[]")
+EOF
+}
+
+CFGDATA='{"sensors":[{"sid":1,"name":"probe","lstype":"shell","lscript":"echo sensor-ok"},{"sid":2,"name":"paramtest","lstype":"shell","lscript":"echo val=${p1}"}]}'
+sign_and_pub config "luminum/$SID/$UID_TEST/cmd" "$CFGDATA"
+await_resp config
+check "client verified + applied a core/config sensor-definition push" "$?"
+SENSOR_EXPECTED="[(1, 'probe', 'shell'), (2, 'paramtest', 'shell')]"
+sensorrows=$(sensors_dump)
+senok=0
+[ "$sensorrows" = "$SENSOR_EXPECTED" ] || senok=1
+check "client persisted the pushed sensor definitions" "$senok" "got: $sensorrows"
+
+QIDQ=$(python3 -c 'import uuid;print(uuid.uuid4())')
+sign_and_pub query "luminum/$SID/$UID_TEST/cmd" "{\"qid\":\"$QIDQ\",\"sensors\":[{\"sid\":1},{\"sid\":2,\"params\":{\"p1\":\"hello\"}}]}"
+ansq=""
+for i in $(seq 1 30); do
+    ansq=$(grep "\"qid\":\"$QIDQ\"" "$SCRATCH/resp.out" 2>/dev/null | grep '"action":"answer"' | head -n 1)
+    [ -n "$ansq" ] && break
+    sleep 0.5
+done
+check "client answered the query (action=answer, data.qid echoed)" $([ -n "$ansq" ]; echo $?) "see $SCRATCH/resp.out"
+if [ -n "$ansq" ]; then
+    verify_envelope "$ansq" answer OK
+    check "answer is a valid signed envelope (action=answer, status=OK)" "$?"
+    check "sensor 1 output present in results" "$(printf '%s' "$ansq" | grep -q '"output":"sensor-ok'; echo $?)"
+    check "sensor 2 parameter injected (\${p1} -> hello)" "$(printf '%s' "$ansq" | grep -q '"output":"val=hello'; echo $?)"
+fi
+
+# Unknown sensor: an undefined sid is a per-sensor {sid, err} entry; with no
+# sensor succeeding, the answer status is ERR.
+QIDU=$(python3 -c 'import uuid;print(uuid.uuid4())')
+sign_and_pub query "luminum/$SID/$UID_TEST/cmd" "{\"qid\":\"$QIDU\",\"sensors\":[{\"sid\":99}]}"
+ansu=""
+for i in $(seq 1 30); do
+    ansu=$(grep "\"qid\":\"$QIDU\"" "$SCRATCH/resp.out" 2>/dev/null | grep '"action":"answer"' | head -n 1)
+    [ -n "$ansu" ] && break
+    sleep 0.5
+done
+check "client answered a query naming an unknown sensor" $([ -n "$ansu" ]; echo $?)
+if [ -n "$ansu" ]; then
+    verify_envelope "$ansu" answer ERR
+    check "unknown-sensor answer is signed (status=ERR)" "$?"
+    check "unknown sensor reported as UNKNOWN_SENSOR" "$(printf '%s' "$ansu" | grep -q 'UNKNOWN_SENSOR'; echo $?)"
+fi
+
+# Malformed query (no qid): answered ERR/INVALID_DATA with no data.
+sign_and_pub query "luminum/$SID/$UID_TEST/cmd" '{"sensors":[{"sid":1}]}'
+ansv=""
+for i in $(seq 1 30); do
+    ansv=$(grep '"action":"answer"' "$SCRATCH/resp.out" 2>/dev/null | grep -v '"qid"' | head -n 1)
+    [ -n "$ansv" ] && break
+    sleep 0.5
+done
+malok=1
+if [ -n "$ansv" ]; then
+    if verify_envelope "$ansv" answer ERR && printf '%s' "$ansv" | grep -q 'INVALID_DATA'; then
+        malok=0
+    fi
+fi
+check "malformed query (no qid) answered ERR/INVALID_DATA" "$malok"
+
+# Malformed config push: rejected as a whole, stored sensors untouched.
+sign_and_pub config "luminum/$SID/$UID_TEST/cmd" '{"sensors":"nope"}'
+cfgerr=""
+for i in $(seq 1 30); do
+    if [ "$(grep -c '"action":"config"' "$SCRATCH/resp.out" 2>/dev/null)" -ge 2 ]; then
+        cfgerr=$(grep '"action":"config"' "$SCRATCH/resp.out" 2>/dev/null | tail -n 1)
+        break
+    fi
+    sleep 0.5
+done
+badok=1
+if [ -n "$cfgerr" ]; then
+    if verify_envelope "$cfgerr" config ERR && printf '%s' "$cfgerr" | grep -q 'INVALID_DATA'; then
+        badok=0
+    fi
+fi
+check "client rejected a malformed core/config payload (ERR/INVALID_DATA)" "$badok"
+sensorrows=$(sensors_dump)
+senok=0
+[ "$sensorrows" = "$SENSOR_EXPECTED" ] || senok=1
+check "malformed config left the stored sensors untouched" "$senok" "got: $sensorrows"
 
 # --- LWT: kill the client, expect a signed offline envelope -------------------
 kill -9 "$CLIENT_PID" 2>/dev/null

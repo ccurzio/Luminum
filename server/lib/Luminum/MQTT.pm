@@ -243,9 +243,12 @@ sub _on_status {
 	}
 }
 
-# Handle a response (resp) message: mark the matching outbox command ACKED.
-# Correlation is by (uid, lumy, action) because the client echoes lumy/action
-# and signs with its own UID but does not carry the command's message id.
+# Handle a response (resp) message. An answer to a query is correlated by
+# data.qid (protocol 7.3: the client echoes the query's qid, which is the
+# outbox QID, the command envelope id, and data.qid in one value); its
+# per-sensor results are stored in QUERYRESULTS. Other responses (setgroups,
+# config, ...) carry no qid, so correlation stays by (uid, lumy, action):
+# the client echoes lumy/action but does not carry the command's message id.
 sub _on_resp {
 	my ($db, $sid, $topic, $payload, $log) = @_;
 	my ($uid) = $topic =~ m{^luminum/$sid/(\d+)/resp$} or do { $log->("resp: unparseable topic $topic"); return; };
@@ -253,6 +256,11 @@ sub _on_resp {
 	return unless ref($env) eq "HASH";
 	my $lumy = $env->{lumy} // "";
 	my $action = $env->{action} // "";
+	my $data = (ref($env->{data}) eq "HASH") ? $env->{data} : undef;
+	if ($action eq "answer" && defined $data) {
+		_on_answer($db, $uid, $data, $log);
+		return;
+	}
 	my $dbh = _dbh($db);
 	my $sth = $dbh->prepare("select ID from COMMANDS where STATUS = 'SENT' and LUMY = ? and ACTION = ? and (TARGET = ? or TARGET = 'all' or TARGET like 'os/%' or TARGET like 'grp/%') order by ID asc limit 1");
 	$sth->execute($lumy, $action, $uid);
@@ -266,6 +274,44 @@ sub _on_resp {
 	}
 }
 
+# Handle a query answer (protocol 6.1, 7.3): mark the command ACKED and store
+# each per-sensor results entry in QUERYRESULTS. A duplicate or late answer
+# (command already ACKED/TIMEDOUT, e.g. a QoS 1 redelivery) is logged and
+# dropped, so results are stored exactly once.
+sub _on_answer {
+	my ($db, $uid, $data, $log) = @_;
+	my $qid = $data->{qid};
+	if (!defined $qid || $qid !~ /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/) {
+		$log->("answer: UID $uid answer without a valid data.qid; not correlated");
+		return;
+	}
+	my $dbh = _dbh($db);
+	my $sth = $dbh->prepare("select ID, STATUS from COMMANDS where QID = ?");
+	$sth->execute($qid);
+	my ($id, $status) = $sth->fetchrow_array();
+	if (!defined $id) {
+		$log->("answer: UID $uid answer for unknown qid $qid (no matching outbox command)");
+		return;
+	}
+	if ($status eq "ACKED" || $status eq "TIMEDOUT") {
+		$log->("answer: duplicate/late answer for command $id (already $status); ignored");
+		return;
+	}
+	$dbh->do("update COMMANDS set STATUS = 'ACKED', ACKED = now() where ID = ?", undef, $id);
+	my $results = (ref($data->{results}) eq "ARRAY") ? $data->{results} : [];
+	my $ins = $dbh->prepare("insert into QUERYRESULTS (CMDID,QID,UID,SENSORID,STATUS,OUTPUT,ERR,TS) values (?,?,?,?,?,?,?,now())");
+	my $stored = 0;
+	for my $r (@$results) {
+		next unless ref($r) eq "HASH" && defined $r->{sid} && "$r->{sid}" =~ /^[0-9]+$/;
+		my $ok = (defined $r->{output} && !ref($r->{output}));
+		$ins->execute($id, $qid, $uid, $r->{sid}, $ok ? "OK" : "ERR",
+			$ok ? $r->{output} : undef,
+			($ok || !defined $r->{err} || ref($r->{err})) ? undef : $r->{err});
+		$stored++;
+	}
+	$log->("answer: UID $uid answered query $qid (command $id, $stored result(s) stored)");
+}
+
 # Handle an event message (logged only for now).
 sub _on_events {
 	my ($db, $sid, $topic, $payload, $log) = @_;
@@ -275,16 +321,32 @@ sub _on_events {
 	$log->("events: UID $uid " . ($env->{action} // "?") . " " . ($env->{status} // ""));
 }
 
-# Publish PENDING outbox commands, and retry SENT commands past their deadline.
-# A redelivered command reuses its stored QID as the envelope id so the client
-# deduplicates it (protocol 9).
+# The deadline for an action (protocol 9.3): query and other commands use
+# CMDTIMEOUT, deploy uses DEPLTIMEOUT.
+sub _action_timeout {
+	my ($action, $cmd, $depl) = @_;
+	return ($action eq "deploy") ? $depl : $cmd;
+}
+
+# Publish PENDING outbox commands, and handle SENT commands past their
+# deadline (protocol 7.3, 9). A redelivered command reuses its stored QID as
+# the envelope id so the client deduplicates it. Retry policy (v1): a query
+# that gets no answer by its deadline is terminal - it is marked TIMEDOUT and
+# not republished (a redelivered query would be deduplicated client-side and
+# never re-answered); the console re-enqueues it if it wants a retry. Other
+# actions are republished past their deadline.
 sub _pump_outbox {
-	my ($db, $m, $sid, $seed, $log) = @_;
+	my ($db, $m, $sid, $seed, $cmd_timeout, $depl_timeout, $log) = @_;
 	my $dbh = _dbh($db);
-	my $sth = $dbh->prepare("select ID, TARGET, LUMY, ACTION, DATA, QID from COMMANDS where STATUS = 'PENDING' or (STATUS = 'SENT' and DEADLINE is not null and DEADLINE < now()) order by ID asc limit 50");
+	my $sth = $dbh->prepare("select ID, TARGET, LUMY, ACTION, DATA, QID, STATUS from COMMANDS where STATUS = 'PENDING' or (STATUS = 'SENT' and DEADLINE is not null and DEADLINE < now()) order by ID asc limit 50");
 	$sth->execute();
 	while (my @row = $sth->fetchrow_array()) {
-		my ($id, $target, $lumy, $action, $data, $qid) = @row;
+		my ($id, $target, $lumy, $action, $data, $qid, $status) = @row;
+		if ($status eq "SENT" && $action eq "query") {
+			$dbh->do("update COMMANDS set STATUS = 'TIMEDOUT' where ID = ?", undef, $id);
+			$log->("outbox: query command $id got no answer by its deadline; marked TIMEDOUT");
+			next;
+		}
 		my $topic = target_topic($sid, $target);
 		if (!defined $topic) {
 			$dbh->do("update COMMANDS set STATUS = 'EXPIRED' where ID = ?", undef, $id);
@@ -295,9 +357,33 @@ sub _pump_outbox {
 		my $datahash = (defined $data && length($data)) ? eval { JSON::PP->new->utf8->decode($data) } : undef;
 		my $payload = sign_command($seed, $uid, $lumy, $action, $datahash, $qid);
 		$m->publish($topic, $payload);
-		$dbh->do("update COMMANDS set STATUS = 'SENT', SENT = now(), DEADLINE = date_add(now(), interval 120 second) where ID = ?", undef, $id);
-		$log->("outbox: published command $id ($lumy/$action) to $topic");
+		my $timeout = _action_timeout($action, $cmd_timeout, $depl_timeout);
+		$dbh->do("update COMMANDS set STATUS = 'SENT', SENT = now(), DEADLINE = date_add(now(), interval $timeout second) where ID = ?", undef, $id);
+		$log->("outbox: published command $id ($lumy/$action) to $topic (deadline ${timeout}s)");
 	}
+}
+
+# Ensure the answer-storage table exists (protocol 7.3). schema.sql creates
+# it for installed databases; this covers a worker pointed at a database
+# that predates the table.
+sub _ensure_schema {
+	my ($db) = @_;
+	my $dbh = _dbh($db);
+	$dbh->do(qq{
+		create table if not exists QUERYRESULTS (
+			ID int(20) not null auto_increment,
+			CMDID int(20) not null,
+			QID char(36) not null,
+			UID int(20) not null,
+			SENSORID int(20) not null,
+			STATUS tinytext not null,
+			OUTPUT mediumtext default null,
+			ERR tinytext default null,
+			TS datetime not null,
+			primary key (ID),
+			key IDX_QUERYRESULTS_QID (QID)
+		) engine=InnoDB default charset=utf8mb4
+	});
 }
 
 # The main worker loop. Runs forever in a forked child.
@@ -306,6 +392,8 @@ sub _pump_outbox {
 #   sid, host, port, ca, user, secret, seed   - MQTT connection + signing
 #   dbname, dbuser, dbpass, dbsock, dbhost    - database connection
 #   poll_secs                                 - outbox poll interval (default 1)
+#   cmd_timeout, depl_timeout                 - command deadlines in seconds
+#                                               (protocol 9.3; defaults 120/3600)
 #   log                                       - coderef($msg) for logging
 sub worker {
 	my (%a) = @_;
@@ -314,6 +402,8 @@ sub worker {
 		params => { dbname => $a{dbname}, dbuser => $a{dbuser}, dbpass => $a{dbpass}, dbsock => $a{dbsock}, dbhost => $a{dbhost} },
 		h => undef,
 	};
+	my $cmd_timeout = ($a{cmd_timeout} && $a{cmd_timeout} =~ /^[0-9]+$/) ? $a{cmd_timeout} : 120;
+	my $depl_timeout = ($a{depl_timeout} && $a{depl_timeout} =~ /^[0-9]+$/) ? $a{depl_timeout} : 3600;
 
 	my $m = Net::MQTT::Simple::SSL->new("$a{host}:$a{port}", { SSL_ca_file => $a{ca}, SSL_verify_mode => SSL_VERIFY_PEER });
 	$m->login($a{user}, $a{secret});
@@ -323,13 +413,15 @@ sub worker {
 	$m->subscribe("$base/+/status", sub { _on_status($db, $a{sid}, $_[0], $_[1], $log); });
 	$m->subscribe("$base/+/events", sub { _on_events($db, $a{sid}, $_[0], $_[1], $log); });
 
+	my $schema_ok = 0;
 	my $last = 0;
 	while (1) {
 		eval {
 			$m->tick(0.25);
+			unless ($schema_ok) { _ensure_schema($db); $schema_ok = 1; }
 			if (time() - $last >= ($a{poll_secs} // 1)) {
 				$last = time();
-				_pump_outbox($db, $m, $a{sid}, $a{seed}, $log);
+				_pump_outbox($db, $m, $a{sid}, $a{seed}, $cmd_timeout, $depl_timeout, $log);
 			}
 			1;
 		} or do { $log->("worker: " . $@); sleep 2; };

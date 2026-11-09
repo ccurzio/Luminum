@@ -10,6 +10,10 @@
 #     client, and marked ACKED on the client's response
 #   - an OS-targeted command is published to the lowercased OS topic and acked
 #   - a group-targeted command is delivered to the group topic and acked
+#   - a query round trip: the config row (sensor definitions) and the query
+#     row are published in ID order, both are ACKED (the answer by data.qid),
+#     and the per-sensor result is stored in QUERYRESULTS
+#   - an unanswered query is marked TIMEDOUT at its deadline (not republished)
 #   - the offline LWT on client death flips STATUS.CSTATE to OFFLINE
 #
 # Unlike tests/mqtt_client_test.sh (which stands in for the server with
@@ -170,6 +174,19 @@ create table COMMANDS (
   primary key (ID),
   key IDX_COMMANDS_STATUS (STATUS)
 ) engine=InnoDB default charset=utf8mb4;
+create table QUERYRESULTS (
+  ID int(20) not null auto_increment,
+  CMDID int(20) not null,
+  QID char(36) not null,
+  UID int(20) not null,
+  SENSORID int(20) not null,
+  STATUS tinytext not null,
+  OUTPUT mediumtext default null,
+  ERR tinytext default null,
+  TS datetime not null,
+  primary key (ID),
+  key IDX_QUERYRESULTS_QID (QID)
+) engine=InnoDB default charset=utf8mb4;
 SQL
 [ $? -eq 0 ] || { echo "SKIP - could not create the scratch database"; exit 0; }
 
@@ -255,23 +272,26 @@ chmod 600 "$HOME_TEST/config/client.conf.db"
 cp "$CERTDIR/ca.pem" "$HOME_TEST/config/server.crt"
 
 # --- worker driver (runs Luminum::MQTT::worker against the scratch DB) -------
+# cmd_timeout is 5s (vs the 120s production default) so the TIMEDOUT check
+# below does not have to wait out CMDTIMEOUT.
 cat > "$SCRATCH/worker.pl" <<'EOF'
 use strict; use warnings;
 use Luminum::MQTT;
-my ($seedfile, $sid, $host, $port, $ca, $user, $secret, $dbname, $dbsock) = @ARGV;
+my ($seedfile, $sid, $host, $port, $ca, $user, $secret, $dbname, $dbsock, $cmdtimeout, $depltimeout) = @ARGV;
 open(my $sf, "<", $seedfile) or die "seed: $!"; binmode($sf); read($sf, my $seed, 32); close($sf);
 Luminum::MQTT::worker(
     sid => $sid, host => $host, port => $port, ca => $ca,
     user => $user, secret => $secret, seed => $seed,
     dbname => $dbname, dbuser => "root", dbpass => "", dbsock => $dbsock,
     poll_secs => 1,
+    cmd_timeout => $cmdtimeout, depl_timeout => $depltimeout,
     log => sub { print "[worker] $_[0]\n"; },
 );
 EOF
 
 PERL5LIB="$PERL_LIBS" perl "$SCRATCH/worker.pl" \
     "$CERTDIR/srv.seed" "$SID" 127.0.0.1 "$PORT" "$CERTDIR/ca.pem" \
-    "$SERVER_USER" "$SERVER_SECRET" "$DBNAME" "$DBSOCK" \
+    "$SERVER_USER" "$SERVER_SECRET" "$DBNAME" "$DBSOCK" 5 30 \
     > "$SCRATCH/worker.log" 2>&1 &
 WORKER_PID=$!
 sleep 1
@@ -328,6 +348,48 @@ for i in $(seq 1 60); do
     sleep 0.5
 done
 check "group-targeted command (grp/$GROUP) was published and ACKED" "$ACK3" "final status: $(dbq "select STATUS from COMMANDS where QID='$QID3';")"
+
+# --- query / answer end to end (protocol 6.1, 7.3) -----------------------------
+# Two outbox rows: a core/config row with the sensor definition, then the
+# core/query row (its QID is the envelope id and data.qid). The worker
+# publishes them in ID order; the client applies the definition, runs the
+# sensor, and answers with data.qid; the worker ACKs both and stores the
+# per-sensor result in QUERYRESULTS.
+QCFG=$(python3 -c 'import uuid;print(uuid.uuid4())')
+QQRY=$(python3 -c 'import uuid;print(uuid.uuid4())')
+CFGDATA='{"sensors":[{"sid":7,"name":"probe","lstype":"shell","lscript":"echo probe-7"}]}'
+QRYDATA="{\"qid\":\"$QQRY\",\"sensors\":[{\"sid\":7}]}"
+dbq "insert into COMMANDS (SID,TARGET,LUMY,ACTION,DATA,QID,STATUS,CREATED) values ($SID,'$UID_TEST','core','config','$CFGDATA','$QCFG','PENDING',now());"
+dbq "insert into COMMANDS (SID,TARGET,LUMY,ACTION,DATA,QID,STATUS,CREATED) values ($SID,'$UID_TEST','core','query','$QRYDATA','$QQRY','PENDING',now());"
+ACKC=1
+ACKQ=1
+for i in $(seq 1 60); do
+    stc=$(dbq "select STATUS from COMMANDS where QID='$QCFG';")
+    [ "$stc" = "ACKED" ] && { ACKC=0; }
+    stq=$(dbq "select STATUS from COMMANDS where QID='$QQRY';")
+    [ "$stq" = "ACKED" ] && { ACKQ=0; }
+    [ "$ACKC" -eq 0 ] && [ "$ACKQ" -eq 0 ] && break
+    sleep 0.5
+done
+check "query config command (sensor definitions) was published and ACKED" "$ACKC" "final status: $(dbq "select STATUS from COMMANDS where QID='$QCFG';")"
+check "query command was ACKED via the answer's data.qid" "$ACKQ" "final status: $(dbq "select STATUS from COMMANDS where QID='$QQRY';")"
+# The mysql client escapes newlines in batch output, so the trailing newline
+# of the sensor output is stripped in SQL before comparing.
+qout=$(dbq "select concat(STATUS,'|',ifnull(replace(OUTPUT,char(10),''),''),'|',ifnull(ERR,'')) from QUERYRESULTS where QID='$QQRY';")
+check "answer result stored in QUERYRESULTS (sensor 7 output)" $([ "$qout" = "OK|probe-7|" ]; echo $?) "got: $qout"
+
+# --- query deadline: no answer by the deadline => TIMEDOUT (protocol 7.3) -----
+# The worker runs with cmd_timeout=5s. Target 99 has no client, so the query
+# gets no answer and must be marked TIMEDOUT (and not republished).
+QTMO=$(python3 -c 'import uuid;print(uuid.uuid4())')
+dbq "insert into COMMANDS (SID,TARGET,LUMY,ACTION,DATA,QID,STATUS,CREATED) values ($SID,'99','core','query','{\"qid\":\"$QTMO\",\"sensors\":[{\"sid\":7}]}','$QTMO','PENDING',now());"
+TMO=1
+for i in $(seq 1 40); do
+    st=$(dbq "select STATUS from COMMANDS where QID='$QTMO';")
+    [ "$st" = "TIMEDOUT" ] && { TMO=0; break; }
+    sleep 0.5
+done
+check "unanswered query was marked TIMEDOUT at its deadline" "$TMO" "final status: $(dbq "select STATUS from COMMANDS where QID='$QTMO';")"
 
 # --- password_file maintenance (on a spare UID, not the running client) ------
 PERL5LIB="$PERL_LIBS" perl -e '
