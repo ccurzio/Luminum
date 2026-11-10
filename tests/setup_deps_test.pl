@@ -115,7 +115,7 @@ check("offer accepted: callback invoked (root only)",
     "offered=$offered3 isroot=$isroot");
 check("offer accepted: package installation was attempted (root only)",
     $isroot
-        ? ($log3 =~ /installing via |no supported package manager|no system package/)
+        ? ($log3 =~ /installing via |no supported package manager|no package mapping/)
         : 1,
     $log3);
 # Offline host: the install cannot succeed, so the run must fail cleanly.
@@ -124,6 +124,25 @@ check("offer accepted: package installation was attempted (root only)",
 check("offer accepted: run fails cleanly when packages cannot be installed",
     $rc3 != 0, "rc=$rc3");
 check("offer accepted: install tree not created", !-d $root3);
+
+# --- 4. the apt mapping for Net::MQTT::Simple ----------------------------
+# It is NOT CPAN-only: Debian ships libnet-mqtt-simple-perl (trixie/main),
+# which provides both Net::MQTT::Simple and Net::MQTT::Simple::SSL.
+my $aptmap = Luminum::Setup::dep_packages("apt");
+check("apt mapping: Net::MQTT::Simple -> libnet-mqtt-simple-perl",
+    defined $aptmap->{"Net::MQTT::Simple"}
+        && $aptmap->{"Net::MQTT::Simple"} eq "libnet-mqtt-simple-perl");
+my $haveapt = `command -v apt-cache 2>/dev/null`;
+chomp($haveapt) if defined $haveapt;
+if (defined $haveapt && $haveapt ne "") {
+    my $show = `apt-cache show libnet-mqtt-simple-perl 2>/dev/null`;
+    check("apt repo: libnet-mqtt-simple-perl exists",
+        $show =~ /^Package: libnet-mqtt-simple-perl/m,
+        "apt-cache found no such package");
+    }
+else {
+    print "skip - apt-cache not available\n";
+    }
 
 # ---------------------------------------------------------------------------
 print "-" x 60, "\n";

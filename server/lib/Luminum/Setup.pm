@@ -586,9 +586,11 @@ sub find_missing_dependencies {
 	}
 
 # System packages providing each dependency, per package-manager family.
-# Items without an entry cannot be installed automatically:
-# Net::MQTT::Simple is CPAN-only, and Alpine's PHP packages are
-# version-prefixed (php83-fpm, ...).
+# Net::MQTT::Simple is mapped for apt only: libnet-mqtt-simple-perl
+# (verified in Debian trixie/main) provides both Net::MQTT::Simple and
+# Net::MQTT::Simple::SSL. The dnf/apk equivalents are unverified, so
+# they are reported as unmapped rather than guessed; Alpine's PHP
+# packages are version-prefixed (php83-fpm, ...) and likewise unmapped.
 #
 my %DEPPKGS = (
 	apt => {
@@ -602,6 +604,7 @@ my %DEPPKGS = (
 		"DBD::mysql"      => "libdbd-mysql-perl",
 		"IO::Socket::SSL" => "libio-socket-ssl-perl",
 		"Crypt::Perl::Ed25519" => "libcrypt-perl-ed25519-perl",
+		"Net::MQTT::Simple"    => "libnet-mqtt-simple-perl",
 		},
 	dnf => {
 		mosquitto         => "mosquitto",
@@ -633,6 +636,13 @@ my %DEPCMD = (
 	yum => "yum",
 	apk => "apk",
 	);
+
+# The package mapping table for a family (the table itself is lexical);
+# exposed for the tests.
+sub dep_packages {
+	my ($fam) = @_;
+	return $DEPPKGS{$fam} || {};
+	}
 
 # Detect the system package manager. Returns (family, full path);
 # (undef, undef) when none of apt/dnf/yum/apk is available.
@@ -673,8 +683,9 @@ sub install_missing_dependencies {
 		}
 	my @pkgs = sort keys %pkgset;
 	if (@unmapped) {
-		$log->("  no system package available for: " . join(", ", @unmapped));
-		$log->("  (Net::MQTT::Simple is CPAN-only: cpanm Net::MQTT::Simple)");
+		$log->("  no package mapping for: " . join(", ", @unmapped));
+		my @cpan = grep { /::/ } @unmapped;
+		$log->("  (Perl modules can be installed from CPAN: cpanm " . join(" ", @cpan) . ")") if @cpan;
 		}
 	unless (@pkgs) {
 		return @$missing;

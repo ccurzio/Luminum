@@ -1097,6 +1097,20 @@ $doInstall = sub {
 	# dialog pumps events itself until a button is pressed.
 	$params{deps_offer} = sub {
 		my ($missing) = @_;
+		# $doInstall has redirected fd 1/2 to the capture file (so the
+		# installer and its children cannot paint over the screen), but
+		# ncurses draws on fd 2 - anything drawn from here until the
+		# redirect is restored would go into the capture file, leaving
+		# the user staring at the last frame. Point both fds back at
+		# the controlling terminal for the duration of the dialog.
+		my $tty;
+		my $saved1;
+		my $saved2;
+		my $swapped = open($tty, "+<", "/dev/tty")
+			&& open($saved1, ">&1")
+			&& open($saved2, ">&2")
+			&& POSIX::dup2(fileno($tty), 1) == 1
+			&& POSIX::dup2(fileno($tty), 2) == 2;
 		my $text = "The following dependencies are missing:\n\n";
 		$text .= "  $_\n" for @$missing;
 		$text .= "\nInstall them now with the system package manager (I), or cancel the installation (C)?";
@@ -1127,12 +1141,19 @@ $doInstall = sub {
 		$depsbuttons->focus();
 		$win->draw();
 		# The installer blocks the mainloop while this callback runs,
-		# so pump single events through the app until a button is
-		# pressed. do_one_event dispatches the key to $win, which
-		# routes it to the focused widget (the dialog's buttonbox),
-		# giving the dialog modal focus.
+		# so pump single events until a button is pressed. Pump through
+		# the app with no target, exactly like the mainloop does: the
+		# app-level bindings (Ctrl-C) are consulted, and the key is
+		# delegated on to the focused widget (the dialog's buttonbox).
 		while (!defined $choice) {
-			$cui->do_one_event($win);
+			$cui->do_one_event();
+			}
+		if ($swapped) {
+			POSIX::dup2(fileno($saved1), 1);
+			POSIX::dup2(fileno($saved2), 2);
+			close($saved1);
+			close($saved2);
+			close($tty);
 			}
 		return $choice;
 		};
