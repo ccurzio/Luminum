@@ -1112,7 +1112,7 @@ $doInstall = sub {
 			-x => 2, -y => 2,
 			);
 		my $choice;
-		$dlg->add('depsbuttons', 'Buttonbox',
+		my $depsbuttons = $dlg->add('depsbuttons', 'Buttonbox',
 			-buttons => [ {
 				-label => " Cancel ", -value => "cancel",
 				-onpress => sub { $choice = 0; $win->delete('depsdialog'); $win->draw(); },
@@ -1124,26 +1124,15 @@ $doInstall = sub {
 			-fg => "black", -buttonalignment => "right",
 			-x => 2, -ipadright => 3, -y => 14, -selected => 1,
 			);
-		$dlg->get('depsbuttons')->focus();
+		$depsbuttons->focus();
 		$win->draw();
+		# The installer blocks the mainloop while this callback runs,
+		# so pump single events through the app until a button is
+		# pressed. do_one_event dispatches the key to $win, which
+		# routes it to the focused widget (the dialog's buttonbox),
+		# giving the dialog modal focus.
 		while (!defined $choice) {
-			if ($win->can("handle_event")) {
-				$win->handle_event();
-				}
-			else {
-				require Curses;
-				my $key = Curses::getch();
-				if (defined $key && ($key eq "i" || $key eq "I" || $key == 10 || $key == 13)) {
-					$choice = 1;
-					$win->delete('depsdialog');
-					$win->draw();
-					}
-				elsif (defined $key && ($key eq "c" || $key eq "C" || $key == 27)) {
-					$choice = 0;
-					$win->delete('depsdialog');
-					$win->draw();
-					}
-				}
+			$cui->do_one_event($win);
 			}
 		return $choice;
 		};
