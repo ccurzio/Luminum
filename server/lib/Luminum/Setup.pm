@@ -124,6 +124,18 @@ sub run {
 	unless (-d $srcdir) { return $fail->("source directory not found: $srcdir"); }
 	unless (-e "$srcdir/broker.pl") { return $fail->("source tree incomplete (no broker.pl in $srcdir)"); }
 
+	# --- Step 0: dependency check (before any files are copied) --------------
+	# Fail on a host that cannot run the result - missing binaries, Perl
+	# modules, or database - with the system left exactly as found.
+	my $dbh = check_dependencies({
+		dbadmin => $dbadmin, dbadminpass => $dbadminpass,
+		dbhost => $dbhost, dbsocket => $dbsocket, log => $log,
+		}, $fail) or return 1;
+	# A mosquitto left running from a previous install (or started
+	# manually) holds the listener port and the password/ACL files this
+	# run rewrites; stop it before any files are copied.
+	stop_running_mosquitto($root, $log);
+
 	# --- Layout -------------------------------------------------------------
 	my %dir = (
 		root    => $root,
@@ -181,11 +193,8 @@ sub run {
 	chmod(0755, "$root/console/html") if -d "$root/console/html";
 
 	# --- Step 2: database ----------------------------------------------------
+	# $dbh was already connected by the step 0 dependency check.
 	$log->("Setting up database ...");
-	my $dbh = admin_connect($dbadmin, $dbadminpass, $dbhost, $dbsocket);
-	unless ($dbh) {
-		return $fail->("cannot connect to database as $dbadmin (socket: $dbsocket); if the admin account uses a password, supply it (dbadminpass / --dbadminpass)");
-		}
 
 	unless (apply_schema($dbh, "$root/sql/schema.sql", $log)) {
 		return $fail->("database schema application failed");
@@ -266,6 +275,27 @@ sub run {
 	chmod(0600, $mosqpasswd);
 	unless (writefile($mosqacl, "# initial ACL - the broker regenerates this on startup\n", 0600)) {
 		return $fail->("cannot write $mosqacl");
+		}
+	# On hosts where the mosquitto package runs the broker as the
+	# unprivileged 'mosquitto' user (the process does not keep the
+	# invoking user's privileges), it cannot reach the 0700 root-owned
+	# install tree: hand it everything it reads or writes at runtime -
+	# the config dir (pid_file), the password/ACL files, and its log
+	# file. The log dir itself stays root-owned; mosquitto only needs
+	# to traverse it to reach the pre-created log file. No-op when no
+	# such user exists (source builds, broker running as root).
+	if ($> == 0) {
+		my @mpw = getpwnam("mosquitto");
+		if (@mpw) {
+			chown($mpw[2], $mpw[3], $dir{mosquitto}, $mosqpasswd, $mosqacl);
+			unless (-e "$dir{logdir}/mosquitto.log") {
+				open(my $lfh, ">", "$dir{logdir}/mosquitto.log")
+					or return $fail->("cannot create $dir{logdir}/mosquitto.log");
+				close($lfh);
+				}
+			chown($mpw[2], $mpw[3], "$dir{logdir}/mosquitto.log");
+			chmod(0711, $dir{logdir});
+			}
 		}
 
 	# --- Step 4: server identity ---------------------------------------------
@@ -456,6 +486,83 @@ sub writefile {
 	close($fh);
 	chmod($mode, $path) if defined $mode;
 	return 1;
+	}
+
+# Verify everything the install needs BEFORE any files are copied or
+# services are touched, so an unprepared host fails with the system left
+# exactly as found. Checks the external binaries, the Perl modules the
+# broker and the forked MQTT worker load (in this process's @INC, which
+# is what detect_perl5lib bakes into the generated start scripts), and a
+# working database admin connection. Returns a connected DBI handle on
+# success; on failure reports via $fail and returns false.
+#
+sub check_dependencies {
+	my ($o, $fail) = @_;
+	my $log = $o->{log};
+	$log->("Checking dependencies ...");
+	my @missing;
+	for my $bin (qw(mosquitto mosquitto_passwd nginx openssl)) {
+		my $p = `command -v $bin 2>/dev/null`;
+		push @missing, $bin unless defined $p && $p ne "";
+		}
+	my $fpmbin = find_php_fpm();
+	push @missing, "php-fpm" unless $fpmbin;
+	# Non-core Perl modules loaded at runtime. DBD::mysql is not caught by
+	# a compile check (DBI->connect loads it), so it is listed explicitly.
+	my %modfile = (
+		"DBI"                    => "DBI.pm",
+		"DBD::mysql"             => "DBD/mysql.pm",
+		"IO::Socket::SSL"        => "IO/Socket/SSL.pm",
+		"Crypt::Perl::Ed25519"   => "Crypt/Perl/Ed25519/PrivateKey.pm",
+		"Net::MQTT::Simple"      => "Net/MQTT/Simple.pm",
+		"Net::MQTT::Simple::SSL" => "Net/MQTT/Simple/SSL.pm",
+		);
+	for my $mod (sort keys %modfile) {
+		my $ok = eval { require $modfile{$mod}; 1 };
+		push @missing, $mod unless $ok;
+		}
+	if (@missing) {
+		return $fail->("missing dependencies: " . join(", ", @missing)
+			. " - install them and re-run setup (no files were copied)");
+		}
+	my $dbh = admin_connect($o->{dbadmin}, $o->{dbadminpass}, $o->{dbhost}, $o->{dbsocket});
+	unless ($dbh) {
+		return $fail->("cannot connect to database as $o->{dbadmin} (socket: $o->{dbsocket}); if the admin account uses a password, supply it (dbadminpass / --dbadminpass)");
+		}
+	return $dbh;
+	}
+
+# Stop a mosquitto that is still running before the install copies or
+# rewrites any files. The installed stop script (pid file) is tried
+# first; any surviving mosquitto process - e.g. one started manually with
+# a different pid file or in the foreground - is then terminated
+# directly.
+#
+sub stop_running_mosquitto {
+	my ($root, $log) = @_;
+	if (-x "$root/bin/stop-mosquitto") {
+		$log->("Stopping existing MQTT broker (mosquitto) ...");
+		system("$root/bin/stop-mosquitto");
+		}
+	my @pids = `pgrep -x mosquitto 2>/dev/null`;
+	chomp(@pids);
+	@pids = grep { /^\d+$/ } @pids;
+	if (@pids) {
+		$log->("Stopping mosquitto process(es) " . join(", ", @pids) . " ...");
+		kill("TERM", @pids);
+		my $t = 0;
+		while ($t < 5) {
+			@pids = `pgrep -x mosquitto 2>/dev/null`;
+			chomp(@pids);
+			@pids = grep { /^\d+$/ } @pids;
+			last unless @pids;
+			sleep(1);
+			$t++;
+			}
+		if (@pids) {
+			$log->("  mosquitto " . join(", ", @pids) . " did not exit; starting the new broker may fail to bind the MQTT port");
+			}
+		}
 	}
 
 # Connect to the database as the administrator (schema setup only).

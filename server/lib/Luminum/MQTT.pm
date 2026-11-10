@@ -87,15 +87,33 @@ sub gen_acl {
 	return $acl;
 }
 
+# Capture a file's (uid, gid) so a root-side rewrite can restore it. On
+# hosts where mosquitto runs as an unprivileged user, setup hands it the
+# password/ACL files; if the broker's rewrites left them root-owned, the
+# next mosquitto reload could not read them.
+sub _file_owner {
+	my ($path) = @_;
+	my @st = stat($path);
+	return @st ? ($st[4], $st[5]) : (undef, undef);
+	}
+
+sub _restore_owner {
+	my ($path, $uid, $gid) = @_;
+	return unless $> == 0 && defined $uid;
+	chown($uid, $gid, $path);
+	}
+
 # Atomically write an ACL file (tmp + rename) with 0600 permissions.
 sub write_acl {
 	my ($path, $content) = @_;
+	my ($ouid, $ogid) = _file_owner($path);
 	my $tmp = "$path.tmp.$$";
 	open(my $fh, ">", $tmp) or die "Luminum::MQTT write_acl: cannot open $tmp: $!";
 	print $fh $content or die "Luminum::MQTT write_acl: cannot write $tmp: $!";
 	close($fh) or die "Luminum::MQTT write_acl: cannot close $tmp: $!";
 	chmod(0600, $tmp);
 	rename($tmp, $path) or die "Luminum::MQTT write_acl: cannot rename $tmp to $path: $!";
+	_restore_owner($path, $ouid, $ogid);
 	return 1;
 }
 
@@ -107,8 +125,11 @@ sub write_acl {
 sub passwd_add {
 	my ($file, $uid, $secret) = @_;
 	return 0 unless defined $uid && length($uid) && $uid !~ /[:\n\r]/ && defined $secret && length($secret);
+	my ($ouid, $ogid) = _file_owner($file);
 	my $rc = system("mosquitto_passwd", "-b", $file, $uid, $secret);
-	return ($rc == 0) ? 1 : 0;
+	return 0 unless $rc == 0;
+	_restore_owner($file, $ouid, $ogid);
+	return 1;
 }
 
 # Remove a user from the mosquitto password_file. $uid must be numeric.
@@ -116,8 +137,11 @@ sub passwd_add {
 sub passwd_remove {
 	my ($file, $uid) = @_;
 	return 0 unless defined $uid && $uid =~ /^[0-9]+$/;
+	my ($ouid, $ogid) = _file_owner($file);
 	my $rc = system("mosquitto_passwd", "-D", $file, $uid);
-	return ($rc == 0) ? 1 : 0;
+	return 0 unless $rc == 0;
+	_restore_owner($file, $ouid, $ogid);
+	return 1;
 }
 
 # Send SIGHUP to the mosquitto instance named by $pidfile so it re-reads its
