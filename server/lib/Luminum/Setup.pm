@@ -215,6 +215,9 @@ sub run {
 	unless (seed_admin_user($dbh, $adminuser, \$adminpass, \$adminnote, $adminemail)) {
 		return $fail->("console admin user setup failed");
 		}
+	unless (seed_default_cset($dbh, $adminuser, $log)) {
+		return $fail->("default content set setup failed");
+		}
 
 	# --- Step 3: server certificate ------------------------------------------
 	my $sslspec = $o{ssl} || {};
@@ -766,6 +769,38 @@ sub seed_admin_user {
 		1;
 		};
 	return $rc ? 1 : 0;
+	}
+
+# Ensure the "Luminum Default" content set exists in CONTENT.SETS: the
+# console assigns new sensors/packages (and orphaned content) to a
+# default set, so an install must start with one. Owned by the console
+# administrator. REQUIRED = 1: the set is needed by the system and
+# cannot be deleted. LOCKED = 0: it must stay selectable in the server
+# options' "Default Content Set" dropdowns (which list only unlocked
+# sets) and editable by the administrator.
+# Idempotent: an existing set with the same name is left untouched.
+#
+sub seed_default_cset {
+	my ($dbh, $adminuser, $log) = @_;
+	my $rc = eval {
+		my $sth = $dbh->prepare("select ID from AUTH.USERS where USERNAME = ?");
+		$sth->execute($adminuser);
+		my ($owner) = $sth->fetchrow_array();
+		die "AUTH.USERS lookup failed for $adminuser" unless defined $owner;
+		$sth = $dbh->prepare("select ID from CONTENT.SETS where NAME = ?");
+		$sth->execute("Luminum Default");
+		if ($sth->fetchrow_array()) {
+			$log->("  content set 'Luminum Default' already exists; leaving it in place");
+			return 1;
+			}
+		$sth = $dbh->prepare("insert into CONTENT.SETS (NAME, DESCRIPTION, REQUIRED, LOCKED, OWNER, CREATED) values (?, ?, 1, 0, ?, now())");
+		$sth->execute("Luminum Default", "Default content set created by the Luminum installer", $owner)
+			or die "CONTENT.SETS insert failed: " . ($sth->errstr || "unknown error");
+		$log->("  created content set 'Luminum Default'");
+		1;
+		};
+	unless ($rc) { warn "[setup] default content set seed failed: $@"; return 0; }
+	return 1;
 	}
 
 # bcrypt hash via the PHP CLI (cost 13, matching the console login check).
