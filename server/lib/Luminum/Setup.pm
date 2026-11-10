@@ -151,6 +151,10 @@ sub run {
 	unless ($dbh) {
 		return $fail->("cannot connect to database as $dbadmin (socket: $dbsocket); if the admin account uses a password, supply it (dbadminpass / --dbadminpass)");
 		}
+	# A broker left running from a previous install (or a different install
+	# root, or the systemd unit) holds the listener port this run rebinds;
+	# stop it before any files are copied.
+	stop_running_broker($root, $log);
 	# A mosquitto left running from a previous install (or started
 	# manually) holds the listener port and the password/ACL files this
 	# run rewrites; stop it before any files are copied.
@@ -732,6 +736,129 @@ sub install_missing_dependencies {
 		$log->("  still missing after installation: " . join(", ", @still));
 		}
 	return @still;
+	}
+
+# Stop a Luminum broker that is still running before the install copies or
+# rewrites any files. Three layers, mirroring stop_running_mosquitto: the
+# generated systemd unit (it never writes the pid file the stop script
+# reads, and Restart=on-failure would bring a killed broker straight
+# back), the installed stop script (pid file), then any surviving process
+# matched by command line - e.g. a broker left over from a different
+# install root or started manually, which the stop script cannot see but
+# which still holds the listener port.
+#
+sub stop_running_broker {
+	my ($root, $log) = @_;
+	if (systemd_available()) {
+		for my $u (glob("/etc/systemd/system/*-broker.service")) {
+			(my $name = $u) =~ s{.*/}{};
+			$log->("Stopping $name ...");
+			system("/usr/bin/systemctl", "stop", $name);
+			}
+		}
+	if (-x "$root/bin/stop-broker") {
+		$log->("Stopping existing Luminum broker ...");
+		system("$root/bin/stop-broker");
+		}
+	my @pids = broker_pids();
+	if (@pids) {
+		$log->("Stopping broker process(es) " . join(", ", @pids) . " ...");
+		kill("TERM", @pids);
+		my $t = 0;
+		while ($t < 5) {
+			@pids = broker_pids();
+			last unless @pids;
+			sleep(1);
+			$t++;
+			}
+		if (@pids) {
+			$log->("  broker " . join(", ", @pids) . " did not exit; starting the new broker may fail to bind the listener port");
+			}
+		}
+	}
+
+# PIDs of running Luminum broker processes, matched by command line
+# ("perl <path>/broker.pl") rather than pid file: a broker left over from
+# another install root, started manually, or run by the systemd unit
+# (which never writes run/broker.pid) is invisible to the stop script yet
+# still holds the listener port. The broker's forked MQTT worker shares
+# the command line and is included.
+#
+sub broker_pids {
+	my @pids = `pgrep -f 'broker\.pl' 2>/dev/null`;
+	chomp(@pids);
+	@pids = grep { /^\d+$/ } @pids;
+	return @pids unless -d "/proc";
+	my @verified;
+	for my $pid (@pids) {
+		my $raw;
+		{
+			open(my $fh, "<", "/proc/$pid/cmdline") or next;
+			local $/;
+			$raw = <$fh>;
+			}
+		next unless defined $raw;                        # zombie: empty cmdline
+		my @c = grep { length } split(/\0/, $raw);
+		next unless @c == 2;
+		my ($interp, $script) = @c;
+		$interp =~ s{.*/}{};
+		$script =~ s{.*/}{};
+		push @verified, $pid if $interp =~ /^perl/ && $script eq "broker.pl";
+		}
+	return @verified;
+	}
+
+# Command line of a running process (from /proc), space-joined; "" when
+# unavailable (no /proc, or the process already exited).
+#
+sub proc_cmdline {
+	my ($pid) = @_;
+	return "" unless -r "/proc/$pid/cmdline";
+	open(my $fh, "<", "/proc/$pid/cmdline") or return "";
+	my $raw;
+	{
+		local $/;
+		$raw = <$fh>;
+		}
+	my @c = grep { length } split(/\0/, $raw);
+	return @c ? join(" ", @c) : "";
+	}
+
+# PID of the process listening on TCP $port (any local address), or ""
+# when none is found or /proc is unavailable. /proc/net/tcp{,6} lists
+# LISTEN sockets with their inode; /proc/<pid>/fd maps the inode back to
+# a PID.
+#
+sub port_holder {
+	my ($port) = @_;
+	return "" unless -d "/proc";
+	my $hex = sprintf("%04X", $port);
+	my %inodes;
+	for my $f ("/proc/net/tcp", "/proc/net/tcp6") {
+		open(my $fh, "<", $f) or next;
+		while (my $line = <$fh>) {
+			# The line is blank-padded, so split yields a leading empty
+			# field: $c[1] is the slot, $c[2] local_address, $c[4] st,
+			# $c[10] inode.
+			my @c = split(/\s+/, $line);
+			next unless @c >= 11;
+			next unless $c[1] =~ /^\d+:$/;                # skips the header
+			next unless $c[4] eq "0A";                    # TCP_LISTEN
+			my ($addr, $lport) = split(/:/, $c[2]);
+			next unless defined $lport && $lport eq $hex;
+			$inodes{$c[10]} = 1 if $c[10] > 0;
+			}
+		close($fh);
+		}
+	return "" unless keys %inodes;
+	for my $d (glob("/proc/[0-9]*")) {
+		my ($pid) = $d =~ m{^/proc/(\d+)$};
+		for my $fd (glob("$d/fd/*")) {
+			my $t = readlink($fd);
+			return $pid if defined $t && $t =~ /^socket:\[(\d+)\]$/ && $inodes{$1};
+			}
+		}
+	return "";
 	}
 
 # Stop a mosquitto that is still running before the install copies or
@@ -1680,12 +1807,16 @@ sub start_now {
 	system("$bin/stop-mosquitto") if -x "$bin/stop-mosquitto";
 	system("$bin/stop-web") if -x "$bin/stop-web";
 	sleep(1);
-	# A broker left over from a *different* install root was not stopped
-	# above; fail with a clear message instead of a cryptic bind error.
+	# A holder surviving the stop above (a non-Luminum process, or a broker
+	# that ignored TERM) still blocks the bind; name it instead of guessing.
 	my $probe_addr = ($p->{laddr} && $p->{laddr} ne "0.0.0.0") ? $p->{laddr} : "127.0.0.1";
 	if (my $s = IO::Socket::INET->new(PeerAddr => "$probe_addr:$p->{lport}", Timeout => 1)) {
 		close($s);
-		warn "[setup] port $p->{lport} is already in use - a broker from a previous install is probably still running; stop it (its bin/stop-broker) and re-run setup";
+		my $holder = port_holder($p->{lport});
+		my $who = $holder ne ""
+			? " - held by PID $holder" . (proc_cmdline($holder) ? " (" . proc_cmdline($holder) . ")" : "")
+			: "";
+		warn "[setup] port $p->{lport} is already in use$who - stop that process and re-run setup";
 		return 1;
 		}
 	# Start the MQTT broker (mosquitto) first: the broker's forked worker connects
