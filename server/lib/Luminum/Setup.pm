@@ -335,10 +335,6 @@ EOF
 		LPORT       => "$lport",
 		MADDR       => $laddr,
 		MPORT       => "$mport",
-		CMDTIMEOUT  => "120",
-		DEPLTIMEOUT => "3600",
-		CHECKININT  => "5",
-		MISSINGAFTER => "90",
 		INVESTIGATE => "Enabled",
 		SSLCERT     => $cert,
 		SSLPRVKEY   => $key,
@@ -353,7 +349,17 @@ EOF
 	# The admin email is optional; only seed it when supplied so an
 	# existing value (e.g. changed later in the console) is preserved.
 	$rows{OWNEREMAIL} = $adminemail if defined $adminemail && $adminemail ne "";
-	unless (seed_config($dbh, \%rows)) {
+	# Default-only rows: seeded on first install (ENDPOINTCOMM = mqtt,
+	# MISSINGAFTER = 90 days, CMDTIMEOUT = 120s, DEPLTIMEOUT = 3600s,
+	# CHECKININT = 5 min), but a value later changed in the console
+	# survives re-runs.
+	unless (seed_config($dbh, \%rows, {
+		ENDPOINTCOMM => "mqtt",
+		MISSINGAFTER => "90",
+		CMDTIMEOUT   => "120",
+		DEPLTIMEOUT  => "3600",
+		CHECKININT   => "5",
+		})) {
 		return $fail->("SYSTEM.CONFIG seeding failed");
 		}
 	$dbh->disconnect();
@@ -1144,11 +1150,14 @@ sub prepare_mqtt_tls {
 	}
 
 # Insert or update SYSTEM.CONFIG rows. Existing values are preserved unless
-# the caller passes a value; here all values are authoritative (generated or
-# user-supplied), except INSTALLDATE which is only set once.
+# the caller passes a value; here all values in $rows are authoritative
+# (generated or user-supplied), except INSTALLDATE which is only set once.
+# $defaults (optional) holds default-only rows: inserted when absent but
+# never updated, so a value later changed in the console survives re-runs.
 #
 sub seed_config {
-	my ($dbh, $rows) = @_;
+	my ($dbh, $rows, $defaults) = @_;
+	$defaults = {} unless defined $defaults;
 	my $rc = eval {
 		for my $ckey (sort keys %$rows) {
 			my $cval = $rows->{$ckey};
@@ -1162,6 +1171,12 @@ sub seed_config {
 			else {
 				$dbh->do("insert into SYSTEM.CONFIG (CKEY, CVAL) values (?, ?)", undef, $ckey, $cval);
 				}
+			}
+		for my $ckey (sort keys %$defaults) {
+			my $sth = $dbh->prepare("select CVAL from SYSTEM.CONFIG where CKEY = ?");
+			$sth->execute($ckey);
+			next if $sth->fetchrow_array();
+			$dbh->do("insert into SYSTEM.CONFIG (CKEY, CVAL) values (?, ?)", undef, $ckey, $defaults->{$ckey});
 			}
 		1;
 		};
