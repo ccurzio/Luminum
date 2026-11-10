@@ -140,11 +140,16 @@ for i in $(seq 1 20); do
     if (exec 3<>/dev/tcp/127.0.0.1/$MPORT) 2>/dev/null; then exec 3>&- 3<&- 2>/dev/null; mosq_up=0; break; fi
     sleep 0.5
 done
-check "mosquitto is listening on $MPORT" "$mosq_up" "see $ROOT/log/mosquitto.log"
+# The pid_file and log live in the system-standard locations on root
+# installs and in the install tree otherwise; take both from the
+# generated mosquitto.conf.
+MOSQ_PIDFILE=$(awk '/^pid_file/ {print $2}' "$ROOT/config/mosquitto/mosquitto.conf")
+MOSQ_LOG=$(awk '/^log_dest/ {print $3}' "$ROOT/config/mosquitto/mosquitto.conf")
+check "mosquitto is listening on $MPORT" "$mosq_up" "see $MOSQ_LOG"
 [ "$mosq_up" -eq 0 ] || exit 1
-# Track the mosquitto PID (from its pid_file) so cleanup can stop it even if
-# the install tree is later removed.
-MOSQ_PID=$(cat "$ROOT/config/mosquitto/mosquitto.pid" 2>/dev/null)
+# Track the mosquitto PID (from its pid_file) so cleanup can stop it
+# even if the install tree is later removed.
+MOSQ_PID=$(cat "$MOSQ_PIDFILE" 2>/dev/null)
 
 "$ROOT/bin/start-broker" > "$RUN/start-broker.log" 2>&1
 broker_up=1
@@ -250,7 +255,7 @@ check "outbox command round-tripped to ACKED" "$ack_ok" "final status: $(dbq "se
 echo "------------------------------------------------------------"
 if [ "$FAILURES" -gt 0 ]; then
     echo "FAILED: $FAILURES check(s) failed"
-    echo "Artifacts left in $RUN for inspection (setup.log, client.log, broker.log, mosquitto.log)"
+    echo "Artifacts left in $RUN for inspection (setup.log, client.log, broker.log; mosquitto log: $MOSQ_LOG)"
     exit 1
 fi
 echo "All checks passed."

@@ -439,13 +439,15 @@ sub readconfig {
 	# MQTT broker integration (protocol 4, 9). The worker connects to the
 	# Mosquitto broker as $MQTTUSER and maintains the password_file and ACL
 	# file that Mosquitto is configured to use, reloading it (SIGHUP) after
-	# changes. Paths default under the install's config dir; set the MQTT*
-	# keys in SYSTEM.CONFIG to point at a different Mosquitto layout.
+	# changes. The password/ACL files default under the install's config
+	# dir; the pid file defaults to the system-standard location (setup
+	# generates mosquitto.conf with the same path). Set the MQTT* keys in
+	# SYSTEM.CONFIG to point at a different Mosquitto layout.
 	if (!$MQTTUSER || $MQTTUSER eq "") { $MQTTUSER = "luminum-server"; }
 	if (!$MQTTCA || $MQTTCA eq "") { $MQTTCA = $sslcert; }
 	if (!$MQTTPASSWD || $MQTTPASSWD eq "") { $MQTTPASSWD = "$mgrpath/config/mosquitto/passwd"; }
 	if (!$MQTTACL || $MQTTACL eq "") { $MQTTACL = "$mgrpath/config/mosquitto/acl"; }
-	if (!$MQTTPIDFILE || $MQTTPIDFILE eq "") { $MQTTPIDFILE = "$mgrpath/config/mosquitto/mosquitto.pid"; }
+	if (!$MQTTPIDFILE || $MQTTPIDFILE eq "") { $MQTTPIDFILE = "/var/run/mosquitto/mosquitto.pid"; }
 	if (!$sslprvkey || $sslprvkey eq "") {
 		Broker::debugout(3,"Server private key file is not configured! (Run with --setup)");
 		$suerror = 1;
