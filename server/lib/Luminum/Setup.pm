@@ -335,7 +335,6 @@ EOF
 		LPORT       => "$lport",
 		MADDR       => $laddr,
 		MPORT       => "$mport",
-		INVESTIGATE => "Enabled",
 		SSLCERT     => $cert,
 		SSLPRVKEY   => $key,
 		SSLPUBKEY   => $pub,
@@ -351,16 +350,52 @@ EOF
 	$rows{OWNEREMAIL} = $adminemail if defined $adminemail && $adminemail ne "";
 	# Default-only rows: seeded on first install (ENDPOINTCOMM = mqtt,
 	# MISSINGAFTER = 90 days, CMDTIMEOUT = 120s, DEPLTIMEOUT = 3600s,
-	# CHECKININT = 5 min), but a value later changed in the console
-	# survives re-runs.
-	unless (seed_config($dbh, \%rows, {
-		ENDPOINTCOMM => "mqtt",
-		MISSINGAFTER => "90",
-		CMDTIMEOUT   => "120",
-		DEPLTIMEOUT  => "3600",
-		CHECKININT   => "5",
-		})) {
+	# CHECKININT = 5 min, TCONFTHRESHOLD = 250 endpoints, 2FA = Optional,
+	# MINPASS = 8, COMPLEXPASS = Disabled, UTIMEOUT = 15M, UTIMEOUTWARN =
+	# Enabled, SENREVS = 5, PKGREVS = 5, INVESTIGATE = Enabled), but a
+	# value later changed in the console survives re-runs. SENREVS and
+	# PKGREVS are revision counts; any value > 0 is "Enabled" in the
+	# console, 0 is "Disabled".
+	my %defaults = (
+		ENDPOINTCOMM    => "mqtt",
+		MISSINGAFTER    => "90",
+		CMDTIMEOUT      => "120",
+		DEPLTIMEOUT     => "3600",
+		CHECKININT      => "5",
+		TCONFTHRESHOLD  => "250",
+		"2FA"           => "Optional",
+		MINPASS         => "8",
+		COMPLEXPASS     => "Disabled",
+		UTIMEOUT        => "15M",
+		UTIMEOUTWARN    => "Enabled",
+		SENREVS         => "5",
+		PKGREVS         => "5",
+		INVESTIGATE     => "Enabled",
+		);
+	unless (seed_config($dbh, \%rows, \%defaults)) {
 		return $fail->("SYSTEM.CONFIG seeding failed");
+		}
+	# Verify every seeded row is present with a non-null value. The
+	# columns are NOT NULL in the schema, but that does not guarantee the
+	# row exists (e.g. hand-removed), and the console and broker read
+	# these keys unconditionally.
+	my @bad;
+	my $ok = eval {
+		my @missing;
+		for my $ckey (sort(keys(%rows), keys(%defaults))) {
+			my $sth = $dbh->prepare("select CVAL from SYSTEM.CONFIG where CKEY = ?");
+			$sth->execute($ckey);
+			my ($cval) = $sth->fetchrow_array();
+			push @missing, $ckey unless defined $cval && $cval ne "";
+			}
+		@bad = @missing;
+		1;
+		};
+	unless ($ok) {
+		return $fail->("SYSTEM.CONFIG verification failed: " . ($@ || "unknown error"));
+		}
+	if (@bad) {
+		return $fail->("SYSTEM.CONFIG rows missing or null after seeding: " . join(", ", @bad));
 		}
 	$dbh->disconnect();
 
@@ -1175,7 +1210,11 @@ sub seed_config {
 		for my $ckey (sort keys %$defaults) {
 			my $sth = $dbh->prepare("select CVAL from SYSTEM.CONFIG where CKEY = ?");
 			$sth->execute($ckey);
-			next if $sth->fetchrow_array();
+			# Row count, not value truth: a stored value of "0" (e.g.
+			# PKGREVS disabled in the console) is false in scalar context
+			# and would look like a missing row.
+			my @existing = $sth->fetchrow_array();
+			next if @existing;
 			$dbh->do("insert into SYSTEM.CONFIG (CKEY, CVAL) values (?, ?)", undef, $ckey, $defaults->{$ckey});
 			}
 		1;

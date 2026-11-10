@@ -2,10 +2,14 @@
 #
 # setup_config_defaults_test.pl - offline test for the installer's
 # default-only SYSTEM.CONFIG rows (ENDPOINTCOMM, MISSINGAFTER,
-# CMDTIMEOUT, DEPLTIMEOUT, CHECKININT):
+# CMDTIMEOUT, DEPLTIMEOUT, CHECKININT, TCONFTHRESHOLD, 2FA, MINPASS,
+# COMPLEXPASS, UTIMEOUT, UTIMEOUTWARN, SENREVS, PKGREVS, INVESTIGATE):
 #   1. fresh install: ENDPOINTCOMM is seeded to "mqtt", MISSINGAFTER to
 #      "90" (days), CMDTIMEOUT to "120" (s), DEPLTIMEOUT to "3600" (s),
-#      CHECKININT to "5" (min)
+#      CHECKININT to "5" (min), TCONFTHRESHOLD to "250" (endpoints),
+#      2FA to "Optional", MINPASS to "8", COMPLEXPASS to "Disabled",
+#      UTIMEOUT to "15M" (minutes), UTIMEOUTWARN to "Enabled", SENREVS
+#      to "5", PKGREVS to "5", INVESTIGATE to "Enabled"
 #   2. values later changed "in the console" (simulated with direct
 #      UPDATEs) survive a re-run of the installer - the defaults must
 #      not clobber them
@@ -154,14 +158,41 @@ $val = q1("select CVAL from SYSTEM.CONFIG where CKEY = 'DEPLTIMEOUT'");
 check("fresh install: DEPLTIMEOUT seeded to '3600' (s)", $val eq "3600", "val=[$val]");
 $val = q1("select CVAL from SYSTEM.CONFIG where CKEY = 'CHECKININT'");
 check("fresh install: CHECKININT seeded to '5' (min)", $val eq "5", "val=[$val]");
+$val = q1("select CVAL from SYSTEM.CONFIG where CKEY = 'TCONFTHRESHOLD'");
+check("fresh install: TCONFTHRESHOLD seeded to '250' (endpoints)", $val eq "250", "val=[$val]");
+$val = q1("select CVAL from SYSTEM.CONFIG where CKEY = '2FA'");
+check("fresh install: 2FA seeded to 'Optional'", $val eq "Optional", "val=[$val]");
+$val = q1("select CVAL from SYSTEM.CONFIG where CKEY = 'MINPASS'");
+check("fresh install: MINPASS seeded to '8' (characters)", $val eq "8", "val=[$val]");
+$val = q1("select CVAL from SYSTEM.CONFIG where CKEY = 'COMPLEXPASS'");
+check("fresh install: COMPLEXPASS seeded to 'Disabled'", $val eq "Disabled", "val=[$val]");
+$val = q1("select CVAL from SYSTEM.CONFIG where CKEY = 'UTIMEOUT'");
+check("fresh install: UTIMEOUT seeded to '15M' (minutes)", $val eq "15M", "val=[$val]");
+$val = q1("select CVAL from SYSTEM.CONFIG where CKEY = 'UTIMEOUTWARN'");
+check("fresh install: UTIMEOUTWARN seeded to 'Enabled'", $val eq "Enabled", "val=[$val]");
+$val = q1("select CVAL from SYSTEM.CONFIG where CKEY = 'SENREVS'");
+check("fresh install: SENREVS seeded to '5' (revisions, > 0 = enabled)", $val eq "5", "val=[$val]");
+$val = q1("select CVAL from SYSTEM.CONFIG where CKEY = 'PKGREVS'");
+check("fresh install: PKGREVS seeded to '5' (revisions, > 0 = enabled)", $val eq "5", "val=[$val]");
+$val = q1("select CVAL from SYSTEM.CONFIG where CKEY = 'INVESTIGATE'");
+check("fresh install: INVESTIGATE seeded to 'Enabled'", $val eq "Enabled", "val=[$val]");
 
 # 2. console changes -> survive a re-run
 my %changed = (
-	ENDPOINTCOMM => "hybrid",
-	MISSINGAFTER => "45",
-	CMDTIMEOUT   => "60",
-	DEPLTIMEOUT  => "1800",
-	CHECKININT   => "10",
+	ENDPOINTCOMM   => "hybrid",
+	MISSINGAFTER   => "45",
+	CMDTIMEOUT     => "60",
+	DEPLTIMEOUT    => "1800",
+	CHECKININT     => "10",
+	TCONFTHRESHOLD => "100",
+	"2FA"          => "Required",
+	MINPASS        => "12",
+	COMPLEXPASS    => "Enabled",
+	UTIMEOUT       => "30M",
+	UTIMEOUTWARN   => "Disabled",
+	SENREVS        => "10",
+	PKGREVS        => "0",
+	INVESTIGATE    => "Disabled",
 	);
 for my $ckey (sort keys %changed) {
 	$out = `$cli -S $sock -u root -ptestrootpw -e "update SYSTEM.CONFIG set CVAL = '$changed{$ckey}' where CKEY = '$ckey';" 2>&1`;
@@ -174,6 +205,16 @@ for my $ckey (sort keys %changed) {
 	check("re-run: $ckey console value preserved (not reset to the default)",
 	    $val eq $changed{$ckey}, "val=[$val]");
 	}
+
+# 3. a hand-removed row is restored on the next run (the schema's
+# NOT NULL covers column values, not row existence)
+$out = `$cli -S $sock -u root -ptestrootpw -e "delete from SYSTEM.CONFIG where CKEY = 'UTIMEOUT';" 2>&1`;
+check("row hand-removed (UTIMEOUT deleted)", $? == 0, $out);
+($rc, $o) = run_setup("$tmp/root1", "lumdef1");
+check("re-run after row removal: install succeeds", $rc == 0, $o);
+$val = q1("select CVAL from SYSTEM.CONFIG where CKEY = 'UTIMEOUT'");
+check("re-run after row removal: UTIMEOUT restored to the default",
+    $val eq "15M", "val=[$val]");
 
 # ---------------------------------------------------------------------------
 print "-" x 60, "\n";
