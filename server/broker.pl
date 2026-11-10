@@ -102,6 +102,21 @@ if ($writelog == 0) { Broker::debugout(2,"Writing broker logs to disk has been d
 startserver();
 startweb();
 setuplistener();
+# Write our own pid file now that the listener is bound, so the installed
+# stop script can find us no matter how we were started (start script,
+# systemd unit, manually) - the start script's "echo $!" only covers its
+# own path. A failed second start exits inside setuplistener() and never
+# reaches here, so it cannot clobber the running broker's pid file. Must
+# stay before startmqtt() forks the MQTT worker, which has a different
+# PID.
+{
+	my $pidfile = "$mgrpath/run/broker.pid";
+	if (open(my $pfh, ">", $pidfile)) {
+		print $pfh "$$\n";
+		close($pfh);
+		}
+	else { Broker::debugout(2,"Cannot write pid file $pidfile: $!"); }
+	}
 startmqtt();
 
 Broker::debugout(1,"Server startup complete.");

@@ -2,19 +2,19 @@
 # setup_orphan_e2e_test.sh - regression test for the installer's
 # orphan-broker recovery (Luminum::Setup::stop_running_broker).
 #
-# The generated stop script only sees a broker whose pid file is under its
-# own install root. A broker left over from a different install root,
-# started manually, or run by the systemd unit (which never writes
-# run/broker.pid) is invisible to it yet still holds the listener port, so
-# every re-run died at the pre-start probe with "port already in use" while
-# the stop scripts reported "no pid file".
+# A broker left running whose pid file is missing or lost is invisible to
+# the stop script's pid-file path yet still holds the listener port, so
+# re-runs died at the pre-start probe with "port already in use" while the
+# stop scripts reported "no pid file".
 #
 # This test reproduces that state end to end against a scratch MariaDB:
 #   1. provision an install (--no-start)
-#   2. start mosquitto and a broker MANUALLY (no start script, no pid file)
+#   2. start mosquitto and a broker MANUALLY (no start script); the broker
+#      writes its own pid file once the listener is bound - verify that,
+#      then delete the file to reproduce the lost-pid-file state
 #   3. re-run the installer with start=1
-# and checks that the installer finds the orphan by command line, stops it,
-# and completes with all services listening.
+# and checks that the orphan is stopped and the install completes with all
+# services listening.
 #
 # Usage: bash tests/setup_orphan_e2e_test.sh
 set -u
@@ -142,8 +142,16 @@ for i in $(seq 1 30); do
     if port_open "$LPORT"; then orphan_up=0; break; fi
     sleep 0.5
 done
-check "orphan broker is listening on $LPORT (no pid file)" "$orphan_up" "see $RUN/orphan-broker.log"
+check "orphan broker is listening on $LPORT" "$orphan_up" "see $RUN/orphan-broker.log"
 [ "$orphan_up" -eq 0 ] || exit 1
+# The broker writes its own pid file once the listener is bound, so a
+# manual start is visible to the stop script; the PID in it must be live.
+ORPHAN_SELF_PID=$(cat "$ROOT/run/broker.pid" 2>/dev/null)
+check "orphan broker wrote its own pid file with a live PID" \
+    $([ -n "$ORPHAN_SELF_PID" ] && kill -0 "$ORPHAN_SELF_PID" 2>/dev/null; echo $?)
+# Delete the file to reproduce the lost-pid-file state the command-line
+# fallback must recover from.
+rm -f "$ROOT/run/broker.pid"
 check "no broker pid file exists" $([ ! -f "$ROOT/run/broker.pid" ]; echo $?)
 
 # --- 3. re-run the installer with start=1 -------------------------------------
@@ -156,8 +164,11 @@ PERL5LIB="$PERL_LIBS" perl "$SETUP" --noninteractive --yes \
     > "$RUN/setup2.log" 2>&1
 rc=$?
 check "installer re-run completed" $([ $rc -eq 0 ]; echo $rc) "see $RUN/setup2.log"
-check "installer stopped the orphan by command line" \
-    $(grep -q 'Stopping broker process(es)' "$RUN/setup2.log"; echo $?)
+# The installed stop script's command-line fallback reaches the orphan
+# (relative start, working directory at the install root), so the
+# installer's own pgrep layer is not needed here.
+check "installer stopped the orphan" \
+    $(grep -q 'Stopping existing Luminum broker' "$RUN/setup2.log"; echo $?)
 # The orphan is our child; bash reaps dead background jobs, so once it is
 # gone /proc/$ORPHAN_PID disappears (an alive or unreaped zombie keeps it).
 orphan_gone=1

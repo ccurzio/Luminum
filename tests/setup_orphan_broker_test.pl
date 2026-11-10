@@ -4,10 +4,9 @@
 # orphan-broker cleanup (Luminum::Setup::stop_running_broker) and the
 # port-holder diagnostic (Luminum::Setup::port_holder).
 #
-# The generated stop script only sees a broker whose pid file is under its
-# own install root. A broker left over from a different install root,
-# started manually, or run by the systemd unit (which never writes
-# run/broker.pid) is invisible to it yet still holds the listener port, so
+# A broker left over from a different install root is invisible to this
+# install's stop script (its pid file and command-line fallback both cover
+# only this install's broker.pl) yet still holds the listener port, so
 # every re-run died at the pre-start probe with "port already in use".
 # These tests stand in for such an orphan (no database needed):
 #   1. a "perl <tmp>/broker.pl" process with no pid file anywhere is found
