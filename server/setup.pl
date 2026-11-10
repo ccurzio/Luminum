@@ -612,11 +612,13 @@ sub collect_params_text {
 	$v{lport}        = textprompt("Broker listener port", $opt{lport} || "10465");
 	$v{wport}        = textprompt("Web console port", $opt{wport} || "443");
 	$v{dbsocket}     = textprompt("Database socket", $opt{dbsocket} || "/var/run/mysqld/mysqld.sock");
-	$v{dbadmin}      = textprompt("Database admin user", $opt{dbadmin} || "root");
+	# The account names are fixed (root / luminum / lumadmin) and are not
+	# offered for change in the text wizard; only the passwords are asked.
+	$v{dbadmin}      = "root";
 	$v{dbadminpass}  = textpromptpass("Database admin password", $opt{dbadminpass}, "blank = no password");
-	$v{dbuser}       = textprompt("Database user", $opt{dbuser} || "luminum");
+	$v{dbuser}       = "luminum";
 	$v{dbpass}       = textpromptpass("DB App Password", $opt{dbpass});
-	$v{adminuser}    = textprompt("Console admin username", $opt{adminuser} || "lumadmin");
+	$v{adminuser}    = "lumadmin";
 	$v{adminpass}    = textpromptpass("Console admin password", $opt{adminpass});
 	$v{adminemail}   = textprompt("Admin Email", $opt{adminemail});
 	return %v;
