@@ -124,13 +124,33 @@ sub run {
 	unless (-d $srcdir) { return $fail->("source directory not found: $srcdir"); }
 	unless (-e "$srcdir/broker.pl") { return $fail->("source tree incomplete (no broker.pl in $srcdir)"); }
 
-	# --- Step 0: dependency check (before any files are copied) --------------
-	# Fail on a host that cannot run the result - missing binaries, Perl
-	# modules, or database - with the system left exactly as found.
-	my $dbh = check_dependencies({
-		dbadmin => $dbadmin, dbadminpass => $dbadminpass,
-		dbhost => $dbhost, dbsocket => $dbsocket, log => $log,
-		}, $fail) or return 1;
+	# --- Step 0: dependency check (before any files are written) -------------
+	# The host must be able to run the result before anything is written.
+	# Missing dependencies are reported, and - when the interface can ask
+	# (deps_offer callback, interactive modes) - the user is offered
+	# installing them now or cancelling. Either way, no file is written
+	# before this point.
+	my @missing = find_missing_dependencies();
+	if (@missing) {
+		$log->("Missing dependencies: " . join(", ", @missing));
+		my $resolved = 0;
+		if (ref($o{deps_offer}) eq "CODE" && $> == 0) {
+			if ($o{deps_offer}->(\@missing, $log)) {
+				@missing = install_missing_dependencies(\@missing, $log);
+				$resolved = !@missing;
+				}
+			}
+		unless ($resolved) {
+			return $fail->("missing dependencies: " . join(", ", @missing)
+				. " - install them and re-run setup (no files were written)");
+			}
+		}
+	# The database must be reachable (it is not installable through the
+	# offer above).
+	my $dbh = admin_connect($dbadmin, $dbadminpass, $dbhost, $dbsocket);
+	unless ($dbh) {
+		return $fail->("cannot connect to database as $dbadmin (socket: $dbsocket); if the admin account uses a password, supply it (dbadminpass / --dbadminpass)");
+		}
 	# A mosquitto left running from a previous install (or started
 	# manually) holds the listener port and the password/ACL files this
 	# run rewrites; stop it before any files are copied.
@@ -532,27 +552,24 @@ sub writefile {
 	return 1;
 	}
 
-# Verify everything the install needs BEFORE any files are copied or
-# services are touched, so an unprepared host fails with the system left
-# exactly as found. Checks the external binaries, the Perl modules the
-# broker and the forked MQTT worker load (in this process's @INC, which
-# is what detect_perl5lib bakes into the generated start scripts), and a
-# working database admin connection. Returns a connected DBI handle on
-# success; on failure reports via $fail and returns false.
+# Detect the dependencies the install needs, run BEFORE any file is
+# written: the external binaries the installer shells out to (including
+# the php CLI used for bcrypt hashing - the php-fpm package does not
+# pull it in) and the non-core Perl modules the broker and the forked
+# MQTT worker load (checked in this process's @INC, which is what
+# detect_perl5lib bakes into the generated start scripts). Returns the
+# missing item names; empty when the host is ready.
 #
-sub check_dependencies {
-	my ($o, $fail) = @_;
-	my $log = $o->{log};
-	$log->("Checking dependencies ...");
+sub find_missing_dependencies {
 	my @missing;
-	for my $bin (qw(mosquitto mosquitto_passwd nginx openssl)) {
+	for my $bin (qw(mosquitto mosquitto_passwd nginx openssl php)) {
 		my $p = `command -v $bin 2>/dev/null`;
 		push @missing, $bin unless defined $p && $p ne "";
 		}
 	my $fpmbin = find_php_fpm();
 	push @missing, "php-fpm" unless $fpmbin;
-	# Non-core Perl modules loaded at runtime. DBD::mysql is not caught by
-	# a compile check (DBI->connect loads it), so it is listed explicitly.
+	# DBD::mysql is not caught by a compile check (DBI->connect loads it),
+	# so it is listed explicitly.
 	my %modfile = (
 		"DBI"                    => "DBI.pm",
 		"DBD::mysql"             => "DBD/mysql.pm",
@@ -565,15 +582,124 @@ sub check_dependencies {
 		my $ok = eval { require $modfile{$mod}; 1 };
 		push @missing, $mod unless $ok;
 		}
-	if (@missing) {
-		return $fail->("missing dependencies: " . join(", ", @missing)
-			. " - install them and re-run setup (no files were copied)");
+	return @missing;
+	}
+
+# System packages providing each dependency, per package-manager family.
+# Items without an entry cannot be installed automatically:
+# Net::MQTT::Simple is CPAN-only, and Alpine's PHP packages are
+# version-prefixed (php83-fpm, ...).
+#
+my %DEPPKGS = (
+	apt => {
+		mosquitto         => "mosquitto",
+		mosquitto_passwd  => "mosquitto-clients",
+		nginx             => "nginx",
+		openssl           => "openssl",
+		php               => "php-cli",
+		"php-fpm"         => "php-fpm",
+		"DBI"             => "libdbi-perl",
+		"DBD::mysql"      => "libdbd-mysql-perl",
+		"IO::Socket::SSL" => "libio-socket-ssl-perl",
+		"Crypt::Perl::Ed25519" => "libcrypt-perl-ed25519-perl",
+		},
+	dnf => {
+		mosquitto         => "mosquitto",
+		mosquitto_passwd  => "mosquitto-clients",
+		nginx             => "nginx",
+		openssl           => "openssl",
+		php               => "php-cli",
+		"php-fpm"         => "php-fpm",
+		"DBI"             => "perl-DBI",
+		"DBD::mysql"      => "perl-DBD-MySQL",
+		"IO::Socket::SSL" => "perl-IO-Socket-SSL",
+		"Crypt::Perl::Ed25519" => "perl-Crypt-Perl-Ed25519",
+		},
+	apk => {
+		mosquitto         => "mosquitto",
+		mosquitto_passwd  => "mosquitto-clients",
+		nginx             => "nginx",
+		openssl           => "openssl",
+		"DBI"             => "perl-DBI",
+		"DBD::mysql"      => "perl-DBD-mysql",
+		"IO::Socket::SSL" => "perl-IO-Socket-SSL",
+		"Crypt::Perl::Ed25519" => "perl-Crypt-Perl-Ed25519",
+		},
+	);
+
+my %DEPCMD = (
+	apt => "apt-get",
+	dnf => "dnf",
+	yum => "yum",
+	apk => "apk",
+	);
+
+# Detect the system package manager. Returns (family, full path);
+# (undef, undef) when none of apt/dnf/yum/apk is available.
+#
+sub detect_package_manager {
+	for my $fam (qw(apt dnf yum apk)) {
+		my $p = `command -v $DEPCMD{$fam} 2>/dev/null`;
+		chomp($p) if defined $p;
+		return ($fam, $p) if defined $p && $p ne "";
 		}
-	my $dbh = admin_connect($o->{dbadmin}, $o->{dbadminpass}, $o->{dbhost}, $o->{dbsocket});
-	unless ($dbh) {
-		return $fail->("cannot connect to database as $o->{dbadmin} (socket: $o->{dbsocket}); if the admin account uses a password, supply it (dbadminpass / --dbadminpass)");
+	return (undef, undef);
+	}
+
+# Install missing dependencies through the system package manager
+# (requires root). Returns the items still missing afterwards: install
+# failures and items with no package mapping.
+#
+sub install_missing_dependencies {
+	my ($missing, $log) = @_;
+	my ($fam, $pm) = detect_package_manager();
+	if (!defined $fam) {
+		$log->("  no supported package manager found (apt/dnf/yum/apk); install the missing dependencies manually and re-run setup");
+		return @$missing;
 		}
-	return $dbh;
+	if ($> != 0) {
+		$log->("  installing packages requires root; re-run setup as root or install the missing dependencies manually");
+		return @$missing;
+		}
+	my $table = $DEPPKGS{$fam} || {};
+	my %pkgset;
+	my @unmapped;
+	for my $item (@$missing) {
+		if (defined $table->{$item}) {
+			$pkgset{$table->{$item}} = 1;
+		} else {
+			push @unmapped, $item;
+		}
+		}
+	my @pkgs = sort keys %pkgset;
+	if (@unmapped) {
+		$log->("  no system package available for: " . join(", ", @unmapped));
+		$log->("  (Net::MQTT::Simple is CPAN-only: cpanm Net::MQTT::Simple)");
+		}
+	unless (@pkgs) {
+		return @$missing;
+		}
+	$log->("  installing via $fam: " . join(" ", @pkgs));
+	my $rc;
+	if ($fam eq "apt") {
+		system($pm, "update");
+		$rc = system($pm, "install", "-y", @pkgs);
+		}
+	elsif ($fam eq "apk") {
+		$rc = system($pm, "add", @pkgs);
+		}
+	else {
+		$rc = system($pm, "install", "-y", @pkgs);
+		}
+	if ($rc != 0) {
+		$log->("  package installation failed (exit " . int($rc / 256) . "); install the missing dependencies manually and re-run setup");
+		return find_missing_dependencies();
+		}
+	my @still = find_missing_dependencies();
+	if (@still) {
+		$log->("  still missing after installation: " . join(", ", @still));
+		}
+	return @still;
 	}
 
 # Stop a mosquitto that is still running before the install copies or

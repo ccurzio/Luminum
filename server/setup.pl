@@ -416,6 +416,19 @@ EOF
 
 sub runinstaller {
 	my (%p) = @_;
+	if ($text == 1) {
+		# Offer to install missing dependencies before the installer
+		# fails (Setup.pm detects them before any file is written).
+		$p{deps_offer} = sub {
+			my ($missing) = @_;
+			print "\nThe following dependencies are missing:\n";
+			print "  $_\n" for @$missing;
+			print "\nInstall them now with the system package manager? [y/N] ";
+			my $ans = <STDIN>;
+			chomp($ans) if defined $ans;
+			return (defined $ans && $ans =~ /^[yY]/) ? 1 : 0;
+			};
+		}
 	my $rc = Luminum::Setup::run(%p);
 	if ($text == 1 || $opt{noninteractive}) {
 		exit($rc ? 1 : 0);
@@ -1078,6 +1091,62 @@ my $showParamDialog = sub {
 #
 $doInstall = sub {
 	my %params = @_;
+	# Offer to install missing dependencies before the installer fails
+	# (Setup.pm detects them before any file is written). The callback
+	# runs inside the installer, which blocks the mainloop, so the
+	# dialog pumps events itself until a button is pressed.
+	$params{deps_offer} = sub {
+		my ($missing) = @_;
+		my $text = "The following dependencies are missing:\n\n";
+		$text .= "  $_\n" for @$missing;
+		$text .= "\nInstall them now with the system package manager (I), or cancel the installation (C)?";
+		local $Text::Wrap::columns = 64;
+		$text = wrap('', '', $text);
+		my $dlg = $win->add('depsdialog', 'Window',
+			-centered => 1, -width => 74, -height => 18,
+			-bg => 'white', -fg => 'black', -border => 1,
+			-bfg => 'black', -bbg => 'white',
+			);
+		$dlg->add('depslabel', 'Label',
+			-text => $text, -width => -1, -height => -1,
+			-x => 2, -y => 2,
+			);
+		my $choice;
+		$dlg->add('depsbuttons', 'Buttonbox',
+			-buttons => [ {
+				-label => " Cancel ", -value => "cancel",
+				-onpress => sub { $choice = 0; $win->delete('depsdialog'); $win->draw(); },
+				},
+			{
+				-label => " Install ", -value => "install",
+				-onpress => sub { $choice = 1; $win->delete('depsdialog'); $win->draw(); },
+				} ],
+			-fg => "black", -buttonalignment => "right",
+			-x => 2, -ipadright => 3, -y => 14, -selected => 1,
+			);
+		$dlg->get('depsbuttons')->focus();
+		$win->draw();
+		while (!defined $choice) {
+			if ($win->can("handle_event")) {
+				$win->handle_event();
+				}
+			else {
+				require Curses;
+				my $key = Curses::getch();
+				if (defined $key && ($key eq "i" || $key eq "I" || $key == 10 || $key == 13)) {
+					$choice = 1;
+					$win->delete('depsdialog');
+					$win->draw();
+					}
+				elsif (defined $key && ($key eq "c" || $key eq "C" || $key == 27)) {
+					$choice = 0;
+					$win->delete('depsdialog');
+					$win->draw();
+					}
+				}
+			}
+		return $choice;
+		};
 	my $status = $win->add('statusdialog', 'Window',
 		-centered => 1, -width => 74, -height => 24,
 		-bg => 'white', -fg => 'black', -border => 1,
