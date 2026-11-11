@@ -617,7 +617,7 @@ sub collect_params_text {
 	$v{dbadmin}      = "root";
 	$v{dbadminpass}  = textpromptpass("Database admin password", $opt{dbadminpass}, "blank = no password");
 	$v{dbuser}       = "luminum";
-	$v{dbpass}       = textpromptpass("DB App Password", $opt{dbpass});
+	$v{dbpass}       = textpromptpass("App DB Password", $opt{dbpass});
 	$v{adminuser}    = "lumadmin";
 	$v{adminpass}    = textpromptpass("Console admin password", $opt{adminpass});
 	$v{adminemail}   = textprompt("Admin Email", $opt{adminemail});
@@ -1035,7 +1035,7 @@ my $showParamDialog = sub {
 		['wport',        "Web Console Port",  $defaults->{wport}        // ($opt{wport} || "443")],
 		['dbsocket',     "Database Socket",   $defaults->{dbsocket}     // $opt{dbsocket}],
 		['dbadminpass',  "DB Root Password",  $defaults->{dbadminpass}  // $opt{dbadminpass} // ""],
-		['dbpass',       "DB App Password",   $defaults->{dbpass}       // ""],
+		['dbpass',       "App DB Password",   $defaults->{dbpass}       // ""],
 		['adminpass',    "Lumadmin Password", $defaults->{adminpass} // ""],
 		['adminemail',   "Admin Email",       $defaults->{adminemail}   // $opt{adminemail}],
 	);
