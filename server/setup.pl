@@ -1016,7 +1016,7 @@ my $showParamDialog = sub {
 	my $dlg = $win->add('paramdialog', 'Window',
 		-centered	=> 1,
 		-width		=> 78,
-		-height		=> 21,
+		-height		=> 20,
 		-bg		=> 'white',
 		-fg		=> 'black',
 		-border		=> 1,
@@ -1034,8 +1034,7 @@ my $showParamDialog = sub {
 		['lport',        "Listener Port",     $defaults->{lport}        // ($opt{lport} || "10465")],
 		['wport',        "Web Console Port",  $defaults->{wport}        // ($opt{wport} || "443")],
 		['dbsocket',     "Database Socket",   $defaults->{dbsocket}     // $opt{dbsocket}],
-		['dbadmin',      "DB Admin User",     $defaults->{dbadmin}      // $opt{dbadmin} // "root"],
-		['dbadminpass',  "DB Admin Password", $defaults->{dbadminpass}  // $opt{dbadminpass} // ""],
+		['dbadminpass',  "DB Root Password",  $defaults->{dbadminpass}  // $opt{dbadminpass} // ""],
 		['dbpass',       "DB App Password",   $defaults->{dbpass}       // ""],
 		['adminpass',    "Lumadmin Password", $defaults->{adminpass} // ""],
 		['adminemail',   "Admin Email",       $defaults->{adminemail}   // $opt{adminemail}],
@@ -1061,7 +1060,7 @@ my $showParamDialog = sub {
 		}
 	$perr = $dlg->add('p_err', 'Label',
 		-text => "", -fg => 'red', -width => -1, -height => 1,
-		-x => 2, -y => 14,
+		-x => 2, -y => 13,
 		);
 	my $buttons = $dlg->add('p_buttons', 'Buttonbox',
 		-buttons => [ {
@@ -1080,7 +1079,7 @@ my $showParamDialog = sub {
 		-buttonalignment => "right",
 		-x		=> 2,
 		-ipadright	=> 3,
-		-y		=> 17,
+		-y		=> 16,
 		-selected	=> 1,
 		);
 	$pentry{install_root}->focus();
