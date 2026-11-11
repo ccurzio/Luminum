@@ -20,6 +20,7 @@ use Socket qw(inet_aton AF_INET);
 use Term::ANSIColor;
 use Text::Wrap;
 use FindBin qw($Bin);
+use Cwd qw(getcwd);
 use lib "$Bin/lib";
 use Luminum::Setup;
 
@@ -1070,7 +1071,7 @@ my $showParamDialog = sub {
 		['dbsocket',     "Database Socket",   $defaults->{dbsocket}     // $opt{dbsocket}],
 		['dbadminpass',  "DB Root Password",  $defaults->{dbadminpass}  // $opt{dbadminpass} // ""],
 		['dbpass',       "App DB Password",   $defaults->{dbpass}       // ""],
-		['adminpass',    "Lumadmin Password", $defaults->{adminpass} // ""],
+		['adminpass',    "Lumadmin Password", $defaults->{adminpass} // $opt{adminpass} // ""],
 		['adminemail',   "Admin Email",       $defaults->{adminemail}   // $opt{adminemail}],
 	);
 	my $y = 3;
@@ -1205,16 +1206,27 @@ $doInstall = sub {
 		);
 	$status->draw;
 
-	# Capture installer output (raw stdout/stderr would corrupt the
-	# curses screen).
-	my $tmpout = "/tmp/luminum-setup-out.$$";
+	# Write the full installer output to a log file in the current working
+	# directory so the user has a persistent record to inspect after the
+	# (transient) status dialog closes. Raw stdout/stderr would corrupt the
+	# curses screen, so it is captured at the file-descriptor level. Fall
+	# back to /tmp if the CWD is not writable.
+	my $logpath = (getcwd() || ".") . "/luminum-setup.log";
 	my $rc;
 	my $summary = "";
 	my $runerr = "";
+	my $logok = 0;
 	{
 		my $fh;
-		open($fh, ">", $tmpout) or $runerr = "open $tmpout: $!";
-		if (!$runerr) {
+		if (open($fh, ">", $logpath)) {
+			$logok = 1;
+			}
+		else {
+			$logpath = "/tmp/luminum-setup-out.$$";
+			if (open($fh, ">", $logpath)) { $logok = 1; }
+			else { $runerr = "cannot open log file: $!"; }
+			}
+		if ($logok) {
 			# Redirect at the file-descriptor level, not just via
 			# select(): child processes (the start/stop scripts, openssl,
 			# systemctl, ...) inherit fd 1/2 and would otherwise paint
@@ -1251,16 +1263,19 @@ $doInstall = sub {
 			}
 		}
 	$rc = 1 unless defined $rc;
-	my $output = "";
-	if (open(my $rfh, "<", $tmpout)) { $output = do { local $/; <$rfh> }; close($rfh); }
-	unlink($tmpout);
 
 	$status->delete('statuslabel');
-	my $msg = $rc == 0
-		? $summary
-		: "Installation FAILED."
-		  . ($runerr ne "" ? "\n\nError: $runerr" : "")
-		  . ($output ne "" ? "\n\n" . substr($output, -1000) : "");
+	my $msg;
+	if ($rc == 0) {
+		$msg = "Installation Successful\n\n" . $summary
+			. "\n\nFull log: $logpath";
+		}
+	elsif ($logok) {
+		$msg = "Installation Failed\n\nSee $logpath for details.";
+		}
+	else {
+		$msg = "Installation Failed\n\n$runerr";
+		}
 	{
 		local $Text::Wrap::columns = 68;
 		$msg = wrap('', '', $msg);
