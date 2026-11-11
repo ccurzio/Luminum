@@ -333,7 +333,16 @@ sub run {
 	if ($> == 0) {
 		my @mpw = getpwnam("mosquitto");
 		if (@mpw) {
-			chown($mpw[2], $mpw[3], $dir{mosquitto}, $mosqpasswd, $mosqacl);
+			chown($mpw[2], $mpw[3], $dir{mosquitto}, $mosqconf, $mosqpasswd, $mosqacl);
+			# The generated config sets no 'user' directive, and mosquitto
+			# defaults to user=mosquitto when started as root - so after the
+			# privilege drop it must still read the TLS files it loads, and on
+			# every SIGHUP reload it re-reads mosquitto.conf as that user. Hand
+			# it the CA/cert and the MQTT key, and let it traverse config/ssl
+			# to reach them. The server private key and the Ed25519 signing
+			# key stay root-only (0600, not chowned).
+			chown($mpw[2], $mpw[3], $cert, $mcrt, $mkey);
+			chmod(0711, $dir{ssl});
 			for my $d ($mosqrundir, $mosqlogdir) {
 				mkdir($d, 0740) unless -d $d;
 				chown($mpw[2], $mpw[3], $d);
@@ -481,7 +490,7 @@ EOF
 		$log->("Starting services ...");
 		start_now({ bin => $dir{bin}, run => $dir{run}, logdir => $dir{logdir},
 			laddr => $laddr, lport => $lport, maddr => $maddr, mport => $mport,
-			wport => $wport }) == 0 or $rc = 1;
+			wport => $wport, mosqlog => $mosqlog }) == 0 or $rc = 1;
 		if ($rc == 0) {
 			$log->("Verifying installation ...");
 			verify({ root => $root, laddr => $laddr, lport => $lport, wport => $wport,
