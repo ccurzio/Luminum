@@ -635,10 +635,11 @@ sub collect_cert_text {
 	my $sel = "";
 	while ($sel ne "1" && $sel ne "2" && $sel ne "3") {
 		print "$badoplabel: $sel\n\n" if $sel ne "";
-		print "[1|2|3] (1): ";
+		print "(1|2|3) [1]: ";
 		$sel = <STDIN>;
 		$sel = "" unless defined $sel;
 		chomp($sel);
+		$sel = "1" if $sel eq "";
 		}
 	my %s = (mode => "generate", keymode => "new");
 	if ($sel eq "2") {
