@@ -1116,7 +1116,7 @@ $doInstall = sub {
 			&& POSIX::dup2(fileno($tty), 2) == 2;
 		my $text = "The following dependencies are missing:\n\n";
 		$text .= "  $_\n" for @$missing;
-		$text .= "\nInstall them now with the system package manager (I), or cancel the installation (C)?";
+		$text .= "\nInstall them now with the system package manager, or cancel the installation?";
 		local $Text::Wrap::columns = 64;
 		$text = wrap('', '', $text);
 		my $dlg = $win->add('depsdialog', 'Window',
@@ -1131,11 +1131,11 @@ $doInstall = sub {
 		my $choice;
 		my $depsbuttons = $dlg->add('depsbuttons', 'Buttonbox',
 			-buttons => [ {
-				-label => " Cancel ", -value => "cancel",
+				-label => " Cancel ", -value => "cancel", -shortcut => "C",
 				-onpress => sub { $choice = 0; $win->delete('depsdialog'); $win->draw(); },
 				},
 			{
-				-label => " Install ", -value => "install",
+				-label => " Install ", -value => "install", -shortcut => "I",
 				-onpress => sub { $choice = 1; $win->delete('depsdialog'); $win->draw(); },
 				} ],
 			-fg => "black", -buttonalignment => "right",
