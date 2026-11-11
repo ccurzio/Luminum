@@ -476,7 +476,8 @@ EOF
 	if ($startsvc) {
 		$log->("Starting services ...");
 		start_now({ bin => $dir{bin}, run => $dir{run}, logdir => $dir{logdir},
-			laddr => $laddr, lport => $lport, maddr => $maddr, mport => $mport }) == 0 or $rc = 1;
+			laddr => $laddr, lport => $lport, maddr => $maddr, mport => $mport,
+			wport => $wport }) == 0 or $rc = 1;
 		if ($rc == 0) {
 			$log->("Verifying installation ...");
 			verify({ root => $root, laddr => $laddr, lport => $lport, wport => $wport,
@@ -1928,6 +1929,17 @@ sub start_now {
 			print "[setup]   --- $log->[0] (last $log->[1] lines) ---\n";
 			print "[setup]   $_" for @lines;
 			}
+		return 1;
+		}
+	# The web console binds $wport next. stop-web only signals the nginx
+	# started from this install's config, so a port held by another service
+	# (or an nginx from a different install root) survives it; name the
+	# holder up front instead of letting nginx dump five bind failures.
+	my $wholder = port_holder($p->{wport});
+	if ($wholder ne "") {
+		warn "[setup] port $p->{wport} is already in use - held by PID $wholder"
+			. (proc_cmdline($wholder) ? " (" . proc_cmdline($wholder) . ")" : "")
+			. " - stop that service and re-run setup";
 		return 1;
 		}
 	system("$bin/start-web") == 0 or do { warn "[setup] web console start failed"; return 1; };
