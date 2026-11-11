@@ -780,6 +780,9 @@ if ($text == 0) {
 			print "$nocurseslabel\n";
 			exit(1);
 			}
+		# Parent of Luminum::GrayRadio; loaded here at runtime so
+		# text-only runs never pull in the ncurses bindings.
+		require Curses::UI::Radiobuttonbox;
 		}
 	}
 
@@ -1295,6 +1298,48 @@ $doInstall = sub {
 	$status->getobj('statusbuttons')->focus();
 	};
 
+# Radiobuttonbox that draws the unselected options in gray and the
+# selected option in black: the base Listbox paints every row with one
+# color pair, so draw() repaints the rows after the base draw -
+# unselected rows with A_DIM (the library's own gray, as used for its
+# "- no values -" placeholder; a custom gray color pair would be
+# approximated to black-on-black on 8-color terminals) and the selected
+# row in plain bold, so it reads black even when the reverse-video
+# cursor is on it. The base reverse-video highlight on a focused
+# unselected row is left as drawn.
+package Luminum::GrayRadio;
+our @ISA = ('Curses::UI::Radiobuttonbox');
+sub draw {
+	my ($this, $no_doupdate) = @_;
+	$this->SUPER::draw($no_doupdate) or return $this;
+	my $scr = $this->{-canvasscr};
+	my $cw = $this->canvaswidth;
+	my $start = $this->{-yscrpos};
+	my $end = $start + $this->canvasheight - 1;
+	$end = $this->{-max_selected} if $end > $this->{-max_selected};
+	my $sel = $this->{-selected};
+	for my $i ($start .. $end) {
+		next if $this->{-focus} && $this->{-ypos} == $i && $i != $sel;
+		my $y = $i - $start;
+		$scr->attron(Curses::A_DIM()) if $i != $sel;
+		$scr->attron(Curses::A_BOLD()) if $i == $sel;
+		$scr->addstr($y, 0, " " x $cw);
+		$scr->addstr($y, 0, ($i == $sel ? '<o>' : '< >'));
+		my $label = $this->getlabel($i);
+		$label =~ s/\n|\r//g;
+		$scr->addstr($y, 4, $this->text_chop($label, $cw - 4));
+		$scr->attroff(Curses::A_DIM());
+		$scr->attroff(Curses::A_BOLD());
+		}
+	$scr->noutrefresh();
+	Curses::doupdate() unless $no_doupdate;
+	return $this;
+	}
+# Mark the class as loaded so Curses::UI::usemodule does not try to
+# require a Luminum/GrayRadio.pm file for it.
+$INC{"Luminum/GrayRadio.pm"} = 1;
+package main;
+
 # Certificate dialogs: the first screen chooses how the server
 # certificate/key are obtained; if the choice needs existing files
 # (generate from an existing key, or import) a second screen collects
@@ -1454,7 +1499,7 @@ $showCertDialog = sub {
 	# -height is mandatory: an auto-height listbox takes ALL remaining
 	# parent rows, so its window would overlap the button row and erase
 	# the buttons whenever the listbox is redrawn (i.e. while focused).
-	$cradio = $dlg->add('c_radio', 'Radiobuttonbox',
+	$cradio = $dlg->add('c_radio', 'Luminum::GrayRadio',
 		-values => ["gen", "genkey", "import"],
 		-labels => {
 			gen    => $certgen,
