@@ -78,6 +78,10 @@ eval { require "$lib/Luminum/Setup.pm"; Luminum::Setup->import; 1 }
 my $tmp = ($ENV{HOME} || "/tmp") . "/.lum-stop-web-test.$$";
 make_path("$tmp/run", "$tmp/bin", "$tmp/log", "$tmp/fakebin")
     or skip_all("cannot create $tmp");
+# The fake nginx (a copied sleep) has no SIGQUIT handler, so the kernel
+# core-dumps it when the stop scripts QUIT it; the core lands in the
+# process's cwd, so stay inside the scratch dir and it is removed with it.
+chdir($tmp) or die "chdir $tmp: $!";
 my @sleepbins = grep { -x $_ } ("/bin/sleep", "/usr/bin/sleep");
 my $sleepbin = $sleepbins[0];
 skip_all("no /bin/sleep or /usr/bin/sleep to stand in for nginx") unless $sleepbin;
