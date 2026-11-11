@@ -63,6 +63,7 @@ my $yesbsc;
 my $nobsc;
 my $okbutton;
 my $emailreqlabel;
+my $emailinvlabel;
 my $genpasslabel;
 my $certtitle;
 my $certgen;
@@ -106,6 +107,7 @@ if ($ENV{LANG} =~ /en_/ || $ENV{LANG} eq "") {
 	$nobsc = "N";
 	$okbutton = " OK ";
 	$emailreqlabel = "The admin email field must be populated before continuing.";
+	$emailinvlabel = "The admin email address is not in a valid format. Please enter a valid email address before continuing.";
 	$genpasslabel = "If an admin password is not provided one will be generated automatically. Do you want to continue?";
 	$certtitle = "Certificate Configuration";
 	$certgen = "Generate a new self-signed certificate (new private key)";
@@ -149,6 +151,7 @@ elsif ($ENV{LANG} =~ /de_/) {
 	$nobsc = "N";
 	$okbutton = " OK ";
 	$emailreqlabel = "Das Feld für die Administrator-E-Mail-Adresse muss ausgefüllt werden, um fortzufahren.";
+	$emailinvlabel = "Die Administrator-E-Mail-Adresse hat kein gültiges Format. Bitte geben Sie eine gültige E-Mail-Adresse ein, um fortzufahren.";
 	$genpasslabel = "Wenn kein Administrator-Kennwort angegeben wird, wird automatisch eines generiert. Möchten Sie fortfahren?";
 	$certtitle = "Zertifikatskonfiguration";
 	$certgen = "Neues selbstsigniertes Zertifikat erstellen (neuer privater Schlüssel)";
@@ -192,6 +195,7 @@ elsif ($ENV{LANG} =~ /it_/) {
 	$nobsc = "N";
 	$okbutton = " OK ";
 	$emailreqlabel = "Il campo e-mail dell'amministratore deve essere compilato per continuare.";
+	$emailinvlabel = "L'indirizzo e-mail dell'amministratore non è in un formato valido. Inserire un indirizzo e-mail valido per continuare.";
 	$genpasslabel = "Se non viene fornita una password amministratore, ne verrà generata una automaticamente. Vuoi continuare?";
 	$certtitle = "Configurazione Certificato";
 	$certgen = "Genera un nuovo certificato autofirmato (nuova chiave privata)";
@@ -235,6 +239,7 @@ elsif ($ENV{LANG} =~ /fr_/) {
 	$nobsc = "N";
 	$okbutton = " OK ";
 	$emailreqlabel = "Le champ e-mail de l'administrateur doit être rempli pour continuer.";
+	$emailinvlabel = "L'adresse e-mail de l'administrateur n'est pas dans un format valide. Veuillez saisir une adresse e-mail valide pour continuer.";
 	$genpasslabel = "Si aucun mot de passe d'administrateur n'est fourni, un mot de passe sera généré automatiquement. Voulez-vous continuer ?";
 	$certtitle = "Configuration du Certificat";
 	$certgen = "Générer un nouveau certificat auto-signé (nouvelle clé privée)";
@@ -278,6 +283,7 @@ elsif ($ENV{LANG} =~ /es_/) {
 	$nobsc = "N";
 	$okbutton = " OK ";
 	$emailreqlabel = "El campo de correo electrónico del administrador debe estar rellenado para continuar.";
+	$emailinvlabel = "La dirección de correo electrónico del administrador no tiene un formato válido. Introduzca una dirección de correo electrónico válida para continuar.";
 	$genpasslabel = "Si no se proporciona una contraseña de administrador, se generará una automáticamente. ¿Desea continuar?";
 	$certtitle = "Configuración del Certificado";
 	$certgen = "Generar un nuevo certificado autofirmado (nueva clave privada)";
@@ -319,6 +325,7 @@ else {
 	$nobsc = "N";
 	$okbutton = " OK ";
 	$emailreqlabel = "The admin email field must be populated before continuing.";
+	$emailinvlabel = "The admin email address is not in a valid format. Please enter a valid email address before continuing.";
 	$genpasslabel = "If an admin password is not provided one will be generated automatically. Do you want to continue?";
 	$certtitle = "Certificate Configuration";
 	$certgen = "Generate a new self-signed certificate (new private key)";
@@ -535,6 +542,8 @@ if ($opt{noninteractive}) {
 	unless (defined $opt{shost} && defined $opt{laddr}) {
 		die "Non-interactive setup requires --shost and --laddr (see --help)\n";
 		}
+	die "Invalid --adminemail (not a valid email address)\n"
+		if defined $opt{adminemail} && !valid_email($opt{adminemail});
 	my $certmode = $opt{certmode} || "generate";
 	my $keymode  = $opt{keymode} || "new";
 	die "Invalid --certmode (generate|import)\n" unless $certmode =~ /^(generate|import)$/;
@@ -603,6 +612,15 @@ sub textpromptpass {
 	return (defined $ans && $ans ne "") ? $ans : $default;
 	}
 
+# Pragmatic email format check (local@domain.tld) for the admin email
+# prompts - not a full RFC 5322 validation, just catches typos.
+#
+sub valid_email {
+	my ($addr) = @_;
+	return defined $addr
+		&& $addr =~ /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+	}
+
 sub collect_params_text {
 	print "\nInstallation Parameters\n\n";
 	my %v;
@@ -620,7 +638,13 @@ sub collect_params_text {
 	$v{dbpass}       = textpromptpass("App DB Password", $opt{dbpass});
 	$v{adminuser}    = "lumadmin";
 	$v{adminpass}    = textpromptpass("Console admin password", $opt{adminpass});
-	$v{adminemail}   = textprompt("Admin Email", $opt{adminemail});
+	my $email = textprompt("Admin Email", $opt{adminemail});
+	while (!valid_email($email)) {
+		print "Invalid email address: $email\n\n" if defined $email && $email ne "";
+		last if eof(STDIN);
+		$email = textprompt("Admin Email", $email);
+		}
+	$v{adminemail} = $email;
 	return %v;
 	}
 
@@ -917,7 +941,14 @@ my $paramAction = sub {
 		$perr->text("Server hostname and listener address are required.") if $perr;
 		return;
 	}
+	my $emailwarn;
 	if ($v{adminemail} eq "") {
+		$emailwarn = $emailreqlabel;
+		}
+	elsif (!valid_email($v{adminemail})) {
+		$emailwarn = $emailinvlabel;
+		}
+	if (defined $emailwarn) {
 		my $w = $win->add('emailwarndialog', 'Window',
 			-centered	=> 1,
 			-width		=> 68,
@@ -928,6 +959,9 @@ my $paramAction = sub {
 			-bfg		=> 'black',
 			-bbg		=> 'white',
 			);
+		# The label's usable width is 62 (dialog 68 minus border and
+		# padding); wrap narrower than that or long lines clip.
+		local $Text::Wrap::columns = 60;
 		$w->add('emailwarnlabel', 'Label',
 			-width		=> -1,
 			-height		=> -1,
@@ -935,7 +969,7 @@ my $paramAction = sub {
 			-padleft	=> 2,
 			-padright	=> 2,
 			-padtop		=> 1,
-			-text		=> wrap('', '', $emailreqlabel),
+			-text		=> wrap('', '', $emailwarn),
 			);
 		my $wb = $w->add('emailwarnbuttons', 'Buttonbox',
 			-buttons => [ {
