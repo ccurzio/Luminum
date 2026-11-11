@@ -1070,7 +1070,7 @@ my $showParamDialog = sub {
 		['wport',        "Web Console Port",  $defaults->{wport}        // ($opt{wport} || "443")],
 		['dbsocket',     "Database Socket",   $defaults->{dbsocket}     // $opt{dbsocket}],
 		['dbadminpass',  "DB Root Password",  $defaults->{dbadminpass}  // $opt{dbadminpass} // ""],
-		['dbpass',       "App DB Password",   $defaults->{dbpass}       // ""],
+		['dbpass',       "App DB Password",   $defaults->{dbpass}       // $opt{dbpass} // ""],
 		['adminpass',    "Lumadmin Password", $defaults->{adminpass} // $opt{adminpass} // ""],
 		['adminemail',   "Admin Email",       $defaults->{adminemail}   // $opt{adminemail}],
 	);
