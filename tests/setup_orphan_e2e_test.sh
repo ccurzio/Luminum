@@ -12,9 +12,11 @@
 #   2. start mosquitto and a broker MANUALLY (no start script); the broker
 #      writes its own pid file once the listener is bound - verify that,
 #      then delete the file to reproduce the lost-pid-file state
+#   2b. start a FOREIGN nginx (a different config, like the distro's) on
+#       the web port - "nginx -c <our conf> -s quit" cannot reach it
 #   3. re-run the installer with start=1
-# and checks that the orphan is stopped and the install completes with all
-# services listening.
+# and checks that the orphan and the foreign nginx are stopped and the
+# install completes with all services listening.
 #
 # Usage: bash tests/setup_orphan_e2e_test.sh
 set -u
@@ -154,6 +156,39 @@ check "orphan broker wrote its own pid file with a live PID" \
 rm -f "$ROOT/run/broker.pid"
 check "no broker pid file exists" $([ ! -f "$ROOT/run/broker.pid" ]; echo $?)
 
+# --- 2b. a foreign nginx on the web port (another config, like the distro's) -
+# stop-web's "nginx -c <our conf> -s quit" cannot reach it (different pid
+# file); the installer's command-line fallback must stop it so the new
+# nginx can bind the web port.
+WCONF="$RUN/foreign-nginx.conf"
+cat > "$WCONF" <<NGINX
+pid $RUN/foreign-nginx.pid;
+error_log $RUN/foreign-nginx.log;
+events {}
+http {
+    access_log off;
+    client_body_temp_path $RUN/nginx-tmp/client;
+    proxy_temp_path $RUN/nginx-tmp/proxy;
+    fastcgi_temp_path $RUN/nginx-tmp/fastcgi;
+    uwsgi_temp_path $RUN/nginx-tmp/uwsgi;
+    scgi_temp_path $RUN/nginx-tmp/scgi;
+    server {
+        listen 127.0.0.1:$WPORT;
+        return 200;
+    }
+}
+NGINX
+mkdir -p "$RUN/nginx-tmp"
+nginx -c "$WCONF" > "$RUN/foreign-nginx-start.log" 2>&1
+fng_up=1
+for i in $(seq 1 20); do
+    if port_open "$WPORT"; then fng_up=0; break; fi
+    sleep 0.5
+done
+check "foreign nginx is listening on $WPORT" "$fng_up" "see $RUN/foreign-nginx-start.log"
+[ "$fng_up" -eq 0 ] || exit 1
+FNG_PID=$(cat "$RUN/foreign-nginx.pid" 2>/dev/null)
+
 # --- 3. re-run the installer with start=1 -------------------------------------
 PERL5LIB="$PERL_LIBS" perl "$SETUP" --noninteractive --yes \
     --install-root "$ROOT" \
@@ -177,6 +212,18 @@ for i in $(seq 1 40); do
     sleep 0.25
 done
 check "orphan broker process is gone" "$orphan_gone" "PID $ORPHAN_PID still present"
+# The foreign nginx is not our child (nginx daemonizes), so an unreaped
+# zombie is possible: an empty cmdline means dead either way.
+check "installer stopped the foreign nginx" \
+    $(grep -q 'Stopping existing Luminum web console' "$RUN/setup2.log"; echo $?)
+fng_gone=1
+for i in $(seq 1 40); do
+    if [ ! -d "/proc/$FNG_PID" ] || [ ! -s "/proc/$FNG_PID/cmdline" ]; then
+        fng_gone=0; break;
+    fi
+    sleep 0.25
+done
+check "foreign nginx process is gone" "$fng_gone" "PID $FNG_PID still present"
 
 # --- the new install is up -----------------------------------------------------
 NEW_BROKER_PID=$(cat "$ROOT/run/broker.pid" 2>/dev/null)
