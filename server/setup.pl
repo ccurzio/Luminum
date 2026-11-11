@@ -1199,12 +1199,55 @@ $doInstall = sub {
 		-bg => 'white', -fg => 'black', -border => 1,
 		-bfg => 'black', -bbg => 'white',
 		);
+	# Explicit -width/-height on every label here: a label with -1/-1
+	# spans the whole parent canvas, and Curses::UI draws the last-added
+	# child first - so a full-canvas label would paint over the ones
+	# added after it (there is no focused widget in this dialog to be
+	# spliced to the top of the draw order).
 	$status->add('statuslabel', 'Label',
-		-text => "Running installation...\n(this may take a moment)",
-		-width => -1, -height => -1,
+		-text => "Running installation...",
+		-width => 40, -height => 1,
 		-x => 2, -y => 2,
 		);
+	$status->add('steplabel', 'Label',
+		-text => "Starting...",
+		-width => 40, -height => 1,
+		-x => 2, -y => 9,
+		);
+	$status->add('barlabel', 'Label',
+		-text => "-" x 40,
+		-width => 40, -height => 1,
+		-x => 2, -y => 11,
+		);
 	$status->draw;
+
+	# The installer reports each step through the progress callback, which
+	# updates the step text and the bar and redraws. While the installer
+	# runs, fd 1/2 point at the log file (so the installer and its children
+	# cannot paint over the screen), but ncurses draws on fd 2 - so each
+	# redraw swaps both fds back to the controlling terminal and restores
+	# them, exactly like the deps dialog does.
+	my $tty;
+	my $fh;
+	my $steplabel = $status->getobj('steplabel');
+	my $barlabel = $status->getobj('barlabel');
+	$params{progress} = sub {
+		my ($n, $total, $text) = @_;
+		$steplabel->text($text);
+		my $fill = int(($n / $total) * 40 + 0.5);
+		$fill = 40 if $fill > 40;
+		$barlabel->text("#" x $fill . "-" x (40 - $fill));
+		if (defined fileno($tty)) {
+			POSIX::dup2(fileno($tty), 1);
+			POSIX::dup2(fileno($tty), 2);
+			$status->draw();
+			POSIX::dup2(fileno($fh), 1);
+			POSIX::dup2(fileno($fh), 2);
+			}
+		else {
+			$status->draw();
+			}
+		};
 
 	# Write the full installer output to a log file in the current working
 	# directory so the user has a persistent record to inspect after the
@@ -1217,7 +1260,6 @@ $doInstall = sub {
 	my $runerr = "";
 	my $logok = 0;
 	{
-		my $fh;
 		if (open($fh, ">", $logpath)) {
 			$logok = 1;
 			}
@@ -1244,12 +1286,17 @@ $doInstall = sub {
 				&& POSIX::dup2(2, fileno($saveerr)) == fileno($saveerr)
 				&& POSIX::dup2(fileno($fh), 1) == 1
 				&& POSIX::dup2(fileno($fh), 2) == 2) {
+				# The progress callback redraws ncurses (fd 2) from inside
+				# the blocked run; it needs a handle to the controlling
+				# terminal to swap in around each draw.
+				open($tty, "+<", "/dev/tty") or $tty = undef;
 				my ($s, $r) = eval { Luminum::Setup::run(%params) };
 				$summary = $s if defined $s;
 				$rc = $r;
 				$runerr = $@ if $@;
 				POSIX::dup2(fileno($saveout), 1);
 				POSIX::dup2(fileno($saveerr), 2);
+				close($tty) if defined fileno($tty);
 				}
 			close($saveout) if defined fileno($saveout);
 			close($saveerr) if defined fileno($saveerr);
@@ -1265,6 +1312,8 @@ $doInstall = sub {
 	$rc = 1 unless defined $rc;
 
 	$status->delete('statuslabel');
+	$status->delete('steplabel');
+	$status->delete('barlabel');
 	my $msg;
 	if ($rc == 0) {
 		$msg = "Installation Successful\n\n" . $summary

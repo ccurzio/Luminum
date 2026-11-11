@@ -72,6 +72,8 @@ our $VERSION = "0.0.1";
 #                   Default: generate a new self-signed certificate/key.
 #   start         start services after install (default 1; 0 to skip)
 #   quiet         suppress progress output
+#   progress      CODE ref called as progress($n, $total, $text) at the
+#                 start of each install step (for progress UIs)
 #
 # Returns (summary, rc): summary is the completion summary text (empty on
 # failure), rc is 0 on success, nonzero on failure. In scalar context
@@ -83,6 +85,14 @@ sub run {
 	my $root = $o{install_root} || "/opt/Luminum/LuminumServer";
 	my $srcdir = $o{srcdir} || default_srcdir();
 	my $log = $o{quiet} ? sub {} : sub { print "[setup] $_[0]\n"; };
+
+	# progress($n, $total, $text) at the start of each install step.
+	my $totalsteps = 11;
+	my $stepn = 0;
+	my $step = sub {
+		$stepn++;
+		$o{progress}->($stepn, $totalsteps, $_[0]) if ref($o{progress}) eq "CODE";
+		};
 
 	my $fail = sub {
 		print "[setup] ERROR: $_[0]\n";
@@ -130,6 +140,7 @@ sub run {
 	# (deps_offer callback, interactive modes) - the user is offered
 	# installing them now or cancelling. Either way, no file is written
 	# before this point.
+	$step->("Checking dependencies");
 	my @missing = find_missing_dependencies();
 	if (@missing) {
 		$log->("Missing dependencies: " . join(", ", @missing));
@@ -194,6 +205,7 @@ sub run {
 	fix_traversal($root) if $> == 0;
 
 	# --- Step 1: sync code from the source tree ------------------------------
+	$step->("Synchronizing server files");
 	$log->("Synchronizing server files from $srcdir ...");
 	for my $item (qw(broker.pl lib sql)) {
 		my $s = "$srcdir/$item";
@@ -222,6 +234,7 @@ sub run {
 
 	# --- Step 2: database ----------------------------------------------------
 	# $dbh was already connected by the step 0 dependency check.
+	$step->("Setting up database");
 	$log->("Setting up database ...");
 
 	unless (apply_schema($dbh, "$root/sql/schema.sql", $log)) {
@@ -254,6 +267,7 @@ sub run {
 		: ($sslspec->{keymode} eq "existing"
 			? "Generating server certificate from existing key"
 			: "Generating server certificate");
+	$step->($sslwhat);
 	$log->("$sslwhat for $shost ...");
 	my ($slok, $cert, $key, $pub, $signseed, $signpub, $sslerr) =
 		prepare_ssl($shost, $dir{ssl}, $sslspec, $log);
@@ -271,6 +285,7 @@ sub run {
 	# changes; here we provision the TLS, mosquitto.conf, and a bootstrap
 	# (empty) password_file + comment-only ACL so mosquitto can start before the
 	# broker regenerates the full ACL.
+	$step->("Provisioning MQTT broker");
 	$log->("Provisioning MQTT broker (mosquitto) ...");
 	my ($mqttslok, $mcrt, $mkey, $mqtttlserr) =
 		prepare_mqtt_tls($shost, $dir{ssl}, $cert, $key, $log);
@@ -353,10 +368,12 @@ sub run {
 
 	# --- Step 4: server identity ---------------------------------------------
 	# 256-bit random server ID (32 bytes, 64 lowercase hex chars).
+	$step->("Generating server identity");
 	my $sid = randomhex(32);
 	my $skey = randomtoken(24);
 
 	# --- Step 5: configuration files ------------------------------------------
+	$step->("Writing configuration files");
 	$log->("Writing configuration files ...");
 	my $brokerconf = "$dir{config}/broker.conf";
 	my $dbhostline = (defined $dbhost && $dbhost ne "") ? "DBHOST = $dbhost\n" : "";
@@ -376,6 +393,7 @@ dbpass = $dbpass
 EOF
 
 	# --- Step 6: SYSTEM.CONFIG rows --------------------------------------------
+	$step->("Seeding database configuration");
 	$log->("Seeding SYSTEM.CONFIG ...");
 	my %rows = (
 		SID         => $sid,
@@ -454,6 +472,7 @@ EOF
 	$dbh->disconnect();
 
 	# --- Step 7: web console (nginx + php-fpm) ---------------------------------
+	$step->("Writing web console configuration");
 	$log->("Writing web console configuration ...");
 	my $nginxconf = "$dir{nginx}/luminum.conf";
 	my $fpmconf = "$dir{nginx}/luminum-fpm.conf";
@@ -469,6 +488,7 @@ EOF
 		}
 
 	# --- Step 8: service management ---------------------------------------------
+	$step->("Installing service management");
 	$log->("Installing service management ...");
 	unless (install_service({
 		root => $root, bin => $dir{bin}, run => $dir{run}, logdir => $dir{logdir},
@@ -485,6 +505,7 @@ EOF
 		}
 
 	# --- Step 9: start and verify ---------------------------------------------------
+	$step->("Starting and verifying services");
 	my $rc = 0;
 	if ($startsvc) {
 		$log->("Starting services ...");
