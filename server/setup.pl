@@ -656,7 +656,7 @@ sub collect_params_text {
 		# Print the prompt before reading: an eof(STDIN) probe performs a
 		# blocking read on a tty with no prompt on screen and eats the
 		# user's line. An undef read (EOF) ends the loop.
-		print "Admin Email" . (defined $email && $email ne "" ? " [$email]" : "") . ": ";
+		print "Admin Email: ";
 		my $ans = <STDIN>;
 		last unless defined $ans;
 		chomp($ans);
