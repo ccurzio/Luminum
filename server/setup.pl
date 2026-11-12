@@ -1244,7 +1244,11 @@ $doInstall = sub {
 	my $barw = 68;
 	my $barco = $cui->color;
 	my $pair_track   = $barco ? $barco->get_color_pair('black', 'black') : undef;
-	my $pair_fill    = $barco ? $barco->get_color_pair('darkgray', 'black') : undef;
+	# The fill is darkgray as a BACKGROUND (black-on-darkgray), not a
+	# foreground: on some terminals the custom darkgray renders correctly as
+	# a background but not as a foreground on black (the fill then reads as
+	# an empty track while the percentage's darkgray background shows gray).
+	my $pair_fill    = $barco ? $barco->get_color_pair('black', 'darkgray') : undef;
 	my $pair_txt     = $barco ? $barco->get_color_pair('white', 'black') : undef;
 	my $pair_txtfill = $barco ? $barco->get_color_pair('white', 'darkgray') : undef;
 	# Fill attribute: dark gray. With more than 8 colors the custom darkgray

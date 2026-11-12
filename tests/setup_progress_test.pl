@@ -119,17 +119,17 @@ skip_all("scratch MariaDB did not start") unless $ready;
 
 # The step texts the wizard displays, in install order.
 my @expected = (
-    "Checking dependencies",
-    "Synchronizing server files",
-    "Setting up database",
-    "Generating server certificate",
-    "Provisioning MQTT broker",
-    "Generating server identity",
-    "Writing configuration files",
-    "Seeding database configuration",
-    "Writing web console configuration",
-    "Installing service management",
-    "Starting and verifying services",
+    "Checking dependencies...",
+    "Synchronizing server files...",
+    "Setting up database...",
+    "Generating server certificate...",
+    "Provisioning MQTT broker...",
+    "Generating server identity...",
+    "Writing configuration files...",
+    "Seeding database configuration...",
+    "Writing web console configuration...",
+    "Installing service management...",
+    "Starting and verifying services...",
     );
 
 sub stepdump {
@@ -207,7 +207,7 @@ check("early failure: exactly one progress call", scalar(@steps2) == 1,
     "got " . scalar(@steps2) . ": " . stepdump(@steps2));
 check("early failure: step 1 is Checking dependencies",
     @steps2 == 1 && $steps2[0][0] == 1 && $steps2[0][1] == 11
-        && $steps2[0][2] eq "Checking dependencies",
+        && $steps2[0][2] eq "Checking dependencies...",
     stepdump(@steps2));
 check("early failure: install tree not created", !-d "$tmp/root2");
 
