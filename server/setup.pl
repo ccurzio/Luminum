@@ -1214,12 +1214,74 @@ $doInstall = sub {
 		-width => 40, -height => 1,
 		-x => 2, -y => 9,
 		);
-	$status->add('barlabel', 'Label',
-		-text => "-" x 40,
-		-width => 40, -height => 1,
-		-x => 2, -y => 11,
-		);
 	$status->draw;
+
+	# Progress bar: a black track across the full window width (minus a
+	# few characters of padding on each side), a dark gray fill, and the
+	# percentage completed centered on the bar itself. Curses::UI has no
+	# progress widget, so it is drawn directly on the dialog's canvas
+	# screen AFTER each $status->draw() - the window draw erases the whole
+	# window, so the bar cannot be a child widget or drawn before it. The
+	# pairs come from the app's color object; darkgray is the same custom
+	# 400,400,400 the input fields use (on an 8-color terminal ncurses
+	# maps it to black, so the fill degrades to invisible and the bar
+	# reads as a black track with the white percentage).
+	my $barscr = $status->{"-canvasscr"};
+	my $barx = 3;
+	my $bary = 11;
+	my $barw = 66;
+	my $barco = $cui->color;
+	my $pair_track   = $barco ? $barco->get_color_pair('black', 'black') : undef;
+	my $pair_fill    = $barco ? $barco->get_color_pair('darkgray', 'black') : undef;
+	my $pair_txt     = $barco ? $barco->get_color_pair('white', 'black') : undef;
+	my $pair_txtfill = $barco ? $barco->get_color_pair('white', 'darkgray') : undef;
+	my $drawbar = sub {
+		my ($n, $total) = @_;
+		my $fill = int(($n / $total) * $barw + 0.5);
+		$fill = $barw if $fill > $barw;
+		my $pct = int(($n / $total) * 100 + 0.5);
+		# Track: black across the full width.
+		if (defined $pair_track) {
+			$barscr->attron(Curses::COLOR_PAIR($pair_track));
+			$barscr->addstr($bary, $barx, " " x $barw);
+			$barscr->attroff(Curses::COLOR_PAIR($pair_track));
+			}
+		else {
+			$barscr->addstr($bary, $barx, " " x $barw);
+			}
+		# Fill: dark gray.
+		if ($fill > 0) {
+			my $attr = defined $pair_fill
+				? Curses::COLOR_PAIR($pair_fill)
+				: Curses::A_REVERSE();
+			$barscr->attron($attr);
+			$barscr->addstr($bary, $barx, " " x $fill);
+			$barscr->attroff($attr);
+			}
+		# Percentage centered on the bar; each character's background
+		# follows the fill under it.
+		my $pstr = "$pct%";
+		my $px = $barx + int(($barw - length($pstr)) / 2);
+		my $i = 0;
+		for my $ch (split(//, $pstr)) {
+			my $attr;
+			if (defined $pair_txt || defined $pair_txtfill) {
+				my $pair = (($px + $i) < ($barx + $fill) && defined $pair_txtfill)
+					? $pair_txtfill : $pair_txt;
+				$attr = Curses::COLOR_PAIR($pair);
+				}
+			else {
+				$attr = Curses::A_REVERSE();
+				}
+			$barscr->attron($attr);
+			$barscr->addstr($bary, $px + $i, $ch);
+			$barscr->attroff($attr);
+			$i++;
+			}
+		$barscr->noutrefresh();
+		Curses::doupdate();
+		};
+	$drawbar->(0, 11);
 
 	# The installer reports each step through the progress callback, which
 	# updates the step text and the bar and redraws. While the installer
@@ -1230,22 +1292,20 @@ $doInstall = sub {
 	my $tty;
 	my $fh;
 	my $steplabel = $status->getobj('steplabel');
-	my $barlabel = $status->getobj('barlabel');
 	$params{progress} = sub {
 		my ($n, $total, $text) = @_;
 		$steplabel->text($text);
-		my $fill = int(($n / $total) * 40 + 0.5);
-		$fill = 40 if $fill > 40;
-		$barlabel->text("#" x $fill . "-" x (40 - $fill));
 		if (defined fileno($tty)) {
 			POSIX::dup2(fileno($tty), 1);
 			POSIX::dup2(fileno($tty), 2);
 			$status->draw();
+			$drawbar->($n, $total);
 			POSIX::dup2(fileno($fh), 1);
 			POSIX::dup2(fileno($fh), 2);
 			}
 		else {
 			$status->draw();
+			$drawbar->($n, $total);
 			}
 		};
 
@@ -1313,7 +1373,8 @@ $doInstall = sub {
 
 	$status->delete('statuslabel');
 	$status->delete('steplabel');
-	$status->delete('barlabel');
+	# The manually drawn progress bar needs no deletion: the window draw
+	# below erases the whole window before the result label is painted.
 	my $msg;
 	if ($rc == 0) {
 		$msg = "Installation Successful\n\n" . $summary
