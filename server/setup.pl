@@ -447,6 +447,17 @@ sub runinstaller {
 			chomp($ans) if defined $ans;
 			return (defined $ans && $ans =~ /^[yY]/) ? 1 : 0;
 			};
+		# The database admin account may have no stored password (e.g.
+		# MariaDB's unix_socket root); offer to set it to the supplied
+		# DB Admin Password.
+		$p{adminpw_offer} = sub {
+			my ($dbadmin) = @_;
+			print "\nThe database $dbadmin account has no password set.\n";
+			print "Set the $dbadmin password to the Database Admin Password you provided? [y/N] ";
+			my $ans = <STDIN>;
+			chomp($ans) if defined $ans;
+			return (defined $ans && $ans =~ /^[yY]/) ? 1 : 0;
+			};
 		}
 	my $rc = Luminum::Setup::run(%p);
 	if ($text == 1 || $opt{noninteractive}) {
@@ -1212,6 +1223,63 @@ $doInstall = sub {
 		# the app with no target, exactly like the mainloop does: the
 		# app-level bindings (Ctrl-C) are consulted, and the key is
 		# delegated on to the focused widget (the dialog's buttonbox).
+		while (!defined $choice) {
+			$cui->do_one_event();
+			}
+		# The dialog's draw erased the status dialog's manually drawn
+		# progress bar; redraw it now (the fds are still on the tty here)
+		# so the bar persists while the installer continues.
+		$status->draw();
+		$drawbar->($cur_n, $cur_total);
+		if ($swapped) {
+			POSIX::dup2(fileno($saved1), 1);
+			POSIX::dup2(fileno($saved2), 2);
+			close($saved1);
+			close($saved2);
+			close($tty);
+			}
+		return $choice;
+		};
+	# The database admin account may have no stored password (e.g.
+	# MariaDB's unix_socket root); offer to set it to the supplied DB
+	# Admin Password. Same tty/fd dance as the deps dialog above.
+	$params{adminpw_offer} = sub {
+		my ($dbadmin) = @_;
+		my $tty;
+		my $saved1;
+		my $saved2;
+		my $swapped = open($tty, "+<", "/dev/tty")
+			&& open($saved1, ">&1")
+			&& open($saved2, ">&2")
+			&& POSIX::dup2(fileno($tty), 1) == 1
+			&& POSIX::dup2(fileno($tty), 2) == 2;
+		my $text = "The database $dbadmin account has no password set.\n\nSet the $dbadmin password to the Database Admin Password you provided?";
+		local $Text::Wrap::columns = 64;
+		$text = wrap('', '', $text);
+		my $dlg = $win->add('rootpwdialog', 'Window',
+			-centered => 1, -width => 74, -height => 14,
+			-bg => 'white', -fg => 'black', -border => 1,
+			-bfg => 'black', -bbg => 'white',
+			);
+		$dlg->add('rootpwlabel', 'Label',
+			-text => $text, -width => -1, -height => -1,
+			-x => 2, -y => 2,
+			);
+		my $choice;
+		my $rootpwbuttons = $dlg->add('rootpwbuttons', 'Buttonbox',
+			-buttons => [ {
+				-label => " Leave ", -value => "leave", -shortcut => "L",
+				-onpress => sub { $choice = 0; $win->delete('rootpwdialog'); $win->draw(); },
+				},
+			{
+				-label => " Set ", -value => "set", -shortcut => "S",
+				-onpress => sub { $choice = 1; $win->delete('rootpwdialog'); $win->draw(); },
+				} ],
+			-fg => "black", -buttonalignment => "right",
+			-x => 2, -ipadright => 3, -y => 10, -selected => 1,
+			);
+		$rootpwbuttons->focus();
+		$win->draw();
 		while (!defined $choice) {
 			$cui->do_one_event();
 			}

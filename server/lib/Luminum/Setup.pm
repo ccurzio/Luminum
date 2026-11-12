@@ -168,6 +168,31 @@ sub run {
 	unless ($dbh) {
 		return $fail->("cannot connect to database as $dbadmin (socket: $dbsocket); if the admin account uses a password, supply it (dbadminpass / --dbadminpass)");
 		}
+	# The admin account may authenticate without a stored password
+	# (MariaDB's unix_socket root: socket logins succeed for the OS
+	# account regardless of any password supplied), so the connection
+	# above does not prove the account has one. If the operator supplied
+	# a DB Admin Password, offer to set it on the account so the account
+	# is not left open.
+	if ($dbadminpass ne "") {
+		my $nopw = account_has_no_password($dbh, $dbadmin);
+		if ($nopw) {
+			if (ref($o{adminpw_offer}) eq "CODE") {
+				if ($o{adminpw_offer}->($dbadmin, $log)) {
+					unless (set_account_password($dbh, $dbadmin, $dbadminpass)) {
+						return $fail->("could not set the database $dbadmin password");
+					}
+					$log->("Database $dbadmin password set to the supplied DB Admin Password.");
+					}
+				else {
+					$log->("Database $dbadmin account has no password; left unchanged.");
+					}
+			}
+			else {
+				$log->("Note: the database $dbadmin account has no password set.");
+			}
+		}
+	}
 	# A broker left running from a previous install (or a different install
 	# root, or the systemd unit) holds the listener port this run rebinds;
 	# stop it before any files are copied.
@@ -1022,6 +1047,68 @@ sub admin_connect {
 	return $dbh unless $@;
 	warn "[setup] database connect failed: $@";
 	return undef;
+	}
+
+# Does the account have a stored password? Returns 1 when none of the
+# account's mysql.user rows carries a password hash, 0 when any row
+# does, and undef when it cannot be determined (no such column, no rows
+# for the user, or the query failed). MariaDB and MySQL 5.x store the
+# hash in mysql.user.Password; MySQL 8 uses authentication_string.
+# Accounts authenticated by an OS plugin (e.g. MariaDB's unix_socket
+# root) carry an empty hash: socket logins succeed even though the
+# account has no password.
+#
+sub account_has_no_password {
+	my ($dbh, $user) = @_;
+	return eval {
+		# MariaDB's information_schema lists both column names for
+		# mysql.user (authentication_string is an alias of Password);
+		# MySQL 8 has only authentication_string. Prefer Password.
+		my @cols = map { $_->[0] }
+			@{ $dbh->selectall_arrayref(qq{select COLUMN_NAME from information_schema.COLUMNS where TABLE_SCHEMA = 'mysql' and TABLE_NAME = 'user' and COLUMN_NAME in ('Password', 'authentication_string')}) || [] };
+		my $col;
+		for my $c (qw(Password authentication_string)) {
+			$col = $c if grep { $_ eq $c } @cols;
+			last if $col;
+			}
+		return unless defined $col;
+		my @hashes = map { $_->[0] }
+			@{ $dbh->selectall_arrayref(qq{select $col from mysql.user where User = ?}, undef, $user) || [] };
+		return unless @hashes;
+		for my $h (@hashes) {
+			return 0 if defined $h && $h ne "";
+			}
+		return 1;
+		};
+	}
+
+# Set the account's password on every host entry (an account typically
+# has one row per host). On MariaDB this also switches an OS-plugin
+# account (unix_socket) to password authentication.
+#
+sub set_account_password {
+	my ($dbh, $user, $pass) = @_;
+	my $quser = $user;
+	$quser =~ s/'/'\\''/g;
+	my $qpass = $pass;
+	$qpass =~ s/'/'\\''/g;
+	my @hosts = map { $_->[0] }
+		@{ $dbh->selectall_arrayref(qq{select Host from mysql.user where User = ?}, undef, $user) || [] };
+	return 0 unless @hosts;
+	my $rc = eval {
+		for my $h (@hosts) {
+			my $qh = $h;
+			$qh =~ s/'/'\\''/g;
+			# \@ : a bare @' in a double-quoted string is the old package
+			# separator and would interpolate (and vanish) instead of
+			# staying a literal @.
+			$dbh->do("ALTER USER '$quser'\@'$qh' IDENTIFIED BY '$qpass'");
+			}
+		$dbh->do("FLUSH PRIVILEGES");
+		1;
+	};
+	warn "[setup] could not set the $user database password: $@" unless $rc;
+	return $rc ? 1 : 0;
 	}
 
 # Apply schema.sql (idempotent DDL).
