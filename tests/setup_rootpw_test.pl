@@ -174,6 +174,20 @@ sub try_connect {
     check("set_account_password: new password works", try_connect("pwuser", "newpw789"));
     check("set_account_password: old password no longer works", !try_connect("pwuser", "oldpw456"));
     $dbh->do("DROP USER 'pwuser'\@'localhost'");
+    # The 'invalid' sentinel (MySQL 8's INVALID PASSWORD state; storable
+    # on MariaDB via IDENTIFIED BY PASSWORD 'invalid'): every password
+    # login is refused, so the account has no usable password.
+    $dbh->do("CREATE USER 'invuser'\@'localhost'");
+    $dbh->do("ALTER USER 'invuser'\@'localhost' IDENTIFIED BY PASSWORD 'invalid'");
+    check("account_has_no_password: 'invalid' sentinel reports no password",
+        Luminum::Setup::account_has_no_password($dbh, "invuser") == 1);
+    check("set_account_password: 'invalid' account gets a real password",
+        Luminum::Setup::set_account_password($dbh, "invuser", "realpass1") == 1);
+    check("set_account_password: 'invalid' account accepts the new password",
+        try_connect("invuser", "realpass1"));
+    check("set_account_password: 'invalid' account refuses other passwords",
+        !try_connect("invuser", "otherpass"));
+    $dbh->do("DROP USER 'invuser'\@'localhost'");
     $dbh->disconnect();
 }
 

@@ -1050,13 +1050,16 @@ sub admin_connect {
 	}
 
 # Does the account have a stored password? Returns 1 when none of the
-# account's mysql.user rows carries a password hash, 0 when any row
+# account's mysql.user rows carries a usable password, 0 when any row
 # does, and undef when it cannot be determined (no such column, no rows
 # for the user, or the query failed). MariaDB and MySQL 5.x store the
 # hash in mysql.user.Password; MySQL 8 uses authentication_string.
 # Accounts authenticated by an OS plugin (e.g. MariaDB's unix_socket
 # root) carry an empty hash: socket logins succeed even though the
-# account has no password.
+# account has no password. The literal 'invalid' (MySQL 8's
+# "IDENTIFIED BY INVALID PASSWORD" state, also storable on MariaDB via
+# IDENTIFIED BY PASSWORD 'invalid') is a no-usable-password marker, not
+# a real hash: every password login is refused.
 #
 sub account_has_no_password {
 	my ($dbh, $user) = @_;
@@ -1076,7 +1079,9 @@ sub account_has_no_password {
 			@{ $dbh->selectall_arrayref(qq{select $col from mysql.user where User = ?}, undef, $user) || [] };
 		return unless @hashes;
 		for my $h (@hashes) {
-			return 0 if defined $h && $h ne "";
+			next unless defined $h;
+			next if $h eq "" || $h eq "invalid";
+			return 0;
 			}
 		return 1;
 		};
@@ -1096,6 +1101,10 @@ sub set_account_password {
 		@{ $dbh->selectall_arrayref(qq{select Host from mysql.user where User = ?}, undef, $user) || [] };
 	return 0 unless @hosts;
 	my $rc = eval {
+		# A server running with --skip-grant-tables refuses ALTER USER
+		# until the grant tables are re-enabled; the leading flush is a
+		# no-op on a normally running server.
+		$dbh->do("FLUSH PRIVILEGES");
 		for my $h (@hosts) {
 			my $qh = $h;
 			$qh =~ s/'/'\\''/g;
