@@ -1128,6 +1128,15 @@ my $showParamDialog = sub {
 #
 $doInstall = sub {
 	my %params = @_;
+	# Current progress, tracked so the deps dialog (below) can redraw the
+	# status bar after it closes - the dialog's draw erases the manually
+	# drawn bar, and nothing redraws it until the next step fires.
+	my $cur_n = 0;
+	my $cur_total = 11;
+	# Declared here (assigned further down) so the deps dialog closure can
+	# reference them; it runs only during the install, after both are set.
+	my $status;
+	my $drawbar;
 	# Offer to install missing dependencies before the installer fails
 	# (Setup.pm detects them before any file is written). The callback
 	# runs inside the installer, which blocks the mainloop, so the
@@ -1185,6 +1194,11 @@ $doInstall = sub {
 		while (!defined $choice) {
 			$cui->do_one_event();
 			}
+		# The dialog's draw erased the status dialog's manually drawn
+		# progress bar; redraw it now (the fds are still on the tty here)
+		# so the bar persists while the installer continues.
+		$status->draw();
+		$drawbar->($cur_n, $cur_total);
 		if ($swapped) {
 			POSIX::dup2(fileno($saved1), 1);
 			POSIX::dup2(fileno($saved2), 2);
@@ -1194,7 +1208,7 @@ $doInstall = sub {
 			}
 		return $choice;
 		};
-	my $status = $win->add('statusdialog', 'Window',
+	$status = $win->add('statusdialog', 'Window',
 		-centered => 1, -width => 74, -height => 24,
 		-bg => 'white', -fg => 'black', -border => 1,
 		-bfg => 'black', -bbg => 'white',
@@ -1223,19 +1237,40 @@ $doInstall = sub {
 	# screen AFTER each $status->draw() - the window draw erases the whole
 	# window, so the bar cannot be a child widget or drawn before it. The
 	# pairs come from the app's color object; darkgray is the same custom
-	# 400,400,400 the input fields use (on an 8-color terminal ncurses
-	# maps it to black, so the fill degrades to invisible and the bar
-	# reads as a black track with the white percentage).
+	# 400,400,400 the input fields use.
 	my $barscr = $status->{"-canvasscr"};
-	my $barx = 3;
+	my $barx = 2;
 	my $bary = 11;
-	my $barw = 66;
+	my $barw = 68;
 	my $barco = $cui->color;
 	my $pair_track   = $barco ? $barco->get_color_pair('black', 'black') : undef;
 	my $pair_fill    = $barco ? $barco->get_color_pair('darkgray', 'black') : undef;
 	my $pair_txt     = $barco ? $barco->get_color_pair('white', 'black') : undef;
 	my $pair_txtfill = $barco ? $barco->get_color_pair('white', 'darkgray') : undef;
-	my $drawbar = sub {
+	# Fill attribute: dark gray. With more than 8 colors the custom darkgray
+	# slot is used. On an 8-color terminal that palette slot does not exist,
+	# so ncurses approximates the pair to black-on-black - an invisible fill.
+	# Dim white is used there instead: it reads as gray where the terminal
+	# supports dim and as plain white where it does not, so the bar is never
+	# invisible.
+	my $ncolors = 0;
+	if ($barco) {
+		# $Curses::COLORS is a tied package variable (the terminal's color
+		# count); the fully-qualified read trips the "used only once"
+		# warning, so it is silenced for this expression.
+		$ncolors = do { no warnings 'once'; $Curses::COLORS || 0 };
+		}
+	my $fillattr;
+	if ($barco && $ncolors > 8) {
+		$fillattr = Curses::COLOR_PAIR($pair_fill);
+		}
+	elsif ($barco) {
+		$fillattr = Curses::A_DIM() | Curses::COLOR_PAIR($pair_txt);
+		}
+	else {
+		$fillattr = Curses::A_REVERSE();
+		}
+	$drawbar = sub {
 		my ($n, $total) = @_;
 		my $fill = int(($n / $total) * $barw + 0.5);
 		$fill = $barw if $fill > $barw;
@@ -1249,14 +1284,11 @@ $doInstall = sub {
 		else {
 			$barscr->addstr($bary, $barx, " " x $barw);
 			}
-		# Fill: dark gray.
+		# Fill: dark gray (see $fillattr for the 8-color fallback).
 		if ($fill > 0) {
-			my $attr = defined $pair_fill
-				? Curses::COLOR_PAIR($pair_fill)
-				: Curses::A_REVERSE();
-			$barscr->attron($attr);
+			$barscr->attron($fillattr);
 			$barscr->addstr($bary, $barx, " " x $fill);
-			$barscr->attroff($attr);
+			$barscr->attroff($fillattr);
 			}
 		# Percentage centered on the bar; each character's background
 		# follows the fill under it.
@@ -1294,6 +1326,8 @@ $doInstall = sub {
 	my $steplabel = $status->getobj('steplabel');
 	$params{progress} = sub {
 		my ($n, $total, $text) = @_;
+		$cur_n = $n;
+		$cur_total = $total;
 		$steplabel->text($text);
 		if (defined fileno($tty)) {
 			POSIX::dup2(fileno($tty), 1);
