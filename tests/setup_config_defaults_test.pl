@@ -59,6 +59,9 @@ sub which {
 
 my $setup = "$Bin/../server/setup.pl";
 skip_all("setup.pl not found at $setup") unless -f $setup;
+# The installer requires root; this test drives it against a scratch
+# database as an unprivileged user, so use the test escape hatch.
+$ENV{LUMINUM_SETUP_ALLOW_NONROOT} = 1;
 my $mariadbd   = which("mariadbd") || which("mysqld");
 my $install_db = which("mariadb-install-db") || which("mysql_install_db");
 my $cli        = which("mariadb") || which("mysql");

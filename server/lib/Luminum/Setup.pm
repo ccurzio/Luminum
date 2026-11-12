@@ -74,6 +74,12 @@ our $VERSION = "0.0.1";
 #   quiet         suppress progress output
 #   progress      CODE ref called as progress($n, $total, $text) at the
 #                 start of each install step (for progress UIs)
+#   redact_log    print the completion summary to stdout with the console
+#                 admin password replaced by "Console Admin Password has
+#                 been set" / "has not been changed" - for callers whose
+#                 stdout is captured into a persistent log file. The
+#                 returned summary (for transient dialogs) keeps the real
+#                 value either way.
 #
 # Returns (summary, rc): summary is the completion summary text (empty on
 # failure), rc is 0 on success, nonzero on failure. In scalar context
@@ -531,13 +537,22 @@ EOF
 		my @summary = (
 			"Luminum Server installed at $root",
 			"- Database Admin User: $dbadmin",
-			"- Database Admin Password: " . ($dbadminpass ne "" ? $dbadminpass : "(none)"),
 			"- Web Console: https://$shost:$wport",
 			"- Console Admin Username: $adminuser",
 			"- Console Admin Password: $adminpw",
 			);
 		my $summary = join("\n", @summary) . "\n";
-		print $summary;
+		my $printed = $summary;
+		if ($o{redact_log}) {
+			# The printed summary lands in a persistent log file; never
+			# store the password in it. $adminnote is set only when an
+			# existing account's password was left in place.
+			my $pwline = defined $adminnote
+				? "Console Admin Password has not been changed"
+				: "Console Admin Password has been set";
+			$printed =~ s/^- Console Admin Password: .*$/$pwline/m;
+			}
+		print $printed;
 		return ($summary, $rc);
 		}
 	return ("", $rc);

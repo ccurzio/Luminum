@@ -38,6 +38,9 @@ sub check {
 my $setup  = "$Bin/../server/setup.pl";
 my $srcdir = "$Bin/../server";
 die "setup.pl not found at $setup\n" unless -f $setup;
+# The installer requires root; this test drives it as an unprivileged
+# user, so use the test escape hatch.
+$ENV{LUMINUM_SETUP_ALLOW_NONROOT} = 1;
 
 my $tmp = "/tmp/luminum-deps-test.$$";
 remove_tree($tmp) if -d $tmp;

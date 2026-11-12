@@ -23,6 +23,9 @@ set -u
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 SETUP="$REPO/server/setup.pl"
 PERL_LIBS="$REPO/server/lib${PERL5LIB:+:$PERL5LIB}"
+# The installer requires root; this test drives it as an unprivileged
+# user, so use the test escape hatch.
+export LUMINUM_SETUP_ALLOW_NONROOT=1
 
 # --- prerequisites -----------------------------------------------------------
 [ -x "$(command -v mosquitto)" ]          || { echo "SKIP - mosquitto not available"; exit 0; }

@@ -9,6 +9,8 @@
 #   - non-interactive (--noninteractive plus parameter flags, for
 #     unattended installs and testing)
 #
+# Must be run as root (the installer writes system-wide state).
+#
 # Non-interactive example:
 #   perl setup.pl --noninteractive --yes \
 #       --shost luminum.example.com --laddr 192.0.2.10 --lport 10465 \
@@ -384,6 +386,15 @@ while ($i < scalar(@ARGV)) {
 	$i++;
 	}
 
+# The installer writes system-wide state (the install tree, nginx and
+# php-fpm configs, systemd units) and restarts services, so it must run
+# as root. Tests that drive setup.pl against a scratch database as an
+# unprivileged user set LUMINUM_SETUP_ALLOW_NONROOT=1 to bypass the
+# check.
+unless ($> == 0 || $ENV{LUMINUM_SETUP_ALLOW_NONROOT}) {
+	die "Luminum Server setup must be run as root.\n";
+	}
+
 sub usage {
 	print <<EOF;
 Luminum Server Setup
@@ -642,8 +653,14 @@ sub collect_params_text {
 	my $email = textprompt("Admin Email", $opt{adminemail});
 	while (!valid_email($email)) {
 		print "Invalid email address: $email\n\n" if defined $email && $email ne "";
-		last if eof(STDIN);
-		$email = textprompt("Admin Email", $email);
+		# Print the prompt before reading: an eof(STDIN) probe performs a
+		# blocking read on a tty with no prompt on screen and eats the
+		# user's line. An undef read (EOF) ends the loop.
+		print "Admin Email" . (defined $email && $email ne "" ? " [$email]" : "") . ": ";
+		my $ans = <STDIN>;
+		last unless defined $ans;
+		chomp($ans);
+		$email = ($ans ne "") ? $ans : $email;
 		}
 	$v{adminemail} = $email;
 	return %v;
@@ -1128,6 +1145,10 @@ my $showParamDialog = sub {
 #
 $doInstall = sub {
 	my %params = @_;
+	# The installer output is captured into a persistent log file below,
+	# so the printed completion summary must not carry the password; the
+	# result dialog still gets the full summary via run()'s return value.
+	$params{redact_log} = 1;
 	# Current progress, tracked so the deps dialog (below) can redraw the
 	# status bar after it closes - the dialog's draw erases the manually
 	# drawn bar, and nothing redraws it until the next step fires.

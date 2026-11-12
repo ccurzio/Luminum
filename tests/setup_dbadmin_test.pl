@@ -10,6 +10,11 @@
 #                                      password must not be persisted in any
 #                                      generated configuration file
 #   3. with a custom --dbadmin user -> install must succeed
+#   4. non-root, no escape hatch    -> setup.pl must refuse to run
+#                                      (skipped when the test runs as root)
+#   5. in-process with redact_log   -> the printed summary (the persistent
+#                                      log) carries no password; the
+#                                      returned summary keeps the real value
 #
 # Usage: perl tests/setup_dbadmin_test.pl
 # Exit code: 0 if all checks pass, 1 otherwise.
@@ -18,6 +23,10 @@ use strict;
 use warnings;
 use FindBin qw($Bin);
 use File::Path qw(make_path remove_tree);
+# For the in-process redact_log case (case 5); the module itself is
+# required there so this test still skips cleanly where the broker's
+# Perl modules are not installed.
+use lib "$Bin/../server/lib";
 # Time::HiRes::sleep, not core sleep: core sleep truncates fractional
 # arguments to whole seconds, so "sleep 0.5" would be a no-op and the
 # readiness loop below would busy-spin through all its iterations
@@ -53,6 +62,10 @@ sub which {
 
 my $setup = "$Bin/../server/setup.pl";
 skip_all("setup.pl not found at $setup") unless -f $setup;
+# The installer requires root; this test drives it against a scratch
+# database as an unprivileged user, so use the test escape hatch.
+# Case 4 unsets it explicitly for the refusal check.
+$ENV{LUMINUM_SETUP_ALLOW_NONROOT} = 1;
 my $mariadbd   = which("mariadbd") || which("mysqld");
 my $install_db = which("mariadb-install-db") || which("mysql_install_db");
 my $cli        = which("mariadb") || which("mysql");
@@ -164,8 +177,10 @@ for my $f ("$tmp/root2/config/broker.conf", "$tmp/root2/config/console.conf") {
 check("root dbadminpass: admin password not persisted in configs", !$leak);
 check("root dbadminpass: no admin-credentials.txt created",
     !-f "$tmp/root2/config/admin-credentials.txt");
-check("root dbadminpass: summary shows db admin credentials",
-    $o =~ /- Database Admin User: root\n- Database Admin Password: testrootpw/, $o);
+check("root dbadminpass: summary shows db admin user, no password line",
+    $o =~ /- Database Admin User: root\n- Web Console: /, $o);
+check("root dbadminpass: db admin password not in installer output",
+    index($o, "testrootpw") < 0, $o);
 check("root dbadminpass: summary shows console admin credentials",
     $o =~ /- Console Admin Username: lumadmin\n- Console Admin Password: \S+/, $o);
 
@@ -173,6 +188,66 @@ check("root dbadminpass: summary shows console admin credentials",
 ($rc, $o) = run_setup("$tmp/root3", "lumtest3",
     "--dbadmin", "dbadmin", "--dbadminpass", "adminpw2");
 check("custom dbadmin: install succeeds", $rc == 0, $o);
+
+# 4. root requirement: without the escape hatch, setup.pl refuses to run
+# as a non-root user (no-op when this test itself runs as root)
+if ($> != 0) {
+    my $o = `env -u LUMINUM_SETUP_ALLOW_NONROOT perl $setup --noninteractive --yes --no-start --shost rootreq.test --laddr 127.0.0.1 --install-root $tmp/root4 --dbsocket $sock 2>&1`;
+    my $rc = $? >> 8;
+    check("non-root: setup.pl refuses without the escape hatch",
+        $rc != 0 && $o =~ /must be run as root/, "rc=$rc out=$o");
+}
+
+# 5. redact_log: the printed summary (what a persistent log file keeps)
+# carries no password; the returned summary (transient dialogs) keeps
+# the real value
+{
+    eval { require Luminum::Setup; 1 } or do {
+        print "skip - Luminum::Setup not loadable in-process: $@\n";
+        };
+    if ($Luminum::Setup::VERSION) {
+        my $capfile = "$tmp/redact.out";
+        my $saveout;
+        my $saveerr;
+        open($saveout, ">&", \*STDOUT) or die "dup STDOUT: $!";
+        open($saveerr, ">&", \*STDERR) or die "dup STDERR: $!";
+        open(STDOUT, ">", $capfile) or die "open $capfile: $!";
+        open(STDERR, ">>", $capfile) or die "open $capfile: $!";
+        my @r = eval { Luminum::Setup::run(
+            install_root => "$tmp/root5",
+            shost        => "dbadmin.test", laddr => "127.0.0.1", lport => 19468,
+            dbsocket     => $sock,
+            dbadmin      => "root", dbadminpass => "testrootpw",
+            dbuser       => "lumtest5",
+            adminpass    => "knownadminpw",
+            adminemail   => "test\@example.com",
+            perl5lib     => $perl5lib,
+            srcdir       => "$Bin/../server",
+            start        => 0,
+            quiet        => 1,
+            redact_log   => 1,
+            ) };
+        my $err = $@;
+        close(STDOUT);
+        close(STDERR);
+        open(STDOUT, ">&", $saveout) or die "restore STDOUT: $!";
+        open(STDERR, ">&", $saveerr) or die "restore STDERR: $!";
+        close($saveout);
+        close($saveerr);
+        die $err if $err;
+        my ($summary, $rc) = @r;
+        my $printed = "";
+        if (open(my $fh, "<", $capfile)) { local $/; $printed = <$fh>; close($fh); }
+        check("redact_log: install succeeds", $rc == 0, "rc=" . (defined $rc ? $rc : "undef"));
+        check("redact_log: printed summary says the password has been set",
+            $printed =~ /Console Admin Password has been set/, $printed);
+        check("redact_log: printed summary carries no password",
+            index($printed, "knownadminpw") < 0, $printed);
+        check("redact_log: returned summary keeps the real password",
+            defined $summary && $summary =~ /- Console Admin Password: knownadminpw/,
+            $summary);
+    }
+}
 
 # ---------------------------------------------------------------------------
 print "-" x 60, "\n";

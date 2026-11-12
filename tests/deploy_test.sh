@@ -23,6 +23,9 @@ REPO=$(cd "$(dirname "$0")/.." && pwd)
 CLIENT_BIN="$REPO/client/linux/target/debug/LuminumClient"
 SETUP="$REPO/server/setup.pl"
 PERL_LIBS="$REPO/server/lib${PERL5LIB:+:$PERL5LIB}"
+# The installer requires root; this test drives it as an unprivileged
+# user, so use the test escape hatch.
+export LUMINUM_SETUP_ALLOW_NONROOT=1
 
 # --- prerequisites -----------------------------------------------------------
 [ -x "$CLIENT_BIN" ] || { echo "SKIP - client binary not built at $CLIENT_BIN"; exit 0; }
