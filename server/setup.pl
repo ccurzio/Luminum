@@ -653,9 +653,9 @@ sub collect_params_text {
 	$v{lport}        = textprompt("Broker listener port", $opt{lport} || "10465");
 	$v{wport}        = textprompt("Web console port", $opt{wport} || "443");
 	$v{dbsocket}     = textprompt("Database socket", $opt{dbsocket} || "/var/run/mysqld/mysqld.sock");
-	# The account names are fixed (root / luminum / lumadmin) and are not
-	# offered for change in the text wizard; only the passwords are asked.
-	$v{dbadmin}      = "root";
+	# The database admin user is asked (default root); the app DB user and
+	# console admin user are fixed (luminum / lumadmin) and not offered.
+	$v{dbadmin}      = textprompt("Database admin user", $opt{dbadmin} || "root");
 	$v{dbadminpass}  = textpromptpass("Database admin password", $opt{dbadminpass}, "blank = no password");
 	$v{dbuser}       = "luminum";
 	$v{dbpass}       = textpromptpass("App DB Password", $opt{dbpass});
@@ -1079,7 +1079,7 @@ my $showParamDialog = sub {
 	my $dlg = $win->add('paramdialog', 'Window',
 		-centered	=> 1,
 		-width		=> 78,
-		-height		=> 20,
+		-height		=> 21,
 		-bg		=> 'white',
 		-fg		=> 'black',
 		-border		=> 1,
@@ -1097,6 +1097,7 @@ my $showParamDialog = sub {
 		['lport',        "Listener Port",     $defaults->{lport}        // ($opt{lport} || "10465")],
 		['wport',        "Web Console Port",  $defaults->{wport}        // ($opt{wport} || "443")],
 		['dbsocket',     "Database Socket",   $defaults->{dbsocket}     // $opt{dbsocket}],
+		['dbadmin',      "DB Admin User",     $defaults->{dbadmin}      // $opt{dbadmin} // "root"],
 		['dbadminpass',  "DB Root Password",  $defaults->{dbadminpass}  // $opt{dbadminpass} // ""],
 		['dbpass',       "App DB Password",   $defaults->{dbpass}       // $opt{dbpass} // ""],
 		['adminpass',    "Lumadmin Password", $defaults->{adminpass} // $opt{adminpass} // ""],
@@ -1123,7 +1124,7 @@ my $showParamDialog = sub {
 		}
 	$perr = $dlg->add('p_err', 'Label',
 		-text => "", -fg => 'red', -width => -1, -height => 1,
-		-x => 2, -y => 13,
+		-x => 2, -y => 14,
 		);
 	my $buttons = $dlg->add('p_buttons', 'Buttonbox',
 		-buttons => [ {
@@ -1142,7 +1143,7 @@ my $showParamDialog = sub {
 		-buttonalignment => "right",
 		-x		=> 2,
 		-ipadright	=> 3,
-		-y		=> 16,
+		-y		=> 17,
 		-selected	=> 1,
 		);
 	$pentry{install_root}->focus();
