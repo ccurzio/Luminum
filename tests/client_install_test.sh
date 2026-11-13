@@ -24,7 +24,12 @@ INSTALLER="$REPO/client/linux/install.sh"
 CLIENT_BIN="$REPO/client/linux/target/debug/LuminumClient"
 LUMY_BIN="$REPO/client/modules/linux/Integrity/target/debug/Lumy_Integrity"
 [ -x "$CLIENT_BIN" ] || { echo "SKIP - client binary not built at $CLIENT_BIN"; exit 0; }
-[ -x "$LUMY_BIN" ] || { echo "SKIP - Integrity Lumy not built at $LUMY_BIN"; exit 0; }
+# The Lumy is optional for this test: the installer handles a package
+# without Lumy binaries (warning and continuing), so the installer's core
+# paths are testable without it. The Lumy install checks run only when the
+# Lumy binary is built; otherwise the warning path is verified instead.
+HAVE_LUMY=0
+[ -x "$LUMY_BIN" ] && HAVE_LUMY=1
 
 ROOT="$HOME/.lumclient-install-test"
 ROOT2="$HOME/.lumclient-install-test-badcert"
@@ -79,10 +84,13 @@ EOF
 }
 
 # --- stage a throwaway distribution package --------------------------------------
+# The modules directory is always staged (even empty) so the installer's
+# Lumy loop runs; without a built Lumy it exercises the "no Lumy binaries"
+# warning path.
 mkdir -p "$PKG/dist/modules/integrity" "$CERTDIR"
 cp "$INSTALLER" "$PKG/install.sh"
 cp "$CLIENT_BIN" "$PKG/dist/LuminumClient"
-cp "$LUMY_BIN" "$PKG/dist/modules/integrity/Lumy_Integrity"
+[ "$HAVE_LUMY" -eq 1 ] && cp "$LUMY_BIN" "$PKG/dist/modules/integrity/Lumy_Integrity"
 
 openssl req -x509 -newkey rsa:2048 -nodes -days 30 \
     -keyout "$CERTDIR/key.pem" -out "$CERTDIR/cert.pem" \
@@ -107,8 +115,15 @@ check "install: wizard stored SHOST" $([ "$(cfgval SHOST "$ROOT")" = "install.te
 check "install: wizard stored SVRKEY" $([ "$(cfgval SVRKEY "$ROOT")" = "svrkey456" ]; echo $?)
 check "install: server.crt matches the provided certificate" \
     $([ -f "$ROOT/config/server.crt" ] && cmp -s "$CERT" "$ROOT/config/server.crt"; echo $?)
-check "install: Integrity Lumy installed" \
-    $([ -x "$ROOT/modules/integrity/Lumy_Integrity" ]; echo $?)
+if [ "$HAVE_LUMY" -eq 1 ]; then
+    check "install: Integrity Lumy installed" \
+        $([ -x "$ROOT/modules/integrity/Lumy_Integrity" ]; echo $?)
+else
+    check "install: missing Lumy warned, not fatal" \
+        $(grep -q "module integrity skipped" "$ROOT-install.log" 2>/dev/null; echo $?)
+    check "install: no Lumy binary installed" \
+        $([ ! -e "$ROOT/modules/integrity/Lumy_Integrity" ]; echo $?)
+fi
 check "install: installer marker written" $([ -f "$ROOT/.luminum-installer" ]; echo $?)
 if [ "$UNIT_PRE" -eq 0 ]; then
     check "install: no unit written while systemd is offline" $([ ! -f "$UNIT" ]; echo $?)
