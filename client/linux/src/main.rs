@@ -833,6 +833,7 @@ async fn mqtt_run(debug: bool, ccfg: HashMap<String, String>) {
 	// responses/check-ins always go to the per-UID topics below.
 	let status_topic = format!("luminum/{}/{}/status", sid, uid);
 	let resp_topic = format!("luminum/{}/{}/resp", sid, uid);
+	let events_topic = format!("luminum/{}/{}/events", sid, uid);
 	let mut cmd_topics: Vec<String> = vec![
 		format!("luminum/{}/{}/cmd", sid, uid),
 		format!("luminum/{}/all/cmd", sid),
@@ -905,6 +906,10 @@ async fn mqtt_run(debug: bool, ccfg: HashMap<String, String>) {
 				// promptly and overwrites any stale retained offline status.
 				let payload = build_checkin(&uid, &seed);
 				let _ = client.publish(&status_topic, QoS::AtMostOnce, true, payload).await;
+				// Flush any events queued while the control channel was down
+				// (protocol §9.1): re-publish to the per-UID events topic, then
+				// mark them sent.
+				drain_outqueue(&client, &events_topic, &uid, &seed, debug).await;
 			}
 			Ok(Event::Incoming(Packet::Publish(p))) => {
 				if !cmd_topics.contains(&p.topic) { continue; }
@@ -1184,6 +1189,63 @@ fn queue_alert(env: &Envelope, debug: bool) {
 		params![env.ts, env.lumy.to_lowercase(), env.action, payload],
 	).expect("Error: Could not queue alert");
 	conn.close().unwrap();
+}
+
+// Re-publish events that were queued while the control channel was down
+// (protocol §9.1). The out-queue persists client->server events to disk when
+// the MQTT session is unavailable; on (re)connect they are flushed to the
+// per-UID events topic (signed, QoS 1) in ID order and marked SENT. Bounded
+// per drain (up to 100) so a large backlog cannot stall the connect path; a
+// publish failure stops the flush and leaves the remaining rows un-sent so a
+// later drain retries them, preserving order.
+async fn drain_outqueue(
+	client: &rumqttc::AsyncClient,
+	events_topic: &str,
+	uid: &str,
+	seed: &[u8; 32],
+	debug: bool,
+) {
+	let conn = match Connection::open(outq_path()) {
+		Ok(c) => c,
+		Err(_) => return,   // no out-queue yet; nothing to flush
+	};
+	let rows: Vec<(i64, String, String, String)> = match conn
+		.prepare("select ID, LUMY, ACTION, PAYLOAD from OUTQUEUE where SENT = 0 order by ID limit 100")
+	{
+		Ok(mut sth) => match sth.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))) {
+			Ok(it) => it.filter_map(|r| r.ok()).collect(),
+			Err(_) => return,   // OUTQUEUE table not created yet
+		},
+		Err(_) => return,
+	};
+	if rows.is_empty() {
+		conn.close().ok();
+		return;
+	}
+	let mut flushed = 0;
+	for (id, lumy, action, payload) in rows {
+		let data: serde_json::Value = serde_json::from_str(&payload).unwrap_or(serde_json::Value::Null);
+		let mut env = new_envelope("client", uid, &lumy, &action, "OK", Some(data));
+		sign_envelope(&mut env, seed);
+		let bytes = match serde_json::to_vec(&env) {
+			Ok(b) => b,
+			Err(_) => continue,
+		};
+		match client.publish(events_topic, rumqttc::QoS::AtLeastOnce, false, bytes).await {
+			Ok(_) => {
+				let _ = conn.execute("update OUTQUEUE set SENT = 1 where ID = ?", params![id]);
+				flushed += 1;
+			}
+			Err(err) => {
+				dbout(debug, 1, &format!("out-queue flush stopped (publish failed): {}", err));
+				break;
+			}
+		}
+	}
+	if flushed > 0 {
+		dbout(debug, 3, &format!("Flushed {} queued event(s) to the events topic", flushed));
+	}
+	conn.close().ok();
 }
 
 // ---------------------------------------------------------------------------

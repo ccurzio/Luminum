@@ -217,6 +217,21 @@ for p in 10461 10704; do
 done
 check "client IPC/data ports are free" "$port_busy" "port 10461 or 10704 in use"
 
+# Pre-seed the client's out-queue with an event that was "queued while
+# offline" (protocol §9.1). On its first MQTT connect the client must flush it
+# to the per-UID events topic and mark the row SENT. The UID is filled in by
+# the client at drain time, so only the module/action/payload are pre-set.
+python3 - "$HOME_TEST" <<'EOF'
+import os, sqlite3, sys, time
+home = sys.argv[1]
+os.makedirs(home + "/config", exist_ok=True)
+conn = sqlite3.connect(home + "/config/outqueue.db")
+conn.execute("create table if not exists OUTQUEUE ( ID integer primary key autoincrement, TS integer not null, LUMY text not null, ACTION text not null, PAYLOAD text not null, SENT integer not null default 0 )")
+conn.execute("insert into OUTQUEUE (TS, LUMY, ACTION, PAYLOAD) values (?,?,?,?)",
+    (int(time.time()), "integrity", "alert", '{"file":"/etc/passwd","change":"modified"}'))
+conn.commit(); conn.close()
+EOF
+
 # --- run the client (registers, then opens the MQTT control channel) ---------
 LUMINUM_HOME="$HOME_TEST" LUMINUM_CHECKIN_SECS=2 "$CLIENT_BIN" -d > "$RUN/client.log" 2>&1 &
 CLIENT_PID=$!
@@ -248,6 +263,27 @@ for i in $(seq 1 40); do
     sleep 0.5
 done
 check "client connected to mosquitto over TLS" "$conn_ok" "see $RUN/client.log"
+
+# --- out-queue drain: the event queued while offline is flushed on connect ----
+# The client drained its out-queue on the first ConnAck (protocol §9.1); the
+# worker logged the event, and the row is now marked SENT.
+ev_ok=1
+for i in $(seq 1 40); do
+    grep -q "events: UID $UID_C alert OK" "$BLOG" 2>/dev/null && { ev_ok=0; break; }
+    sleep 0.5
+done
+check "out-queue: queued event flushed to the events topic" "$ev_ok" "see $BLOG"
+SENT=$(python3 - "$HOME_TEST" <<'EOF'
+import sqlite3, sys
+try:
+    c = sqlite3.connect(sys.argv[1] + "/config/outqueue.db")
+    print(c.execute("select count(*) from OUTQUEUE where SENT = 1").fetchone()[0])
+except Exception:
+    print(0)
+EOF
+)
+check "out-queue: flushed event marked SENT" $([ "$SENT" -ge 1 ]; echo $?) "sent=$SENT"
+
 checkin_ok=1
 for i in $(seq 1 40); do
     grep -q "\[mqtt\] status: UID $UID_C OK" "$BLOG" 2>/dev/null && { checkin_ok=0; break; }
