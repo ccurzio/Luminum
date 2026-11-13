@@ -238,7 +238,7 @@ sub run {
 	# --- Step 1: sync code from the source tree ------------------------------
 	$step->("Synchronizing server files...");
 	$log->("Synchronizing server files from $srcdir ...");
-	for my $item (qw(broker.pl lib sql)) {
+	for my $item (qw(broker.pl mkprovision.pl lib sql)) {
 		my $s = "$srcdir/$item";
 		my $d = "$root/$item";
 		next unless -e $s;
@@ -251,6 +251,9 @@ sub run {
 			copy($s, $d) or return $fail->("cannot copy $s to $d: $!");
 			}
 		}
+	# mkprovision.pl is a standalone operator tool; make it directly runnable
+	# (it is also invoked as "perl mkprovision.pl" by the console/tests).
+	chmod(0755, "$root/mkprovision.pl") if -e "$root/mkprovision.pl";
 	if (-d "$srcdir/console") {
 		# Refresh the console tree but keep generated nginx configs in place.
 		for my $sub (qw(html)) {
