@@ -1301,22 +1301,50 @@ fn clientsetup() {
 		}
 	};
 
+	let fpnt = write_client_config(&server, port, &server_key, &cert_pem, signing_pem.as_deref());
+
+	println!("\nLuminum Server: {}", server);
+	println!("Server port: {}", port);
+	println!("Server certificate: {}", cert_src);
+	if signing_pem.is_some() {
+		println!("Server signing certificate: {}", signing_src);
+	} else {
+		println!("Server signing certificate: (none provided - registration requires it)");
+	}
+	println!("Client fingerprint: {}\n", fpnt);
+	println!("Luminum Client configuration complete.");
+	process::exit(0);
+}
+
+// Shared configuration writer (wizard + provisioning import): persists the
+// server trust anchors (TLS cert, and the signing cert when provided), seeds
+// the config DB with the server connection parameters, generates the client
+// signing keypair + fingerprint (protocol §3.1), and secures the DB to 0600.
+// Returns the client fingerprint. Both setup paths call this so the on-disk
+// layout they produce cannot drift apart.
+fn write_client_config(
+	server: &str,
+	port: u16,
+	server_key: &str,
+	cert_pem: &[u8],
+	signing_pem: Option<&[u8]>,
+) -> String {
 	if let Some(parent) = Path::new(&cfg_path()).parent() {
 		fs::create_dir_all(parent).expect("Error: Could not create configuration directory");
 	}
-	fs::write(crt_path(), &cert_pem).expect("Error: Could not save server certificate");
-	if let Some(pem) = &signing_pem {
+	fs::write(crt_path(), cert_pem).expect("Error: Could not save server certificate");
+	if let Some(pem) = signing_pem {
 		fs::write(signing_crt_path(), pem).expect("Error: Could not save server signing certificate");
 	}
 	let confconn = Connection::open(cfg_path()).expect("Error: Could not initialize configuration database");
 	// KEY is unique: config_set relies on INSERT OR REPLACE semantics.
 	confconn.execute("create table if not exists CONFIG ( KEY text not null unique, VALUE text not null )", [])
 		.expect("Error: Could not create CONFIG table in configuration database");
-	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)", params!["SHOST", server.as_str()])
+	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)", params!["SHOST", server])
 		.expect("Error: Could not insert SHOST into CONFIG table.");
-	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)", params!["SPORT", port.to_string().as_str()])
+	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)", params!["SPORT", &port.to_string()])
 		.expect("Error: Could not insert SPORT into CONFIG table.");
-	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)", params!["SVRKEY", server_key.as_str()])
+	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)", params!["SVRKEY", server_key])
 		.expect("Error: Could not insert SVRKEY into CONFIG table.");
 
 	// Client signing keypair + fingerprint (protocol §3.1).
@@ -1329,23 +1357,101 @@ fn clientsetup() {
 		.expect("Error: Could not insert CLPPRV into CONFIG table.");
 	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)", params!["CLPPUB", base64ct::Base64::encode_string(&pubb)])
 		.expect("Error: Could not insert CLPPUB into CONFIG table.");
-	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)", params!["FPNT", fpnt.as_str()])
+	confconn.execute("insert into CONFIG (KEY,VALUE) values (?1, ?2)", params!["FPNT", &fpnt])
 		.expect("Error: Could not insert FPNT into CONFIG table.");
 	confconn.close().unwrap();
 	// The config DB holds the client's private signing key (CLPPRV).
 	fs::set_permissions(&cfg_path(), fs::Permissions::from_mode(0o600))
 		.expect("Error: Could not secure configuration database");
+	fpnt
+}
 
-	println!("\nLuminum Server: {}", server);
-	println!("Server port: {}", port);
-	println!("Server certificate: {}", cert_src);
-	if signing_pem.is_some() {
-		println!("Server signing certificate: {}", signing_src);
-	} else {
-		println!("Server signing certificate: (none provided - registration requires it)");
+// ---------------------------------------------------------------------------
+// Provisioning import (out-of-band setup)
+// ---------------------------------------------------------------------------
+
+// The infra-specific provisioning file (config.ini): a single self-contained
+// JSON document carrying everything the client needs to register and talk to
+// the server. The server-side generator (mkprovision.pl) emits it from an
+// installed server's SYSTEM.CONFIG and certificates.
+#[derive(Deserialize)]
+struct ProvisionServer {
+	host: String,
+	port: u16,
+	key: String,
+}
+
+#[derive(Deserialize)]
+struct ProvisionCerts {
+	server: String,
+	signing: String,
+}
+
+#[derive(Deserialize)]
+struct ProvisionFile {
+	v: String,
+	server: ProvisionServer,
+	certificates: ProvisionCerts,
+}
+
+// Import a provisioning file in place of the interactive wizard. The file is
+// validated fully before anything is written, so a bad file leaves no partial
+// configuration behind. Exits the process on success (mirrors clientsetup).
+fn clientimport(path: &str, debug: bool) {
+	let raw = match fs::read_to_string(path) {
+		Ok(r) => r,
+		Err(err) => {
+			dbout(debug, 1, &format!("Could not read provisioning file {}: {}", path, err));
+			process::exit(1);
+		}
+	};
+	let prov: ProvisionFile = match serde_json::from_str(&raw) {
+		Ok(p) => p,
+		Err(err) => {
+			dbout(debug, 1, &format!("Provisioning file {} is not valid JSON: {}", path, err));
+			process::exit(1);
+		}
+	};
+
+	// Version gate (protocol §10): accept the same MAJOR (1.x).
+	if !prov.v.starts_with("1.") {
+		dbout(debug, 1, &format!("Unsupported provisioning file version: {}", prov.v));
+		process::exit(1);
 	}
-	println!("Client fingerprint: {}\n", fpnt);
-	println!("Luminum Client configuration complete.");
+	if prov.server.host.trim().is_empty() {
+		dbout(debug, 1, "Provisioning file is missing the server host.");
+		process::exit(1);
+	}
+	if prov.server.port == 0 {
+		dbout(debug, 1, "Provisioning file has an invalid server port.");
+		process::exit(1);
+	}
+	// SKEY charset (server validates ^[A-Za-z0-9]+$ at registration).
+	if prov.server.key.is_empty() || !prov.server.key.chars().all(|c| c.is_ascii_alphanumeric()) {
+		dbout(debug, 1, "Provisioning file has an invalid server key.");
+		process::exit(1);
+	}
+	// Both certificates are required: the file must carry everything needed to
+	// register (the signing cert is the bootstrap trust anchor, protocol §7.1).
+	let cert_ok = prov.certificates.server.contains("BEGIN CERTIFICATE");
+	let sign_ok = prov.certificates.signing.contains("BEGIN CERTIFICATE");
+	if !cert_ok || !sign_ok {
+		dbout(debug, 1, "Provisioning file is missing a valid server certificate and/or signing certificate.");
+		process::exit(1);
+	}
+
+	let fpnt = write_client_config(
+		prov.server.host.trim(),
+		prov.server.port,
+		&prov.server.key,
+		prov.certificates.server.as_bytes(),
+		Some(prov.certificates.signing.as_bytes()),
+	);
+
+	dbout(debug, 0, "Luminum Client provisioning imported.");
+	dbout(debug, 0, &format!("Luminum Server: {}:{}", prov.server.host, prov.server.port));
+	dbout(debug, 0, &format!("Client fingerprint: {}", fpnt));
+	dbout(debug, 0, "Luminum Client configuration complete.");
 	process::exit(0);
 }
 
@@ -1406,10 +1512,16 @@ async fn main() {
 			.long("debug")
 			.help("Enables debug mode")
 			.takes_value(false))
+		.arg(Arg::with_name("import")
+			.short('i')
+			.long("import")
+			.help("Import a provisioning file (config.ini) instead of the wizard")
+			.takes_value(true))
 		.get_matches();
 
 	let setup = matches.is_present("setup");
 	let debug = matches.is_present("debug");
+	let import = matches.value_of("import");
 
 	// Break handler
 	let running = Arc::new(AtomicBool::new(true));
@@ -1428,6 +1540,14 @@ async fn main() {
 		dbout(debug, 4, "Starting client setup...");
 		if fs::metadata(cfg_path()).is_err() {
 			clientsetup();
+		} else {
+			dbout(debug, 1, "Client configuration already exists. Aborting.");
+			process::exit(1);
+		}
+	} else if let Some(path) = import {
+		dbout(debug, 4, "Starting client provisioning import...");
+		if fs::metadata(cfg_path()).is_err() {
+			clientimport(path, debug);
 		} else {
 			dbout(debug, 1, "Client configuration already exists. Aborting.");
 			process::exit(1);
