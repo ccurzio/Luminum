@@ -755,7 +755,7 @@ TBD
 |&#10003;|**Completed**  |Message Handling            |Routines that parse and generate client/server messages                                 |
 |&#10003;|**Completed**  |Sensor Processing           |Routines to execute sensor scripts and collect the output                               |
 | --     |Not Started    |Package Processing          |Routines to store packages and execute embedded commands                                |
-|&#9654; |*In Progress*  |Message Queueing            |Development of the queue structure for pending messages                                 |
+|&#10003;|**Completed**  |Message Queueing            |Development of the queue structure for pending messages                                 |
 | --     |Not Started    |Message Compression         |Compress message contents before sending                                                |
 |&#10003;|**Completed**  |Message Encryption          |Encrypt message contents before sending                                                 |
 | --     |Not Started    |Client Update               |Create functions to download, install, and self-update the Luminum client               |
