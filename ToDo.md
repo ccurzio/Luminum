@@ -16,13 +16,13 @@ In order to be accountable to the community - but more importantly to myself - I
 | --     |Not Started    |OS User Accounts            |Automatically create necessary OS service accounts for Luminum Server                   |
 |&#9654; |*In Progress*  |Detect Installation         |Routines to detect a current existing Luminum Server configuration                      |
 |&#9654; |*In Progress*  |Configuration Import        |Routines to import an existing config on first setup                                    |
-|&#9654; |*In Progress*  |Certificate Setup           |Routines to create or import server certificates                                        |
-|&#9654; |*In Progress*  |Key Setup                   |Routines to create or import public/private keys                                        |
-|&#9654; |*In Progress*  |Database Setup              |Automatically configure the database software and set root password                     |
-|&#9654; |*In Progress*  |Database Structure          |Automatically create Luminum Server databases and tables                                |
-|&#9654; |*In Progress*  |Database User Accounts      |Automatically create database user accounts with permissions                            |
-|&#9654; |*In Progress*  |nginx Configuration         |Routines to automatically configure the nginx webserver software for Luminum            |
-|&#9654; |*In Progress*  |PHP Configuration           |Routines to automatically configure PHP and associated nginx support                    |
+|&#10003;|**Completed**  |Certificate Setup           |Routines to create or import server certificates                                        |
+|&#10003;|**Completed**  |Key Setup                   |Routines to create or import public/private keys                                        |
+|&#10003;|**Completed**  |Database Setup              |Automatically configure the database software and set root password                     |
+|&#10003;|**Completed**  |Database Structure          |Automatically create Luminum Server databases and tables                                |
+|&#10003;|**Completed**  |Database User Accounts      |Automatically create database user accounts with permissions                            |
+|&#10003;|**Completed**  |nginx Configuration         |Routines to automatically configure the nginx webserver software for Luminum            |
+|&#10003;|**Completed**  |PHP Configuration           |Routines to automatically configure PHP and associated nginx support                    |
 | --     |Not Started    |Page Server Configuration   |Configuration options and routines specific to creating a Luminum Page Server           |
 | --     |Not Started    |Failover Configuration      |Support for high availability server clustering                                         |
 
@@ -202,13 +202,13 @@ TBD
 ### Communication
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-| --     |Not Started    |MQTT Comms                  |Setup and configuration of the MQTT messaging channel                                   |
-| --     |Not Started    |Direct Connect Comms        |Setup and configuration of the direct client<->server messaging channel                 |
-|&#9654; |*In Progress*  |Message Format              |Develop the specific formatting for client and server messages                          |
-|&#9654; |*In Progress*  |Message Validation          |Validity checking of client/server messages based on signature verification             |
+|&#10003;|**Completed**  |MQTT Comms                  |Setup and configuration of the MQTT messaging channel                                   |
+|&#9654; |*In Progress*  |Direct Connect Comms        |Setup and configuration of the direct client<->server messaging channel                 |
+|&#10003;|**Completed**  |Message Format              |Develop the specific formatting for client and server messages                          |
+|&#10003;|**Completed**  |Message Validation          |Validity checking of client/server messages based on signature verification             |
 | --     |Not Started    |Message Decompression       |Expand received messages that arrive compressed                                         |
-|&#9654; |*In Progress*  |Message Decryption          |Decrypt received messages that arrive encrypted                                         |
-| --     |Not Started    |Query Format                |Develop the specific format of server-actionable user information queries               |
+|&#10003;|**Completed**  |Message Decryption          |Decrypt received messages that arrive encrypted                                         |
+|&#10003;|**Completed**  |Query Format                |Develop the specific format of server-actionable user information queries               |
 | --     |Not Started    |SMTP Server Configuration   |Setup and configuration of SMTP servers to be used by Luminum Server                    |
 | --     |Not Started    |SMTP Configuration Test     |Validate SMTP server configurations by performing connection tests                      |
 
@@ -216,15 +216,15 @@ TBD
 ### Broker Process
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#9654; |*In Progress*  |Network Listener            |The actual process that opens on a secure network interface to listen for connections   |
-|&#9654; |*In Progress*  |Message Handling            |Routines that parse messages from the server and/or endpoints                           |
+|&#10003;|**Completed**  |Network Listener            |The actual process that opens on a secure network interface to listen for connections   |
+|&#10003;|**Completed**  |Message Handling            |Routines that parse messages from the server and/or endpoints                           |
 |&#9654; |*In Progress*  |Client Certificate          |Attach a requirement for client certificats to the listener process                     |
-|&#9654; |*In Progress*  |Lumy Scanning               |Include Lumys based on enabled/disabled state in configuration and file include presence|
-|&#9654; |*In Progress*  |Client Onboarding           |Processing for newly-added clients on first report to the server                        |
-|&#9654; |*In Progress*  |Client Deactivation         |Processing the removal of clients from the server                                       |
-|&#9654; |*In Progress*  |Check-In Processing         |Handle server-side updates on regular client check-ins                                  |
-| --     |Not Started    |Action Queueing             |Development of the queue structure for pending queries and actions                      |
-| --     |Not Started    |Action Polling              |Development of routines that watch for and then send new queries or actions             |
+|&#10003;|**Completed**  |Lumy Scanning               |Include Lumys based on enabled/disabled state in configuration and file include presence|
+|&#10003;|**Completed**  |Client Onboarding           |Processing for newly-added clients on first report to the server                        |
+|&#10003;|**Completed**  |Client Deactivation         |Processing the removal of clients from the server                                       |
+|&#10003;|**Completed**  |Check-In Processing         |Handle server-side updates on regular client check-ins                                  |
+|&#10003;|**Completed**  |Action Queueing             |Development of the queue structure for pending queries and actions                      |
+|&#10003;|**Completed**  |Action Polling              |Development of routines that watch for and then send new queries or actions             |
 | --     |Not Started    |Update Management           |Routines to manage Luminun core patching and updates                                    |
 | --     |Not Started    |Lumy Update Management      |Routines to manage Lumy patching and updates                                            |
 
@@ -236,7 +236,7 @@ TBD
 | --     |Not Started    |User sign-in/sign-out       |Generate log entries for instances of user login/logout                                 |
 | --     |Not Started    |Invalid Credentials         |Generate log entries for failed login attempts                                          |
 | --     |Not Started    |Navigation                  |Generate log entries for user page navigation                                           |
-|&#9654; |*In Progress*  |Broker Information          |Generate log entries from broker processing                                             |
+|&#10003;|**Completed**  |Broker Information          |Generate log entries from broker processing                                             |
 | --     |Not Started    |Account Modification        |Generate log entries for user account modifications                                     |
 | --     |Not Started    |User Group Modifications    |Generate log entries on the creation or modification of user groups                     |
 | --     |Not Started    |Computer Group Modifications|Generate log entries on the creation or modification of computer groups                 |
@@ -301,7 +301,7 @@ TBD
 #### Packages
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#9654; |*In Progress*  |Database Package Storage    |Create structure for storing packages in the database                                   |
+|&#10003;|**Completed**  |Database Package Storage    |Create structure for storing packages in the database                                   |
 | --     |Not Started    |Filesystem Package Storage  |Create structure for storing and referencing package files                              |
 | --     |Not Started    |Package Management          |Routines for adding/modifying/deleting packages                                         |
 | --     |Not Started    |Revision Control            |Routines to manage and view previous versions of packages                               |
@@ -653,10 +653,10 @@ TBD
 ### Linux Support
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#9654; |*In Progress*  |Setup Utility (Text)        |Create plaintext interface for a step-by-step setup wizard                              |
+|&#10003;|**Completed**  |Setup Utility (Text)        |Create plaintext interface for a step-by-step setup wizard                              |
 | --     |Not Started    |Setup Utility (ncurses)     |Create ncurses interface for a step-by-step setup wizard                                |
 | --     |Not Started    |Unattended Install          |Create automated process for unattended installation                                    |
-| --     |Not Started    |Key Management              |Routines to create a new public/private key pair                                        |
+|&#10003;|**Completed**  |Key Management              |Routines to create a new public/private key pair                                        |
 | --     |Not Started    |x86 Client Binaries         |Create x86-compiled client binaries                                                     |
 | --     |Not Started    |x64 Client Binaries         |Create x64-compiled client binaries                                                     |
 | --     |Not Started    |ARM Client Binaries         |Create ARM-compiled client binaries                                                     |
@@ -746,18 +746,18 @@ TBD
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9654; |*In Progress*  |Main Client Process         |The primary client application process                                                  |
-|&#9654; |*In Progress*  |Computer ID                 |Create a method to generate a reproduceable computer ID                                 |
-|&#9654; |*In Progress*  |Parameter Functions         |Create functions to set client configuration parameters                                 |
+|&#10003;|**Completed**  |Computer ID                 |Create a method to generate a reproduceable computer ID                                 |
+|&#10003;|**Completed**  |Parameter Functions         |Create functions to set client configuration parameters                                 |
 |&#9654; |*In Progress*  |Config Save/Import          |Routines to save configuration and import an existing config on first setup             |
-| --     |Not Started    |Service Management          |Routines to register the client as a service with the host operating system             |
+|&#10003;|**Completed**  |Service Management          |Routines to register the client as a service with the host operating system             |
 | --     |Not Started    |Tamper Protection           |Configure the operating system to secure the client against user access                 |
 | --     |Not Started    |Sanctioned Uninstall        |Routines to validate permission to uninstall the client against the server              |
-|&#9654; |*In Progress*  |Message Handling            |Routines that parse and generate client/server messages                                 |
-| --     |Not Started    |Sensor Processing           |Routines to execute sensor scripts and collect the output                               |
+|&#10003;|**Completed**  |Message Handling            |Routines that parse and generate client/server messages                                 |
+|&#10003;|**Completed**  |Sensor Processing           |Routines to execute sensor scripts and collect the output                               |
 | --     |Not Started    |Package Processing          |Routines to store packages and execute embedded commands                                |
-| --     |Not Started    |Message Queueing            |Development of the queue structure for pending messages                                 |
+|&#9654; |*In Progress*  |Message Queueing            |Development of the queue structure for pending messages                                 |
 | --     |Not Started    |Message Compression         |Compress message contents before sending                                                |
-| --     |Not Started    |Message Encryption          |Encrypt message contents before sending                                                 |
+|&#10003;|**Completed**  |Message Encryption          |Encrypt message contents before sending                                                 |
 | --     |Not Started    |Client Update               |Create functions to download, install, and self-update the Luminum client               |
 
 </li>
