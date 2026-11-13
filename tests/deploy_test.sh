@@ -186,24 +186,29 @@ check "MQTT worker process is alive" "$worker_alive"
 wp_parent=$(ps -o ppid= -p "${WORKER_PID:-0}" 2>/dev/null | tr -d ' ')
 check "MQTT worker is a child of the broker" $([ "$wp_parent" = "$BROKER_PID" ]; echo $?)
 
-# --- fresh client home: trust anchors + bootstrap config, NO pre-seeded
-# --- UID/MQTT* (so registration must supply them). The SKEY is provisioned
-# --- out of band (as on a real endpoint) so the broker accepts the request.
+# --- fresh client home, provisioned out of band (as on a real endpoint): the
+# --- server generates config.ini from its own installed state (mkprovision.pl)
+# --- and the client imports it. NO pre-seeded UID/MQTT* (so registration must
+# --- supply them); the SKEY + trust anchors come from the generated file.
 SKEY=$(dbq "select CVAL from SYSTEM.CONFIG where CKEY='SKEY';")
 check "installer generated an SKEY" $([ -n "$SKEY" ]; echo $?)
-mkdir -p "$HOME_TEST/config"
-python3 - "$HOME_TEST" "$LPORT" "$SKEY" <<'EOF'
-import sqlite3, sys
-home, port, skey = sys.argv[1], sys.argv[2], sys.argv[3]
-conn = sqlite3.connect(home + "/config/client.conf.db")
-conn.execute("create table if not exists CONFIG (KEY text not null, VALUE text not null)")
-for k, v in [("SHOST", "127.0.0.1"), ("SPORT", port), ("SVRKEY", skey)]:
-    conn.execute("insert into CONFIG (KEY,VALUE) values (?,?)", (k, v))
-conn.commit()
+PERL5LIB="$PERL_LIBS" perl "$ROOT/mkprovision.pl" --out "$RUN/config.ini" > "$RUN/mkprov.log" 2>&1
+check "mkprovision.pl generated config.ini" $([ -s "$RUN/config.ini" ]; echo $?) "see $RUN/mkprov.log"
+python3 - "$RUN/config.ini" "$SKEY" "$LPORT" <<'EOF'
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert d["server"]["key"] == sys.argv[2], "SKEY mismatch in generated file"
+assert d["server"]["port"] == int(sys.argv[3]), "port mismatch in generated file"
+assert "BEGIN CERTIFICATE" in d["certificates"]["server"], "server cert missing"
+assert "BEGIN CERTIFICATE" in d["certificates"]["signing"], "signing cert missing"
 EOF
-chmod 600 "$HOME_TEST/config/client.conf.db"
-cp "$ROOT/config/ssl/server.crt" "$HOME_TEST/config/server.crt"
-cp "$ROOT/config/ssl/server-signing.crt" "$HOME_TEST/config/server-signing.crt"
+check "config.ini carries the SKEY, port, and both certificates" $?
+LUMINUM_HOME="$HOME_TEST" "$CLIENT_BIN" --import "$RUN/config.ini" > "$RUN/import.log" 2>&1
+check "client imported config.ini" $([ $? -eq 0 ]; echo $?) "see $RUN/import.log"
+check "imported SHOST matches the server" $([ "$(cfgval SHOST)" = "$SHOST" ]; echo $?)
+check "imported SVRKEY matches the SKEY" $([ "$(cfgval SVRKEY)" = "$SKEY" ]; echo $?)
+check "imported server.crt present" $([ -f "$HOME_TEST/config/server.crt" ]; echo $?)
+check "imported server-signing.crt present" $([ -f "$HOME_TEST/config/server-signing.crt" ]; echo $?)
 
 # The client binds IPC (10461) and the data channel (10704); both must be free.
 port_busy=0

@@ -37,6 +37,7 @@ ROOT3="$HOME/.lumclient-install-test-override"
 ROOT4="$HOME/.lumclient-install-test-configure"
 ROOT5="$HOME/.lumclient-install-test-configure2"
 ROOT6="$HOME/.lumclient-install-test-foreign"
+PROVROOT="$HOME/.lumclient-install-test-provision"
 PKG="$HOME/.lumclient-pkg-test"
 CERTDIR="$HOME/.lumclient-install-test-certs"
 UNIT=/etc/systemd/system/luminum-client.service
@@ -56,7 +57,7 @@ UNIT_PRE=0
 [ -f "$UNIT" ] && { cp "$UNIT" "$UNIT_BAK"; UNIT_PRE=1; }
 cleanup() {
     [ -x "$ROOT/bin/stop-client" ] && "$ROOT/bin/stop-client" >/dev/null 2>&1
-    rm -rf "$ROOT" "$ROOT2" "$ROOT3" "$ROOT4" "$ROOT5" "$ROOT6" "$PKG" "$CERTDIR"
+    rm -rf "$ROOT" "$ROOT2" "$ROOT3" "$ROOT4" "$ROOT5" "$ROOT6" "$PROVROOT" "$PKG" "$CERTDIR"
     if [ -f "$UNIT" ]; then
         # Restore the pre-test unit (the installer overwrote it with a
         # scratch-root unit), or remove the one the installer created.
@@ -96,6 +97,12 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 30 \
     -keyout "$CERTDIR/key.pem" -out "$CERTDIR/cert.pem" \
     -subj "/CN=install.test" 2>/dev/null
 CERT="$CERTDIR/cert.pem"
+# Self-signed Ed25519 signing certificate for the provisioning file (the
+# import path requires both the TLS and signing certs).
+openssl req -x509 -newkey ed25519 -nodes -days 30 \
+    -keyout "$CERTDIR/signing.key" -out "$CERTDIR/signing.crt" \
+    -subj "/CN=install.test" 2>/dev/null
+SIGNING="$CERTDIR/signing.crt"
 
 # --- Phase 1: fresh install with wizard (piped answers), no start -----------------
 printf 'install.test\n\nsvrkey456\n%s\n' "$CERT" | \
@@ -113,6 +120,8 @@ check "install: config DB mode is 0600" \
     $([ "$(stat -c %a "$ROOT/config/client.conf.db" 2>/dev/null)" = "600" ]; echo $?)
 check "install: wizard stored SHOST" $([ "$(cfgval SHOST "$ROOT")" = "install.test" ]; echo $?)
 check "install: wizard stored SVRKEY" $([ "$(cfgval SVRKEY "$ROOT")" = "svrkey456" ]; echo $?)
+check "install: no provisioning file -> wizard, not import" \
+    $(! grep -q "Importing provisioning file" "$ROOT-install.log" 2>/dev/null; echo $?)
 check "install: server.crt matches the provided certificate" \
     $([ -f "$ROOT/config/server.crt" ] && cmp -s "$CERT" "$ROOT/config/server.crt"; echo $?)
 if [ "$HAVE_LUMY" -eq 1 ]; then
@@ -248,10 +257,91 @@ check "--binary over foreign install: marker now written" \
     $([ -f "$ROOT4/.luminum-installer" ]; echo $?)
 rm -f "$OVERRIDE2"
 
+# --- Phase 11: provisioning-driven install (config.ini auto-discovered in dist/) ----
+# A valid config.ini staged in the package's dist/ is imported
+# non-interactively (no piped wizard input) and seeds the config DB from the
+# file. This is the out-of-band path the wizard is a fallback for.
+python3 - "$PKG/dist/config.ini" "prov.install.test" "10465" "svrkeyprov456" "$CERT" "$SIGNING" <<'EOF'
+import json, sys
+out, host, port, key, scert, gcert = sys.argv[1:7]
+def read(p):
+    try:
+        return open(p).read()
+    except Exception:
+        return ""
+doc = {
+    "v": "1.0",
+    "server": {"host": host, "port": int(port), "key": key},
+    "certificates": {"server": read(scert), "signing": read(gcert)},
+}
+open(out, "w").write(json.dumps(doc, indent=2))
+EOF
+bash "$PKG/install.sh" --install-root "$PROVROOT" --no-start > "$PROVROOT.log" 2>&1
+rc=$?
+check "provision: exits 0 without wizard input" $([ "$rc" -eq 0 ]; echo $?) "rc=$rc; see $PROVROOT.log"
+check "provision: import path taken" \
+    $(grep -q "Importing provisioning file" "$PROVROOT.log" 2>/dev/null; echo $?)
+check "provision: SHOST from the file" $([ "$(cfgval SHOST "$PROVROOT")" = "prov.install.test" ]; echo $?)
+check "provision: SVRKEY from the file" $([ "$(cfgval SVRKEY "$PROVROOT")" = "svrkeyprov456" ]; echo $?)
+check "provision: SPORT from the file" $([ "$(cfgval SPORT "$PROVROOT")" = "10465" ]; echo $?)
+check "provision: server.crt from the file" \
+    $([ -f "$PROVROOT/config/server.crt" ] && cmp -s "$CERT" "$PROVROOT/config/server.crt"; echo $?)
+check "provision: server-signing.crt from the file" \
+    $([ -f "$PROVROOT/config/server-signing.crt" ] && cmp -s "$SIGNING" "$PROVROOT/config/server-signing.crt"; echo $?)
+check "provision: config DB mode is 0600" \
+    $([ "$(stat -c %a "$PROVROOT/config/client.conf.db" 2>/dev/null)" = "600" ]; echo $?)
+# Remove the staged file so it cannot leak into any later phase.
+rm -f "$PKG/dist/config.ini"
+
+# --- Phase 12: explicit --provision overrides auto-discovery -------------------------
+# Both dist/config.ini (auto) and an explicit file are present; the explicit
+# --provision path must win. Fresh root so the config-DB guard does not abort.
+rm -rf "$PROVROOT"
+python3 - "$PKG/dist/config.ini" "auto.install.test" "10465" "svrkeyauto" "$CERT" "$SIGNING" <<'EOF'
+import json, sys
+out, host, port, key, scert, gcert = sys.argv[1:7]
+def read(p):
+    try:
+        return open(p).read()
+    except Exception:
+        return ""
+doc = {
+    "v": "1.0",
+    "server": {"host": host, "port": int(port), "key": key},
+    "certificates": {"server": read(scert), "signing": read(gcert)},
+}
+open(out, "w").write(json.dumps(doc, indent=2))
+EOF
+python3 - "$PKG/explicit.ini" "explicit.install.test" "10465" "svrkeyexplicit" "$CERT" "$SIGNING" <<'EOF'
+import json, sys
+out, host, port, key, scert, gcert = sys.argv[1:7]
+def read(p):
+    try:
+        return open(p).read()
+    except Exception:
+        return ""
+doc = {
+    "v": "1.0",
+    "server": {"host": host, "port": int(port), "key": key},
+    "certificates": {"server": read(scert), "signing": read(gcert)},
+}
+open(out, "w").write(json.dumps(doc, indent=2))
+EOF
+bash "$PKG/install.sh" --install-root "$PROVROOT" --no-start --provision "$PKG/explicit.ini" \
+    > "$PROVROOT-explicit.log" 2>&1
+rc=$?
+check "--provision: exits 0" $([ "$rc" -eq 0 ]; echo $?) "rc=$rc; see $PROVROOT-explicit.log"
+check "--provision: explicit file's SHOST wins over auto-discovery" \
+    $([ "$(cfgval SHOST "$PROVROOT")" = "explicit.install.test" ]; echo $?)
+check "--provision: explicit file's SVRKEY wins" \
+    $([ "$(cfgval SVRKEY "$PROVROOT")" = "svrkeyexplicit" ]; echo $?)
+rm -f "$PKG/dist/config.ini" "$PKG/explicit.ini"
+
 # --- cleanup ---------------------------------------------------------------------------------
 rm -f "$ROOT-install.log" "$ROOT-rerun.log" "$ROOT-start.log" "$ROOT-stop.log" \
       "$ROOT2.log" "$ROOT3.log" "$ROOT3-override.log" \
-      "$ROOT4.log" "$ROOT4-override.log" "$ROOT5.log" "$ROOT6.log"
+      "$ROOT4.log" "$ROOT4-override.log" "$ROOT5.log" "$ROOT6.log" \
+      "$PROVROOT.log" "$PROVROOT-explicit.log"
 
 echo "------------------------------------------------------------"
 if [ "$FAILURES" -gt 0 ]; then
