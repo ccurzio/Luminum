@@ -322,7 +322,7 @@ sub run {
 	$step->("Provisioning MQTT broker...");
 	$log->("Provisioning MQTT broker (mosquitto) ...");
 	my ($mqttslok, $mcrt, $mkey, $mqtttlserr) =
-		prepare_mqtt_tls($shost, $dir{ssl}, $cert, $key, $log);
+		prepare_mqtt_tls($shost, $dir{ssl}, $cert, $key, $maddr, $log);
 	unless ($mqttslok) {
 		return $fail->("MQTT broker TLS setup failed: $mqtttlserr");
 		}
@@ -1645,16 +1645,33 @@ sub prepare_ssl {
 # failure.
 #
 sub prepare_mqtt_tls {
-	my ($shost, $ssldir, $cacert, $cakey, $log) = @_;
+	my ($shost, $ssldir, $cacert, $cakey, $maddr, $log) = @_;
 	$log ||= sub {};
 	my $mcrt = "$ssldir/mosquitto.crt";
 	my $mkey = "$ssldir/mosquitto.key";
 	my $mcsr = "$ssldir/mosquitto.csr";
 	my $mext = "$ssldir/mosquitto.ext";
-	# The client's MQTT stack (rustls) verifies the hostname as a DNS name even
-	# when it is an IP literal, so an IP host needs a DNS: entry as well as the
-	# IP: entry (the latter covers IP-aware clients such as mosquitto_sub).
-	my $san = $shost =~ /^\d+\.\d+\.\d+\.\d+$/ ? "DNS:$shost,IP:$shost" : "DNS:$shost";
+	# The leaf must cover every name/IP a client may dial: the server name
+	# (SHOST) and the advertised MQTT address (MADDR). These can differ - e.g.
+	# SHOST is a DNS name (luminum.example.org) while MADDR is the IP clients
+	# are told to connect to (192.168.1.10) - and rustls validates the
+	# certificate against the dialed target, never via reverse DNS, so both
+	# must be listed or IP-dialing clients reject the handshake. rustls
+	# verifies an IP literal as a DNS name, so each IP gets a DNS: entry as
+	# well as an IP: entry (the latter covers IP-aware clients such as
+	# mosquitto_sub). A 0.0.0.0 bind address is not dialable and is omitted.
+	my (%seen, @san);
+	for my $h ($shost, $maddr) {
+		next unless defined $h && length $h && $h ne "0.0.0.0";
+		if ($h =~ /^\d+\.\d+\.\d+\.\d+$/) {
+			push @san, "DNS:$h" unless $seen{"DNS:$h"}++;
+			push @san, "IP:$h"  unless $seen{"IP:$h"}++;
+		}
+		else {
+			push @san, "DNS:$h" unless $seen{"DNS:$h"}++;
+		}
+	}
+	my $san = join(",", @san);
 	my $fail = sub { return (0, undef, undef, $_[0]) };
 	unless (system("openssl", "genpkey", "-algorithm", "rsa",
 		"-pkeyopt", "rsa_keygen_bits:2048", "-out", $mkey) == 0) {
