@@ -453,9 +453,10 @@ EOF
 	$rows{OWNEREMAIL} = $adminemail if defined $adminemail && $adminemail ne "";
 	# Default-only rows: seeded on first install (ENDPOINTCOMM = mqtt,
 	# MISSINGAFTER = 90 days, CMDTIMEOUT = 120s, DEPLTIMEOUT = 3600s,
-	# CHECKININT = 5 min, TCONFTHRESHOLD = 250 endpoints, 2FA = Optional,
-	# MINPASS = 8, COMPLEXPASS = Disabled, UTIMEOUT = 15M, UTIMEOUTWARN =
-	# Enabled, SENREVS = 5, PKGREVS = 5, INVESTIGATE = Enabled), but a
+	# CHECKININT = 5 min, TARGETCONF = Enabled, TCONFTHRESHOLD = 250
+	# endpoints, 2FA = Optional, MINPASS = 8, COMPLEXPASS = Disabled,
+	# UTIMEOUT = 15M, UTIMEOUTWARN = Enabled, SENREVS = 5, PKGREVS = 5,
+	# INVESTIGATE = Enabled), but a
 	# value later changed in the console survives re-runs. SENREVS and
 	# PKGREVS are revision counts; any value > 0 is "Enabled" in the
 	# console, 0 is "Disabled".
@@ -465,6 +466,7 @@ EOF
 		CMDTIMEOUT      => "120",
 		DEPLTIMEOUT     => "3600",
 		CHECKININT      => "5",
+		TARGETCONF      => "Enabled",
 		TCONFTHRESHOLD  => "250",
 		"2FA"           => "Optional",
 		MINPASS         => "8",
