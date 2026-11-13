@@ -9,10 +9,14 @@
 #   - check-ins update CLIENTS.STATUS via the worker
 #   - a COMMANDS outbox row is published by the worker, verified by the client,
 #     and marked ACKED on the client's response
+#   - the web console (nginx + php-fpm) serves the logged-in admin: the
+#     unauthenticated API is rejected (401), the login issues a session, and
+#     /api/clients.php + the Client Status page show the registered client
 #
-# This proves the whole installer -> broker -> mosquitto -> client path, which
-# the isolated scratch tests (mqtt_client_test.sh, mqtt_worker_test.sh) do not
-# cover because they pre-seed the client config and stand in for the broker.
+# This proves the whole installer -> broker -> mosquitto -> client -> console
+# path, which the isolated scratch tests (mqtt_client_test.sh,
+# mqtt_worker_test.sh) do not cover because they pre-seed the client config
+# and stand in for the broker.
 #
 # The installer uses fixed database names (SYSTEM/CLIENTS/...), so this test
 # runs it against a throwaway MariaDB to avoid clobbering the dev install.
@@ -48,6 +52,7 @@ WPORT=8443
 MPORT=8883
 SHOST=127.0.0.1
 LADDR=127.0.0.1
+ADMINPASS="consolepass123"
 BLOG="$ROOT/log/broker.log"
 FAILURES=0
 MARIADB_PID=""; MOSQ_PID=""; BROKER_PID=""; CLIENT_PID=""
@@ -80,6 +85,8 @@ EOF
 
 cleanup() {
     [ -n "$CLIENT_PID" ] && kill -9 "$CLIENT_PID" 2>/dev/null
+    # Web console first (nginx, then php-fpm via the generated stop script).
+    [ -x "$ROOT/bin/stop-web" ] && "$ROOT/bin/stop-web" >/dev/null 2>&1
     if [ -n "$BROKER_PID" ]; then "$ROOT/bin/stop-broker" 2>/dev/null; kill "$BROKER_PID" 2>/dev/null; fi
     if [ -n "$MOSQ_PID" ]; then "$ROOT/bin/stop-mosquitto" 2>/dev/null; kill "$MOSQ_PID" 2>/dev/null; fi
     if [ -n "$MARIADB_PID" ]; then
@@ -113,6 +120,7 @@ PERL5LIB="$PERL_LIBS" perl "$SETUP" --noninteractive --yes --no-start \
     --install-root "$ROOT" \
     --shost "$SHOST" --laddr "$LADDR" --lport $LPORT --wport $WPORT \
     --dbsocket "$DBSOCK" --dbadmin root \
+    --adminpass "$ADMINPASS" \
     --perl5lib "$PERL_LIBS" \
     --srcdir "$REPO/server" \
     > "$RUN/setup.log" 2>&1
@@ -254,6 +262,57 @@ for i in $(seq 1 60); do
     sleep 0.5
 done
 check "outbox command round-tripped to ACKED" "$ack_ok" "final status: $(dbq "select STATUS from CLIENTS.COMMANDS where QID='$QID';")"
+
+# --- web console: nginx + php-fpm serve the logged-in admin -------------------
+# The generated start-web script brings up php-fpm (socket) then nginx (TLS on
+# WPORT) with the installer's console configuration.
+"$ROOT/bin/start-web" > "$RUN/start-web.log" 2>&1
+web_up=1
+for i in $(seq 1 20); do
+    if (exec 3<>/dev/tcp/127.0.0.1/$WPORT) 2>/dev/null; then exec 3>&- 3<&- 2>/dev/null; web_up=0; break; fi
+    sleep 0.5
+done
+check "web console is listening on $WPORT" "$web_up" "see $RUN/start-web.log"
+[ "$web_up" -eq 0 ] || exit 1
+
+# The API auth gate requires a live console session: anonymous access is a 401.
+code=$(curl -k -s -o "$RUN/api-anon.json" -w '%{http_code}' "https://127.0.0.1:$WPORT/api/clients.php")
+check "api: unauthenticated request rejected (401)" $([ "$code" = "401" ]; echo $?) "got: $code"
+
+# Log in as the console admin (lumadmin / the --adminpass value) over the real
+# login flow; the PHP session cookie is what the API auth gate validates.
+code=$(curl -k -s -o "$RUN/login.html" -w '%{http_code}' -c "$RUN/cookies" \
+    --data "username=lumadmin&password=$ADMINPASS" "https://127.0.0.1:$WPORT/index.php")
+check "login: POST to index.php succeeds (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+check "login: PHP session cookie issued" \
+    $(grep -q "PHPSESSID" "$RUN/cookies" 2>/dev/null; echo $?)
+check "login: session row recorded in AUTH.SESSION" \
+    $([ "$(dbq "select count(*) from AUTH.SESSION;")" -ge 1 ]; echo $?)
+
+# The Client Status API must show the client that registered and checked in
+# above, with the hostname and state the worker wrote to CLIENTS.STATUS.
+HOST_DB=$(dbq "select HOSTNAME from CLIENTS.STATUS where ID=$UID_C;")
+code=$(curl -k -s -o "$RUN/api-clients.json" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/api/clients.php")
+check "api: authenticated clients.php returns 200" $([ "$code" = "200" ]; echo $?) "got: $code"
+python3 - "$RUN/api-clients.json" "$UID_C" "$HOST_DB" <<'EOF'
+import json, sys
+data = json.load(open(sys.argv[1]))
+uid, host = int(sys.argv[2]), sys.argv[3]
+row = next((r for r in data["rows"] if r["id"] == uid), None)
+assert row is not None, "client row missing from API response"
+assert row["hostname"] == host, "hostname mismatch: %r != %r" % (row["hostname"], host)
+assert row["state"] == "OK", "state: %r" % row["state"]
+assert data["platforms"]["linux"] >= 1, "linux platform tally missing"
+EOF
+check "api: registered client listed with hostname and OK state" $? "see $RUN/api-clients.json"
+
+# The Client Status page itself renders for the logged-in session.
+code=$(curl -k -s -o "$RUN/cstatus.html" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/index.php?view=clientstatus")
+check "console: Client Status page renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+check "console: Client Status table markup present" \
+    $(grep -q 'id="cstable"' "$RUN/cstatus.html" 2>/dev/null; echo $?)
 
 echo "------------------------------------------------------------"
 if [ "$FAILURES" -gt 0 ]; then
