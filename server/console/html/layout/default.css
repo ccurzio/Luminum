@@ -460,7 +460,7 @@ input[type="text"]::placeholder { color: #ddd; }
 
 input[type="text"]:disabled {
 	cursor: not-allowed;
-	color: transparent;
+	/* color: transparent; */
 	}
 
 input[type="password"] {
