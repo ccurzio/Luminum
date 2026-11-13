@@ -38,17 +38,26 @@
 # control path. The generated scripts and unit export LUMINUM_HOME=<root>
 # so non-default install roots work for the client and every Lumy.
 #
+# Out-of-band provisioning: the distribution may ship an infra-specific
+# config.ini (a self-contained JSON document) next to this script or in
+# dist/. When one is found and the client is not yet configured, it is
+# imported non-interactively (LuminumClient --import) in place of the
+# interactive wizard; otherwise the wizard still runs. An explicit
+# --provision <file> always wins over auto-discovery.
+#
 # Usage: sudo bash install.sh [options]
 #
 #   --install-root P   installation directory (default /opt/Luminum/LuminumClient)
 #   --binary P         client binary to install (default: dist/LuminumClient)
-#   --no-setup         skip the configuration wizard
+#   --provision P      provisioning file (config.ini) to import (default: auto-detect)
+#   --no-setup         skip the configuration wizard / provisioning import
 #   --no-start         install without starting the client
 #
 set -u
 
 ROOT="/opt/Luminum/LuminumClient"
 BINARG=""
+PROVARG=""
 DO_SETUP=1
 DO_START=1
 
@@ -56,6 +65,7 @@ while [ $# -gt 0 ]; do
 	case "$1" in
 		--install-root) ROOT="${2:?--install-root requires a path}"; shift 2 ;;
 		--binary)       BINARG="${2:?--binary requires a path}"; shift 2 ;;
+		--provision)    PROVARG="${2:?--provision requires a path}"; shift 2 ;;
 		--no-setup)     DO_SETUP=0; shift ;;
 		--no-start)     DO_START=0; shift ;;
 		-h|--help)
@@ -64,7 +74,8 @@ Usage: sudo bash install.sh [options]
 
   --install-root P   installation directory (default /opt/Luminum/LuminumClient)
   --binary P         client binary to install (default: dist/LuminumClient)
-  --no-setup         skip the configuration wizard
+  --provision P      provisioning file (config.ini) to import (default: auto-detect)
+  --no-setup         skip the configuration wizard / provisioning import
   --no-start         install without starting the client
 USAGE
 			exit 0 ;;
@@ -79,6 +90,18 @@ echo "by Christopher R. Curzio <ccurzio@luminum.net>"
 echo
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+
+# --- provisioning file (out-of-band setup) ------------------------------------
+# An explicit --provision always wins; otherwise auto-detect config.ini next to
+# the installer, then in dist/. Empty means "no provisioning file" -> wizard.
+PROVF=""
+if [ -n "$PROVARG" ]; then
+	PROVF="$PROVARG"
+elif [ -f "$SCRIPT_DIR/config.ini" ]; then
+	PROVF="$SCRIPT_DIR/config.ini"
+elif [ -f "$SCRIPT_DIR/dist/config.ini" ]; then
+	PROVF="$SCRIPT_DIR/dist/config.ini"
+fi
 
 # The client (and every Lumy) resolve their install root from
 # LUMINUM_HOME, falling back to /opt/Luminum/LuminumClient. Pin it so
@@ -217,14 +240,25 @@ EOF
 	fi
 fi
 
-# --- configuration wizard ----------------------------------------------------------------------
+# --- configuration (provisioning import, else wizard) -------------------------------------------
 if [ ! -f "$ROOT/config/client.conf.db" ] && [ "$DO_SETUP" -eq 1 ]; then
-	echo
-	"$ROOT/LuminumClient" -s || {
+	if [ -n "$PROVF" ]; then
+		[ -f "$PROVF" ] || fail "provisioning file not found: $PROVF"
 		echo
-		echo "Configuration wizard failed; re-run '$ROOT/LuminumClient -s' and start the client manually."
-		exit 1
-	}
+		echo "Importing provisioning file: $PROVF"
+		"$ROOT/LuminumClient" --import "$PROVF" || {
+			echo
+			echo "Provisioning import failed; re-run '$ROOT/LuminumClient --import $PROVF' and start the client manually."
+			exit 1
+		}
+	else
+		echo
+		"$ROOT/LuminumClient" -s || {
+			echo
+			echo "Configuration wizard failed; re-run '$ROOT/LuminumClient -s' and start the client manually."
+			exit 1
+		}
+	fi
 fi
 
 # --- start ------------------------------------------------------------------------------------------
