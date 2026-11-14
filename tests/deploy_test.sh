@@ -293,6 +293,41 @@ check "worker processed the client's MQTT check-in" "$checkin_ok" "see $BLOG"
 cstate=$(dbq "select CSTATE from CLIENTS.STATUS where ID=$UID_C;")
 check "STATUS.CSTATE is OK" $([ "$cstate" = "OK" ]; echo $?) "got: $cstate"
 
+# --- check-in interval sync (protocol 7.2) -----------------------------------
+# The client started with LUMINUM_CHECKIN_SECS=2 and no persisted value, so
+# its check-ins report 2s against the server's CHECKININT=5 (300s); the
+# worker must push core/setcheckinint and the client must persist and apply it.
+push_ok=1
+for i in $(seq 1 40); do
+    grep -q "pushed setcheckinint" "$BLOG" 2>/dev/null && { push_ok=0; break; }
+    sleep 0.5
+done
+check "worker pushed the server check-in interval (setcheckinint)" "$push_ok" "see $BLOG"
+check "client persisted the pushed interval (CHECKIN_SECS=300)" $([ "$(cfgval CHECKIN_SECS)" = "300" ]; echo $?) "got: $(cfgval CHECKIN_SECS)"
+intack_ok=1
+for i in $(seq 1 40); do
+    grep -q "resp: UID $UID_C response (core/setcheckinint)" "$BLOG" 2>/dev/null && { intack_ok=0; break; }
+    sleep 0.5
+done
+check "client acked the interval push" "$intack_ok" "see $BLOG"
+
+# Admin changes the interval: the worker reads CHECKININT live, so no broker
+# restart is needed. Restart the client - it must start from the persisted
+# 300s (not the 2s env override) and its next check-in must trigger a push of
+# the new value (1 min = 60s).
+dbq "update SYSTEM.CONFIG set CVAL='1' where CKEY='CHECKININT';"
+kill "$CLIENT_PID" 2>/dev/null
+wait "$CLIENT_PID" 2>/dev/null
+LUMINUM_HOME="$HOME_TEST" LUMINUM_CHECKIN_SECS=2 "$CLIENT_BIN" -d >> "$RUN/client.log" 2>&1 &
+CLIENT_PID=$!
+push2_ok=1
+for i in $(seq 1 60); do
+    grep -q "client 300s, server 60s" "$BLOG" 2>/dev/null && { push2_ok=0; break; }
+    sleep 0.5
+done
+check "admin change propagated on the client's next check-in (300s -> 60s)" "$push2_ok" "see $BLOG"
+check "client persisted the changed interval (CHECKIN_SECS=60)" $([ "$(cfgval CHECKIN_SECS)" = "60" ]; echo $?) "got: $(cfgval CHECKIN_SECS)"
+
 # --- command round trip: outbox -> worker publish -> client -> resp -> ACKED
 QID=$(python3 -c 'import uuid;print(uuid.uuid4())')
 dbq "insert into CLIENTS.COMMANDS (SID,TARGET,LUMY,ACTION,QID,STATUS,CREATED) values ('$SID','$UID_C','core','deploytest','$QID','PENDING',now());"

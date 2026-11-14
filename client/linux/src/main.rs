@@ -25,7 +25,7 @@ use clap::{Arg, App};
 use colored::Colorize;
 use chrono::Local;
 use chrono::format::strftime::StrftimeItems;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::process;
 use std::process::{Command, Stdio};
 use std::thread;
@@ -627,6 +627,21 @@ fn apply_sensor_config(env: &Envelope, debug: bool) -> Option<String> {
 	None
 }
 
+// core/setcheckinint (protocol §6.1, §7.2): the server directs the check-in
+// interval. data.checkin_secs is the interval in seconds; it is persisted
+// (CHECKIN_SECS) so it survives restarts, and applied to the check-in task
+// immediately (the next check-in uses the new cadence).
+fn apply_checkinint(env: &Envelope, checkin_interval: &Arc<AtomicU64>, debug: bool) -> Option<String> {
+	let secs = match env.data.as_ref().and_then(|d| d.get("checkin_secs")).and_then(|v| v.as_u64()) {
+		Some(s) if (1..=86400).contains(&s) => s,
+		_ => return Some(String::from("INVALID_DATA")),
+	};
+	config_set("CHECKIN_SECS", &secs.to_string());
+	checkin_interval.store(secs, Ordering::SeqCst);
+	dbout(debug, 3, &format!("check-in interval set to {}s (server config)", secs));
+	None
+}
+
 // A UUID v4 in the envelope id format (protocol §5.1).
 fn is_uuid4(s: &str) -> bool {
 	let b = s.as_bytes();
@@ -783,15 +798,22 @@ fn query_err(uid: &str, qid: Option<&str>, err: &str) -> Envelope {
 // MQTT control channel (protocol §4)
 // ---------------------------------------------------------------------------
 
-// Check-in interval (seconds); overridable via LUMINUM_CHECKIN_SECS for
-// testing. Protocol §4.4: status check-ins are QoS 0, retained.
-fn checkin_secs() -> u64 {
+// Check-in interval (seconds). The server is the source of truth (protocol
+// §7.2): once it has delivered an interval, the persisted CHECKIN_SECS wins.
+// Until the first delivery, LUMINUM_CHECKIN_SECS (testing) or the built-in
+// default applies. Protocol §4.4: status check-ins are QoS 0, retained.
+fn checkin_secs(ccfg: &HashMap<String, String>) -> u64 {
+	if let Some(secs) = ccfg.get("CHECKIN_SECS").and_then(|v| v.parse().ok()) {
+		if secs > 0 { return secs; }
+	}
 	std::env::var("LUMINUM_CHECKIN_SECS").ok().and_then(|v| v.parse().ok()).unwrap_or(CHECKIN_SECS)
 }
 
 // Build and sign a check-in envelope (protocol §6.1: action=checkin,
-// status=OK) and return its JSON wire bytes.
-fn build_checkin(uid: &str, seed: &[u8; 32]) -> Vec<u8> {
+// status=OK) and return its JSON wire bytes. checkin is the interval the
+// client is currently using (seconds); the server compares it with its own
+// CHECKININT and pushes a correction when they differ (protocol §7.2).
+fn build_checkin(uid: &str, seed: &[u8; 32], checkin: u64) -> Vec<u8> {
 	let endpointname = gethostname().to_string_lossy().into_owned();
 	let ip_address = local_ip().map(|a| a.to_string()).unwrap_or_default();
 	let data = serde_json::json!({
@@ -799,7 +821,8 @@ fn build_checkin(uid: &str, seed: &[u8; 32]) -> Vec<u8> {
 		"osplat": OSPLAT,
 		"osrel": get_os_release(),
 		"clientver": VER,
-		"ipv4": ip_address
+		"ipv4": ip_address,
+		"checkin_secs": checkin
 	});
 	let mut msg = new_envelope("client", uid, "core", "checkin", "OK", Some(data));
 	sign_envelope(&mut msg, seed);
@@ -871,19 +894,31 @@ async fn mqtt_run(debug: bool, ccfg: HashMap<String, String>) {
 	// Shared connection state for the check-in subtask.
 	let connected = Arc::new(AtomicBool::new(false));
 
+	// Check-in interval (seconds), shared with the check-in subtask. The
+	// server can change it via core/setcheckinint (protocol §7.2); the
+	// persisted value (CHECKIN_SECS) is the source of truth once delivered.
+	let checkin_interval = Arc::new(AtomicU64::new(checkin_secs(&ccfg)));
+
 	// Periodic check-ins (protocol §4.4). Gated on connection state so no
-	// check-ins accumulate in the request channel while offline.
+	// check-ins accumulate in the request channel while offline. The interval
+	// is re-read every tick so a server-directed change applies from the next
+	// check-in (protocol §7.2).
 	let checkin_client = client.clone();
 	let checkin_seed = seed;
 	let checkin_uid = uid.clone();
 	let checkin_topic = status_topic.clone();
 	let checkin_flag = connected.clone();
+	let checkin_interval_task = checkin_interval.clone();
 	spawn(async move {
-		let mut interval = time::interval(Duration::from_secs(checkin_secs()));
+		let mut interval = time::interval(Duration::from_secs(checkin_interval_task.load(Ordering::SeqCst)));
 		loop {
 			interval.tick().await;
+			let current = checkin_interval_task.load(Ordering::SeqCst);
+			if interval.period().as_secs() != current {
+				interval.reset_after(Duration::from_secs(current));
+			}
 			if !checkin_flag.load(Ordering::SeqCst) { continue; }
-			let payload = build_checkin(&checkin_uid, &checkin_seed);
+			let payload = build_checkin(&checkin_uid, &checkin_seed, current);
 			let _ = checkin_client.publish(checkin_topic.clone(), QoS::AtMostOnce, true, payload).await;
 		}
 	});
@@ -904,7 +939,7 @@ async fn mqtt_run(debug: bool, ccfg: HashMap<String, String>) {
 				}
 				// Immediate check-in on (re)connect: lets the server see us
 				// promptly and overwrites any stale retained offline status.
-				let payload = build_checkin(&uid, &seed);
+				let payload = build_checkin(&uid, &seed, checkin_interval.load(Ordering::SeqCst));
 				let _ = client.publish(&status_topic, QoS::AtMostOnce, true, payload).await;
 				// Flush any events queued while the control channel was down
 				// (protocol §9.1): re-publish to the per-UID events topic, then
@@ -934,7 +969,7 @@ async fn mqtt_run(debug: bool, ccfg: HashMap<String, String>) {
 				// per-UID resp topic (the server's worker correlates it back
 				// to the outbox: setgroups/config by action, answers by
 				// data.qid).
-				let mut resp = handle_command(&client, &mut cmd_topics, &env, &uid, &sid, debug).await;
+				let mut resp = handle_command(&client, &mut cmd_topics, &env, &uid, &sid, &checkin_interval, debug).await;
 				sign_envelope(&mut resp, &seed);
 				let payload = serde_json::to_vec(&resp).expect("Error: unable to serialize response");
 				if let Err(err) = client.publish(&resp_topic, QoS::AtLeastOnce, false, payload).await {
@@ -958,16 +993,17 @@ async fn mqtt_run(debug: bool, ccfg: HashMap<String, String>) {
 
 // Dispatch a verified command and build its response envelope (protocol 6).
 // The response is signed and published by the caller. Core actions:
-// setgroups/config/query are applied; deploy awaits the data channel (§8.3);
-// client-originated actions and unknown actions/lumys are rejected per §6.3.
-// Lumy namespaces are routed over MQTT as a follow-on (§6.2); until then a
-// non-core lumy is answered UNKNOWN_LUMY.
+// setgroups/setcheckinint/config/query are applied; deploy awaits the data
+// channel (§8.3); client-originated actions and unknown actions/lumys are
+// rejected per §6.3. Lumy namespaces are routed over MQTT as a follow-on
+// (§6.2); until then a non-core lumy is answered UNKNOWN_LUMY.
 async fn handle_command(
 	client: &rumqttc::AsyncClient,
 	cmd_topics: &mut Vec<String>,
 	env: &Envelope,
 	uid: &str,
 	sid: &str,
+	checkin_interval: &Arc<AtomicU64>,
 	debug: bool,
 ) -> Envelope {
 	if env.lumy != "core" {
@@ -975,6 +1011,10 @@ async fn handle_command(
 	}
 	match env.action.as_str() {
 		"setgroups" => match apply_setgroups(client, cmd_topics, env, sid, debug).await {
+			Some(err) => cmd_error(uid, &env.lumy, &env.action, &err),
+			None => cmd_ok(uid, &env.lumy, &env.action),
+		},
+		"setcheckinint" => match apply_checkinint(env, checkin_interval, debug) {
 			Some(err) => cmd_error(uid, &env.lumy, &env.action, &err),
 			None => cmd_ok(uid, &env.lumy, &env.action),
 		},
