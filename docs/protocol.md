@@ -283,7 +283,7 @@ Both implementations MUST include a shared test vector (a fixed envelope with it
 |---|---|---|---|---|
 | c→s (bootstrap) | core | `register` | `hostname`, `fingerprint`, `pubkey` (base64 SPKI/DER), `osplat`, `osrel`, `clientver`, `ipv4`, `ipv6` (opt), `serverkey` | First-time registration. Only valid with `uid` = `"0"`. |
 | s→c (bootstrap) | core | `register` | `uid`, `sid`, `mqtthost`, `mqttport`, `mqttsecret`, `serverpubkey` (base64 SPKI/DER) | Registration response. Only valid over the bootstrap channel. `sid` is the Luminum Server ID used to build MQTT topics (§4.2). |
-| c→s | core | `checkin` | `hostname`, `osplat`, `osrel`, `clientver`, `ipv4` (opt), `ipv6` (opt) | Periodic liveness + state refresh. Interval = `CHECKININT`. |
+| c→s | core | `checkin` | `hostname`, `osplat`, `osrel`, `clientver`, `ipv4` (opt), `ipv6` (opt), `checkin_secs` (the client's current interval, seconds) | Periodic liveness + state refresh. Interval = `CHECKININT`; the reported `checkin_secs` lets the server detect drift and push a correction (§7.2). |
 | c→s | core | `unregister` | — | Client-initiated deactivation request (sanctioned uninstall flow). |
 | s→c | core | `query` | `qid`, `sensors` (array of `{sid, params}`) | Run named sensors, return results. Definitions arrive via `config` (§7.3). |
 | c→s | core | `answer` | `qid`, `results` (array of `{sid, output}` on success or `{sid, err}` on per-sensor failure) or `ref` (§8.3) | Response to `query`. `status` is `OK` (all succeeded), `PARTIAL` (some failed), or `ERR` (malformed/none succeeded). Correlated by `qid` inside `data`; message `id` still unique per message. |
@@ -291,6 +291,7 @@ Both implementations MUST include a shared test vector (a fixed envelope with it
 | c→s | core | `report` | `event` (string), `detail` (object) | Unsolicited client report (e.g., deploy completion, local error). |
 | s→c | core | `config` | Lumy-specific key/value set; for `lumy` = `core`, `data.sensors` (array of sensor definitions: `sid`, `name`, and the per-OS script type/script fields) | Push configuration to a Lumy (replaces the current IPC `newconfig`/`setconfig` round-trip as the server-side source of truth). Core sensor definitions are upserted by the client into its local sensor table (§7.3). |
 | s→c | core | `setgroups` | `groups` (array of names; the full replacement list, may be empty) | Update the endpoint's group membership (§4.2): the client re-subscribes its group `cmd` topics, persists the list, and responds `OK`; a name outside `[A-Za-z0-9_.-]` is rejected as a whole with `err: "INVALID_DATA"`. |
+| s→c | core | `setcheckinint` | `checkin_secs` (the directed interval, seconds) | Direct the endpoint's check-in interval (§7.2): the client persists it (`CHECKIN_SECS`) and applies it to its check-in cadence, and responds `OK`; a value outside 1–86400 seconds is rejected with `err: "INVALID_DATA"`. |
 
 ### 6.2 Lumy-defined actions
 
@@ -331,6 +332,7 @@ Client                              Server
 
 - Client publishes to `status` (QoS 0, retained) every `CHECKININT` minutes.
 - Server updates `CLIENTS.STATUS` (hostname, IPs, OS, clientver, `LASTSEEN`, `CSTATE`).
+- **Check-in interval sync.** The client reports the interval it is currently using (`checkin_secs`, seconds) in every check-in. The server compares it with `CHECKININT` (minutes, read live from `SYSTEM.CONFIG`); on a mismatch it publishes a signed `core/setcheckinint` on the client's `cmd` topic, and the client persists the value (`CHECKIN_SECS`) and applies it from the next check-in. Because the comparison happens on every check-in, a freshly-installed client converges on its first check-in, an admin change to `CHECKININT` propagates to every client on its next check-in without a broker restart, and a lost push self-heals on the following check-in.
 - A check-in from a UID whose fingerprint no longer matches the stored `PUBKEY`-derived fingerprint ⇒ `CSTATE = "CRIT"`, log `FINGERPRINT_MISMATCH`, and reject further messages from that connection. (Replaces `iafis()`'s role; `iafis()` becomes a lookup, not a per-message re-hash.)
 
 ### 7.3 Query / answer
@@ -421,7 +423,7 @@ In both cases the initiator presents the signed `data/fetch`/`data/push` handsha
 | Command deadline (query) | 120 s | `CMDTIMEOUT` **[NEW]** |
 | Command deadline (deploy) | 3600 s | `DEPLTIMEOUT` **[NEW]** |
 | Data channel token lifetime | 300 s | — (fixed) |
-| Check-in interval | 5 min | `CHECKININT` (existing) |
+| Check-in interval | 5 min | `CHECKININT` (existing; delivered to clients via `setcheckinint`, §7.2) |
 | Missing threshold | 90 days | `MISSINGAFTER` (existing) |
 
 ---

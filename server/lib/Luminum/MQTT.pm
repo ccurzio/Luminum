@@ -246,9 +246,10 @@ sub _dbh {
 }
 
 # Handle a check-in (status) message: update CLIENTS.STATUS. An offline LWT
-# (status "offline") only flips CSTATE; a live check-in refreshes the fields.
+# (status "offline") only flips CSTATE; a live check-in refreshes the fields
+# and syncs the check-in interval (protocol 7.2).
 sub _on_status {
-	my ($db, $sid, $topic, $payload, $log) = @_;
+	my ($db, $sysdb, $m, $seed, $sid, $topic, $payload, $log) = @_;
 	my ($uid) = $topic =~ m{^luminum/$sid/(\d+)/status$} or do { $log->("status: unparseable topic $topic"); return; };
 	my $env = eval { JSON::PP->new->utf8->decode($payload) };
 	return unless ref($env) eq "HASH";
@@ -264,7 +265,43 @@ sub _on_status {
 		$sth->execute($data->{hostname} // "", $data->{ipv4} // "", $data->{osplat} // "", $data->{osrel} // "", $data->{clientver} // "", $uid)
 			or do { $log->("status: update failed for UID $uid: " . $dbh->errstr); return; };
 		$log->("status: UID $uid OK");
+		_sync_checkin_interval($sysdb, $m, $seed, $sid, $uid, $data, $log);
 	}
+}
+
+# Check-in interval sync (protocol 7.2): the client reports the interval it is
+# currently using (data.checkin_secs, seconds). If it differs from the
+# server's CHECKININT, the worker publishes a signed core/setcheckinint
+# command on the client's cmd topic; the client persists and applies it.
+# Because the comparison happens on every check-in, a freshly-installed client
+# converges on its first check-in, an admin change to CHECKININT propagates on
+# each client's next check-in (no broker restart - CHECKININT is read live),
+# and a lost push self-heals on the following check-in.
+sub _sync_checkin_interval {
+	my ($sysdb, $m, $seed, $sid, $uid, $data, $log) = @_;
+	my $reported = $data->{checkin_secs};
+	return unless defined $reported && "$reported" =~ /^[0-9]+$/ && $reported > 0;
+	my $want = _checkin_secs($sysdb, $log);
+	return unless defined $want;
+	return if $want == $reported;
+	my $payload = sign_command($seed, $uid, "core", "setcheckinint", { checkin_secs => $want });
+	$m->publish("luminum/$sid/$uid/cmd", $payload);
+	$log->("status: UID $uid check-in interval differs (client ${reported}s, server ${want}s); pushed setcheckinint");
+}
+
+# The server-directed check-in interval in seconds (protocol 7.2): CHECKININT
+# is stored in minutes in SYSTEM.CONFIG and is read live so an admin change
+# takes effect on the next check-in without a broker restart. Returns undef
+# when the value is absent or invalid.
+sub _checkin_secs {
+	my ($sysdb, $log) = @_;
+	my $dbh = eval { _dbh($sysdb) };
+	if ($@) { $log->("status: cannot read CHECKININT: $@"); return undef; }
+	my @row = eval { $dbh->selectrow_array("select CVAL from CONFIG where CKEY = 'CHECKININT'") };
+	return undef if $@;
+	my $val = $row[0];
+	return undef unless defined $val && $val =~ /^[0-9]+$/ && $val > 0;
+	return $val * 60;
 }
 
 # Handle a response (resp) message. An answer to a query is correlated by
@@ -426,6 +463,13 @@ sub worker {
 		params => { dbname => $a{dbname}, dbuser => $a{dbuser}, dbpass => $a{dbpass}, dbsock => $a{dbsock}, dbhost => $a{dbhost} },
 		h => undef,
 	};
+	# The SYSTEM database holds CHECKININT (protocol 7.2); the worker reads it
+	# live so an admin change propagates on the next check-in without a broker
+	# restart. Same credentials/socket as the CLIENTS database.
+	my $sysdb = {
+		params => { dbname => "SYSTEM", dbuser => $a{dbuser}, dbpass => $a{dbpass}, dbsock => $a{dbsock}, dbhost => $a{dbhost} },
+		h => undef,
+	};
 	my $cmd_timeout = ($a{cmd_timeout} && $a{cmd_timeout} =~ /^[0-9]+$/) ? $a{cmd_timeout} : 120;
 	my $depl_timeout = ($a{depl_timeout} && $a{depl_timeout} =~ /^[0-9]+$/) ? $a{depl_timeout} : 3600;
 
@@ -434,7 +478,7 @@ sub worker {
 
 	my $base = "luminum/$a{sid}";
 	$m->subscribe("$base/+/resp",   sub { _on_resp($db, $a{sid}, $_[0], $_[1], $log); });
-	$m->subscribe("$base/+/status", sub { _on_status($db, $a{sid}, $_[0], $_[1], $log); });
+	$m->subscribe("$base/+/status", sub { _on_status($db, $sysdb, $m, $a{seed}, $a{sid}, $_[0], $_[1], $log); });
 	$m->subscribe("$base/+/events", sub { _on_events($db, $a{sid}, $_[0], $_[1], $log); });
 
 	my $schema_ok = 0;
