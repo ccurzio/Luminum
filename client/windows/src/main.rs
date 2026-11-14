@@ -142,8 +142,14 @@ fn registry_value(root: windows_sys::Win32::System::Registry::HKEY, subkey: &str
 		{
 			let mut buf = vec![0u8; size as usize];
 			if RegQueryValueExW(hkey, value_w.as_ptr(), std::ptr::null(), &mut type_, buf.as_mut_ptr(), &mut size) == 0 {
-				let end = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
-				result = Some(String::from_utf8_lossy(&buf[..end]).into_owned());
+				// REG_SZ values are stored as UTF-16LE; decode the byte buffer
+				// as u16 units (not UTF-8) and stop at the NUL unit.
+				let units: Vec<u16> = buf
+					.chunks(2)
+					.map(|c| u16::from_le_bytes([c[0], c.get(1).copied().unwrap_or(0)]))
+					.collect();
+				let end = units.iter().position(|&u| u == 0).unwrap_or(units.len());
+				result = Some(String::from_utf16_lossy(&units[..end]));
 			}
 		}
 		RegCloseKey(hkey);
