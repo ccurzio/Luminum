@@ -271,6 +271,7 @@ TBD
 ### API
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+| --     |Not Started    |Processor                   |Luminum API Core                                                                        |
 | --     |Not Started    |Comms Syntax                |Structures for sending and receiving data via Luminum API                               |
 
 
@@ -1155,3 +1156,4 @@ TBD
 
 <br>
 <br>
+
