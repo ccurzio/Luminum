@@ -1258,7 +1258,7 @@ $doInstall = sub {
 		local $Text::Wrap::columns = 64;
 		$text = wrap('', '', $text);
 		my $dlg = $win->add('rootpwdialog', 'Window',
-			-centered => 1, -width => 74, -height => 14,
+			-centered => 1, -width => 78, -height => 14,
 			-bg => 'white', -fg => 'black', -border => 1,
 			-bfg => 'black', -bbg => 'white',
 			);
