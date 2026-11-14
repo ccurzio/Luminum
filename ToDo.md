@@ -228,14 +228,14 @@ TBD
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#10003;|**Completed**  |Network Listener            |The actual process that opens on a secure network interface to listen for connections   |
 |&#10003;|**Completed**  |Message Handling            |Routines that parse messages from the server and/or endpoints                           |
-|&#9654; |*In Progress*  |Client Certificate          |Attach a requirement for client certificats to the listener process                     |
+|&#9654; |*In Progress*  |Client Certificate          |Attach a requirement for client certificates to the listener process                    |
 |&#10003;|**Completed**  |Lumy Scanning               |Include Lumys based on enabled/disabled state in configuration and file include presence|
 |&#10003;|**Completed**  |Client Onboarding           |Processing for newly-added clients on first report to the server                        |
 |&#10003;|**Completed**  |Client Deactivation         |Processing the removal of clients from the server                                       |
 |&#10003;|**Completed**  |Check-In Processing         |Handle server-side updates on regular client check-ins                                  |
 |&#10003;|**Completed**  |Action Queueing             |Development of the queue structure for pending queries and actions                      |
 |&#10003;|**Completed**  |Action Polling              |Development of routines that watch for and then send new queries or actions             |
-| --     |Not Started    |Update Management           |Routines to manage Luminun core patching and updates                                    |
+| --     |Not Started    |Update Management           |Routines to manage Luminum core patching and updates                                    |
 | --     |Not Started    |Lumy Update Management      |Routines to manage Lumy patching and updates                                            |
 
 
@@ -414,7 +414,7 @@ TBD
 |&#10003;|**Completed**  |Invalid Input Highlight     |Create stylesheet definitions highlighting fields with invalid values                   |
 |&#9654; |*In Progress*  |Overlay Message             |Display a forced-focus message window above a full-screen overlay                       |
 |&#10003;|**Completed**  |Lumy Menus                  |Dynamically inject UI navigation header options for enabled Lumy modules                |
-| --     |Not Started    |Asynchronous Content Updates|Routines to update page content without refreshing                                      |
+|&#9654; |*In Progress*  |Asynchronous Content Updates|Routines to update page content without refreshing                                      |
 | --     |Not Started    |Stylesheet Consolidation    |Consolidate style definitions and eliminate redundancies                                |
 | --     |Not Started    |Per-User Stylesheets        |Support for user-defined stylesheets                                                    |
 | --     |Not Started    |Dark Mode                   |Create a standard stylesheet for dark mode                                              |
@@ -662,7 +662,7 @@ TBD
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 | --     |Not Started    |
 
-</li>  
+</li>
 </ul>
 
 
@@ -674,7 +674,7 @@ TBD
 ### Linux Support
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#10003;|**Completed**  |Setup Utility (Text)        |Create plaintext interface for a step-by-step setup wizard                              |
+|&#9654; |*In Progress*  |Setup Utility (Text)        |Create plaintext interface for a step-by-step setup wizard                              |
 | --     |Not Started    |Setup Utility (ncurses)     |Create ncurses interface for a step-by-step setup wizard                                |
 | --     |Not Started    |Unattended Install          |Create automated process for unattended installation                                    |
 |&#10003;|**Completed**  |Key Management              |Routines to create a new public/private key pair                                        |
