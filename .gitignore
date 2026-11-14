@@ -13,6 +13,7 @@ target/
 bin/Luminum-Server
 bin/Luminum-Client
 client/linux/dist/
+client/windows/dist/
 
 # Encryption Stuff
 *.key
