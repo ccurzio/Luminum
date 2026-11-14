@@ -14,7 +14,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9654; |*In Progress*  |French Setup Text           |Setup Utility text translated to French                                                 |
 |&#9654; |*In Progress*  |Spanish Setup Text          |Setup Utility text translated to Spanish                                                |
 | --     |Not Started    |OS User Accounts            |Automatically create necessary OS service accounts for Luminum Server                   |
-|&#9654; |*In Progress*  |Detect Installation         |Routines to detect a current existing Luminum Server configuration                      |
+|&#10003;|**Completed**  |Detect Installation         |Routines to detect a current existing Luminum Server configuration                      |
 |&#10003;|**Completed**  |Configuration Import        |Routines to import an existing config on first setup                                    |
 |&#10003;|**Completed**  |Certificate Setup           |Routines to create or import server certificates                                        |
 |&#10003;|**Completed**  |Key Setup                   |Routines to create or import public/private keys                                        |
