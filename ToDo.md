@@ -15,7 +15,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#9654; |*In Progress*  |Spanish Setup Text          |Setup Utility text translated to Spanish                                                |
 | --     |Not Started    |OS User Accounts            |Automatically create necessary OS service accounts for Luminum Server                   |
 |&#9654; |*In Progress*  |Detect Installation         |Routines to detect a current existing Luminum Server configuration                      |
-|&#9654; |*In Progress*  |Configuration Import        |Routines to import an existing config on first setup                                    |
+|&#10003;|**Completed**  |Configuration Import        |Routines to import an existing config on first setup                                    |
 |&#10003;|**Completed**  |Certificate Setup           |Routines to create or import server certificates                                        |
 |&#10003;|**Completed**  |Key Setup                   |Routines to create or import public/private keys                                        |
 |&#10003;|**Completed**  |Database Setup              |Automatically configure the database software and set root password                     |
@@ -98,7 +98,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#10003;|**Completed**  |Parameter Functions         |Create functions to set server configuration parameters                                 |
 |&#10003;|**Completed**  |DB Configuration Values     |Create key/value pairs for storing primary configuration options in the database        |
 |&#10003;|**Completed**  |File Configuration Values   |Create key/value pairs for storing base configuration options in a config file          |
-| --     |Not Started    |Configuration Export        |Routines to export and save the server configuration                                    |
+|&#10003;|**Completed**  |Configuration Export        |Routines to export and save the server configuration                                    |
 | --     |Not Started    |System Permissions          |Create permissions structure defining user access to functions and features             |
 
 <ul>
