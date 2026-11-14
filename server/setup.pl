@@ -305,6 +305,8 @@ elsif ($ENV{LANG} =~ /es_/) {
 else {
 	$lang = "EN";
 	$mainlabel = "Luminum Server Setup\n";
+	$mainlabel .= "-" x length($mainlabel);
+	chop($mainlabel);
 	$nextbutton = " Next > ";
 	$backbutton = " < Back ";
 	$exitbutton = " Cancel ";
