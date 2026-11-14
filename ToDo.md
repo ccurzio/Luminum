@@ -26,6 +26,7 @@ In order to be accountable to the community - but more importantly to myself - I
 | --     |Not Started    |Page Server Configuration   |Configuration options and routines specific to creating a Luminum Page Server           |
 | --     |Not Started    |Failover Configuration      |Support for high availability server clustering                                         |
 
+
 ### Debian Support
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
@@ -157,7 +158,7 @@ In order to be accountable to the community - but more importantly to myself - I
 </li>
 
 <li>
-
+  
 #### Page Server Configuration Options
 
 TBD
@@ -200,6 +201,14 @@ TBD
 | --     |Not Started    |Memory Checking             |Periodic checking for extended high memory utilization                                  |
 
 
+### Server Security
+|        |Status         |Task                        |Description                                                                             |
+|--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+| --     |Not Started    |Luminum Server Hardening    |Routines to automatically secure the Luminum Server installation                        |
+| --     |Not Started    |Server OS Hardening         |Routines to automatically secure the server operating system                            |
+| --     |Not Started    |Lumy Signature Verification |Routines to validate module signatures                                                  |
+
+
 ### Communication
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
@@ -228,6 +237,7 @@ TBD
 |&#10003;|**Completed**  |Action Polling              |Development of routines that watch for and then send new queries or actions             |
 | --     |Not Started    |Update Management           |Routines to manage Luminun core patching and updates                                    |
 | --     |Not Started    |Lumy Update Management      |Routines to manage Lumy patching and updates                                            |
+
 
 ### Logging
 |        |Status         |Task                        |Description                                                                             |
@@ -273,7 +283,6 @@ TBD
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 | --     |Not Started    |Processor                   |Luminum API Core                                                                        |
 | --     |Not Started    |Comms Syntax                |Structures for sending and receiving data via Luminum API                               |
-
 
 
 ### Investigate
