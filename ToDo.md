@@ -479,7 +479,7 @@ TBD
 #### Sensors
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#10003;|**Completed**  |Sensor List                 |Presents a table displaying information about all avaialble sensors                     |
+|&#10003;|**Completed**  |Sensor List                 |Presents a table displaying information about all available sensors                     |
 |&#9654; |*In Progress*  |Create Sensor               |User interface to create sensors                                                        |
 | --     |Not Started    |New Sensor Column Config    |Form elements for splitting sensor output into table columns                            |
 | --     |Not Started    |Edit Sensor                 |User interface to edit an existing sensor                                               |
@@ -493,7 +493,7 @@ TBD
 #### Packages
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#10003;|**Completed**  |Package List                |Presents a table displaying information about all avaialble packages                    |
+|&#10003;|**Completed**  |Package List                |Presents a table displaying information about all available packages                    |
 |&#9654; |*In Progress*  |Create Package              |User interface to create packages                                                       |
 | --     |Not Started    |Edit Package                |User interface to edit an existing package                                              |
 </li>
@@ -527,7 +527,7 @@ TBD
 |&#9654; |*In Progress*  |General Settings            |User interface for administrators to view/modify general Luminum settings               |
 |&#9654; |*In Progress*  |Endpoint Settings           |User interface for administrators to view/modify endpoint settings                      |
 |&#9654; |*In Progress*  |Content Settings            |User interface for administrators to view/modify content settings                       |
-| --     |Not Started    |Server Settings            |User interface for administrators to view/modify Luminum Server settings                 |
+|&#9654; |*In Progress*  |Server Settings             |User interface for administrators to view/modify Luminum Server settings                 |
 | --     |Not Started    |Log Settings                |User interface for administrators to configure system logging                           |
 | --     |Not Started    |SMTP Settings               |User interface for administrators to configure SMTP servers and settings                |
 | --     |Not Started    |Encryption Settings         |User interface for administrators to configure encryption settings                      |
@@ -757,6 +757,12 @@ TBD
 <br>
 
 ## Client System
+
+### Client Security
+|        |Status         |Task                        |Description                                                                             |
+|--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+| --     |Not Started    |Luminum Client Hardening    |Routines to automatically secure the Luminum Client installation                        |
+| --     |Not Started    |Lumy Signature Verification |Routines to validate module signatures                                                  |
 
 ### Linux Client
 
