@@ -99,6 +99,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#10003;|**Completed**  |DB Configuration Values     |Create key/value pairs for storing primary configuration options in the database        |
 |&#10003;|**Completed**  |File Configuration Values   |Create key/value pairs for storing base configuration options in a config file          |
 | --     |Not Started    |Configuration Export        |Routines to export and save the server configuration                                    |
+| --     |Not Started    |System Permissions          |Create permissions structure defining user access to functions and features             |
 
 <ul>
 <li>
@@ -236,7 +237,7 @@ TBD
 | --     |Not Started    |User sign-in/sign-out       |Generate log entries for instances of user login/logout                                 |
 | --     |Not Started    |Invalid Credentials         |Generate log entries for failed login attempts                                          |
 | --     |Not Started    |Navigation                  |Generate log entries for user page navigation                                           |
-|&#10003;|**Completed**  |Broker Information          |Generate log entries from broker processing                                             |
+|&#9654; |*In Progress*  |Broker Information          |Generate log entries from broker processing                                             |
 | --     |Not Started    |Account Modification        |Generate log entries for user account modifications                                     |
 | --     |Not Started    |User Group Modifications    |Generate log entries on the creation or modification of user groups                     |
 | --     |Not Started    |Computer Group Modifications|Generate log entries on the creation or modification of computer groups                 |
@@ -267,9 +268,19 @@ TBD
 | --     |Not Started    |Package Delivery            |Deploy packages to endpoints from the server command line                               |
 
 
+### API
+|        |Status         |Task                        |Description                                                                             |
+|--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+| --     |Not Started    |Comms Syntax                |Structures for sending and receiving data via Luminum API                               |
+
+
+
 ### Investigate
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+| --     |Not Started    |Network Quarantine Action   |Routines to isolate endpoints from the larger network                                   |
+| --     |Not Started    |User Lockout Action         |Routines to lock users out of endpoints for forensics analysis                          |
+| --     |Not Started    |IoC Integration             |Implementation for importing YAML to scan and detect for IoCs                           |
 | --     |Not Started    |Real-Time Shell             |Manages connections to specified endpoints offering remote shell access                 |
 
   
