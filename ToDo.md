@@ -763,6 +763,15 @@ TBD
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 | --     |Not Started    |Luminum Client Hardening    |Routines to automatically secure the Luminum Client installation                        |
 | --     |Not Started    |Lumy Signature Verification |Routines to validate module signatures                                                  |
+| --     |Not Started    |Certificate Rotation        |Routines to revoke and update stored Luminum system certificates                        |
+
+
+### Client Health
+|        |Status         |Task                        |Description                                                                             |
+|--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+| --     |Not Started    |Luminum Protection          |Periodic scanning to detect changes to critical Luminum Client files                    |
+| --     |Not Started    |Service Validation          |Periodic scanning to ensure all necessary/configured services are running               |
+
 
 ### Linux Client
 
