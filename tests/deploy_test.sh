@@ -397,6 +397,95 @@ check "console: inactivity client initialized with the UTIMEOUT config" \
         && grep -q 'timeout: 900' "$RUN/cstatus.html" 2>/dev/null \
         && grep -q 'warn: true' "$RUN/cstatus.html" 2>/dev/null; echo $?)
 
+# --- sensor create form (admin/sensors.php POST handler) ---------------------
+# The create form posts directly to /admin/sensors.php; a valid POST inserts
+# into CONTENT.SENSORS and redirects to the list. The installer's seeded
+# "Luminum Default" set is the content set the form offers.
+CSET_ID=$(dbq "select ID from CONTENT.SETS where NAME='Luminum Default';")
+check "a content set exists for the sensor form" $([ -n "$CSET_ID" ]; echo $?)
+AUTHOR_ID=$(dbq "select ID from AUTH.USERS where USERNAME='lumadmin';")
+
+code=$(curl -k -s -o "$RUN/sensor-new.html" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/index.php?view=sensors&action=new")
+check "console: sensor create form renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+
+code=$(curl -k -s -D "$RUN/sensor-post.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "pkgname=Deploy Test Sensor" \
+    --data-urlencode "pkgdesc=End-to-end sensor created by the deploy test" \
+    --data-urlencode "timeout=30" \
+    --data-urlencode "tint=sec" \
+    --data-urlencode "rtype=text" \
+    --data-urlencode "contentset=$CSET_ID" \
+    --data-urlencode "category=none" \
+    --data-urlencode "leselect=on" \
+    --data-urlencode "lstype=shell" \
+    --data-urlencode "lscript=echo probe-output-42" \
+    "https://127.0.0.1:$WPORT/admin/sensors.php")
+check "console: valid sensor POST redirects (302)" $([ "$code" = "302" ]; echo $?) "got: $code"
+check "console: POST redirected to the list with saved=1" \
+    $(grep -qi "Location:.*view=sensors&saved=1" "$RUN/sensor-post.hdr" 2>/dev/null; echo $?)
+
+srow=$(dbq "select concat(NAME,'|',DESCRIPTION,'|',CSET,'|',TIMEOUT,'|',RTYPE,'|',LSTYPE,'|',LSCRIPT,'|',ifnull(MSCRIPT,'NULL'),'|',ifnull(WSCRIPT,'NULL'),'|',USECASE,'|',CSPLIT,'|',WITHPARAMS,'|',AUTHOR) from CONTENT.SENSORS where NAME='Deploy Test Sensor';")
+check "sensor row stored with the posted fields" \
+    $([ "$srow" = "Deploy Test Sensor|End-to-end sensor created by the deploy test|$CSET_ID|30S|text|shell|echo probe-output-42|NULL|NULL|0|0|0|$AUTHOR_ID" ]; echo $?) \
+    "got: $srow"
+
+code=$(curl -k -s -o "$RUN/sensors.html" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/index.php?view=sensors&saved=1")
+check "console: sensor list renders after save (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+check "console: created sensor appears in the list" \
+    $(grep -q "Deploy Test Sensor" "$RUN/sensors.html" 2>/dev/null; echo $?)
+check "console: saved banner shown on the list" \
+    $(grep -q "Sensor created." "$RUN/sensors.html" 2>/dev/null; echo $?)
+
+# A duplicate name is rejected (case-insensitive collation) and adds no row.
+code=$(curl -k -s -D "$RUN/sensor-dup.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "pkgname=deploy test sensor" \
+    --data-urlencode "pkgdesc=Duplicate attempt" \
+    --data-urlencode "timeout=30" \
+    --data-urlencode "tint=sec" \
+    --data-urlencode "rtype=text" \
+    --data-urlencode "contentset=$CSET_ID" \
+    --data-urlencode "leselect=on" \
+    --data-urlencode "lstype=shell" \
+    --data-urlencode "lscript=echo dup" \
+    "https://127.0.0.1:$WPORT/admin/sensors.php")
+check "console: duplicate-name POST redirects (302)" $([ "$code" = "302" ]; echo $?) "got: $code"
+check "console: duplicate name redirected with err=dupname" \
+    $(grep -qi "Location:.*err=dupname" "$RUN/sensor-dup.hdr" 2>/dev/null; echo $?)
+check "duplicate POST did not add a second row" \
+    $([ "$(dbq "select count(*) from CONTENT.SENSORS where NAME='Deploy Test Sensor';")" = "1" ]; echo $?)
+
+# A POST with no platform enabled fails validation (err=os) and inserts nothing.
+code=$(curl -k -s -D "$RUN/sensor-bad.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "pkgname=Bad Sensor" \
+    --data-urlencode "pkgdesc=No script provided" \
+    --data-urlencode "timeout=30" \
+    --data-urlencode "tint=sec" \
+    --data-urlencode "rtype=text" \
+    --data-urlencode "contentset=$CSET_ID" \
+    "https://127.0.0.1:$WPORT/admin/sensors.php")
+check "console: scriptless POST redirected with err=os" \
+    $(grep -qi "Location:.*err=os" "$RUN/sensor-bad.hdr" 2>/dev/null; echo $?)
+check "scriptless POST inserted nothing" \
+    $([ "$(dbq "select count(*) from CONTENT.SENSORS where NAME='Bad Sensor';")" = "0" ]; echo $?)
+
+# An anonymous POST is bounced and inserts nothing.
+code=$(curl -k -s -o /dev/null -w '%{http_code}' \
+    --data-urlencode "pkgname=Anon Sensor" \
+    --data-urlencode "pkgdesc=No session" \
+    --data-urlencode "timeout=30" \
+    --data-urlencode "tint=sec" \
+    --data-urlencode "rtype=text" \
+    --data-urlencode "contentset=$CSET_ID" \
+    --data-urlencode "leselect=on" \
+    --data-urlencode "lstype=shell" \
+    --data-urlencode "lscript=echo anon" \
+    "https://127.0.0.1:$WPORT/admin/sensors.php")
+check "console: anonymous sensor POST rejected (302)" $([ "$code" = "302" ]; echo $?) "got: $code"
+check "anonymous POST inserted nothing" \
+    $([ "$(dbq "select count(*) from CONTENT.SENSORS where NAME='Anon Sensor';")" = "0" ]; echo $?)
+
 # --- inactivity session timeout ----------------------------------------------
 # Login must stamp the deadline from the UTIMEOUT server option (seeded 15M),
 # not the old hardcoded 60 minutes.

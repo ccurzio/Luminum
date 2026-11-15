@@ -480,7 +480,7 @@ TBD
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#10003;|**Completed**  |Sensor List                 |Presents a table displaying information about all available sensors                     |
-|&#9654; |*In Progress*  |Create Sensor               |User interface to create sensors                                                        |
+|&#10003;|**Completed**  |Create Sensor               |User interface to create sensors                                                        |
 | --     |Not Started    |New Sensor Column Config    |Form elements for splitting sensor output into table columns                            |
 | --     |Not Started    |Edit Sensor                 |User interface to edit an existing sensor                                               |
 |&#10003;|**Completed**  |Linux Sensor Code Editor    |Browser-based editor with syntax highlighting for languages under Linux                 |
