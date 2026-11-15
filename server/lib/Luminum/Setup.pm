@@ -457,9 +457,8 @@ EOF
 		# target this path, so it must track the generated mosquitto.conf.
 		MQTTPIDFILE => $mosqpid,
 		);
-	# The admin email is optional; only seed it when supplied so an
-	# existing value (e.g. changed later in the console) is preserved.
-	$rows{OWNEREMAIL} = $adminemail if defined $adminemail && $adminemail ne "";
+	# The admin email is not a SYSTEM.CONFIG row; it is stored on the
+	# lumadmin account itself (AUTH.USERS.EMAIL) by seed_admin_user.
 	# Default-only rows: seeded on first install (ENDPOINTCOMM = mqtt,
 	# MISSINGAFTER = 90 days, CMDTIMEOUT = 120s, DEPLTIMEOUT = 3600s,
 	# CHECKININT = 5 min, TARGETCONF = Enabled, TCONFTHRESHOLD = 250

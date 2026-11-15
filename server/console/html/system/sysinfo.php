@@ -6,13 +6,17 @@ if ($acctrole > 1) {
 	}
 else {
 	mysqli_select_db($db, "SYSTEM") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
-	$confquery = mysqli_query($db, "select CKEY,CVAL from CONFIG where CKEY = 'SID' or CKEY = 'INSTALLDATE' or CKEY = 'OWNEREMAIL'");
+	$confquery = mysqli_query($db, "select CKEY,CVAL from CONFIG where CKEY = 'SID' or CKEY = 'INSTALLDATE'");
 	$adminemail = "NONE";
 	while($row = mysqli_fetch_assoc($confquery)) {
 		if ($row["CKEY"] == "SID") { $serverid = $row["CVAL"]; }
 		else if ($row["CKEY"] == "INSTALLDATE") { $installdate = $row["CVAL"]; }
-		//else if ($row["CKEY"] == "OWNEREMAIL") { $adminemail = $row["CVAL"]; }
-		else if ($row["CKEY"] == "OWNEREMAIL" && $row["CVAL"] !== "") { $adminemail = $row["CVAL"]; }
+		}
+	// The administrator email lives on the lumadmin account, not in CONFIG.
+	mysqli_select_db($db, "AUTH") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
+	$uquery = mysqli_query($db, "select EMAIL from USERS where USERNAME = 'lumadmin'");
+	if ($urow = mysqli_fetch_assoc($uquery)) {
+		if ($urow["EMAIL"] !== null && $urow["EMAIL"] !== "") { $adminemail = $urow["EMAIL"]; }
 		}
 	//$cpuhistquery = mysqli_query($db, "select TIMESTAMP,PCT from CPUHIST order by TIMESTAMP limit 8");
 	$cpuhistquery = mysqli_query($db, "select * from (select TIMESTAMP,PCT from CPUHIST order by TIMESTAMP desc limit 9) as sub order by TIMESTAMP asc");

@@ -26,8 +26,11 @@ else {
 		else if ($row["CKEY"] == "PASSKEYS") { $passkeys = $row["CVAL"]; }
 		else if ($row["CKEY"] == "USERLOGGING") { $userlogging = $row["CVAL"]; }
 		else if ($row["CKEY"] == "INVESTIGATE") { $investigate = $row["CVAL"]; }
-		else if ($row["CKEY"] == "OWNEREMAIL") { $owner = $row["CVAL"]; }
 		}
+	// The administrator email lives on the lumadmin account, not in CONFIG.
+	mysqli_select_db($db, "AUTH") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
+	$uquery = mysqli_query($db, "select EMAIL from USERS where USERNAME = 'lumadmin'");
+	if ($urow = mysqli_fetch_assoc($uquery)) { $owner = $urow["EMAIL"]; }
 
 	mysqli_select_db($db, "CONTENT") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
 	$csquery = mysqli_query($db, "select ID,NAME from SETS where LOCKED = 0");
