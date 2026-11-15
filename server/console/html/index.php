@@ -7,6 +7,7 @@ ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
 require_once __DIR__ . '/layout/db.php';
+require_once __DIR__ . '/layout/session.php';
 $instdir = luminum_console_conf('instdir');
 $db = luminum_db();
 
@@ -46,7 +47,9 @@ else {
 			else {
 				$acctrole = $storedhash["ROLE"];
 				$newsession = session_create_id('SID');
-				mysqli_query($db, "insert into SESSION (ID,SID,START,EXPIRES) values ((select ID from USERS where USERNAME = '$username'),'$newsession',now(),now()+interval 60 minute)");
+				// Deadline from the UTIMEOUT server option (was a hardcoded 60 minutes).
+				$utsecs = luminum_utimeout_seconds($db);
+				mysqli_query($db, "insert into SESSION (ID,SID,START,EXPIRES) values ((select ID from USERS where USERNAME = '$username'),'$newsession',now(),now()+interval $utsecs second)");
 				mysqli_query($db, "update USERS set LASTSEEN = now() where ID = (select ID from USERS where USERNAME = '$username')");
 				$_SESSION['SID'] = $newsession;
 				$_SESSION['USER'] = $username;

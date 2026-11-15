@@ -24,7 +24,10 @@ function json_error($message, $code = 500) {
 	exit;
 }
 
-// Auth gate: require a console session that still exists server-side.
+// Auth gate: require a console session that still exists server-side and has
+// not passed its inactivity deadline. API requests deliberately never
+// refresh the deadline (see layout/session.php), so background polling such
+// as the Client Status table cannot hold an idle session alive.
 if (!isset($_SESSION['SID']) || !ctype_alnum($_SESSION['SID'])) {
 	json_error('Unauthorized', 401);
 }
@@ -37,7 +40,7 @@ try {
 
 mysqli_select_db($db, 'AUTH') or json_error('Unable to access database.', 500);
 $sid = mysqli_real_escape_string($db, $_SESSION['SID']);
-$check = mysqli_query($db, "select 1 from SESSION where SID = '$sid'");
+$check = mysqli_query($db, "select 1 from SESSION where SID = '$sid' and EXPIRES > now()");
 if (!$check || mysqli_num_rows($check) === 0) {
 	json_error('Session expired', 401);
 }

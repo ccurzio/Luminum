@@ -412,7 +412,7 @@ TBD
 | --     |Not Started    |Form Generation Functions   |Functions to automatically generate HTML forms on-demand                                |
 | --     |Not Started    |Element Generation Functions|Functions to automatically generate HTML elements on-demand                             |
 |&#10003;|**Completed**  |Invalid Input Highlight     |Create stylesheet definitions highlighting fields with invalid values                   |
-|&#9654; |*In Progress*  |Overlay Message             |Display a forced-focus message window above a full-screen overlay                       |
+|&#10003;|**Completed**  |Overlay Message             |Display a forced-focus message window above a full-screen overlay                       |
 |&#10003;|**Completed**  |Lumy Menus                  |Dynamically inject UI navigation header options for enabled Lumy modules                |
 |&#9654; |*In Progress*  |Asynchronous Content Updates|Routines to update page content without refreshing                                      |
 | --     |Not Started    |Stylesheet Consolidation    |Consolidate style definitions and eliminate redundancies                                |
@@ -425,7 +425,7 @@ TBD
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#10003;|**Completed**  |Console Login Processing    |Present a login screen and start a session or reject based on credentials               |
 |&#10003;|**Completed**  |Session Timeout             |Automatically terminate a user session if left inactive                                 |
-|&#9654; |*In Progress*  |Timeout Warning             |Display a timeout warning 2 minutes before automatic inactivity logout                  |
+|&#10003;|**Completed**  |Timeout Warning             |Display a timeout warning 2 minutes before automatic inactivity logout                  |
 |&#9654; |*In Progress*  |Two-Factor Authentication   |Capture user sessions and shunt to 2FA validation on login                              |
 | --     |Not Started    |Mandatory Password Change   |Capture user sessions and shunt to a change password interface on login                 |
 |&#9654; |*In Progress*  |Permissions Adjustments     |Show or hide UI elements/options based on the user's access level                       |

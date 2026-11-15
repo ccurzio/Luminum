@@ -20,6 +20,11 @@ if (!isset($_SESSION['SID'])) {
 	exit;
 	}
 
+// Inactivity timeout: bounce expired sessions to the login page, otherwise
+// refresh the deadline (a page load is user activity).
+require_once __DIR__ . '/session.php';
+luminum_session_gate($db);
+
 $userquery = mysqli_query($db, "select ROLE from USERS where ENABLED = 1 and ID = (select ID from SESSION where SID = '" . $_SESSION["SID"] . "')");
 $userinfo = $userquery->fetch_assoc();
 $acctrole = $userinfo["ROLE"];
@@ -56,19 +61,13 @@ $ienabled = $invinfo["CVAL"];
 
 <body>
 
+<!-- Full-screen dim + forced-focus popup. The content is filled in by
+     LuminumOverlay.show() in layout/session.js; hidden until then. -->
 <div id="overlay">
-	<div style="width: 700px; margin-left: auto; margin-right: auto; margin-top: 12%; background-color: white; border-radius: 8px; padding: 20px; box-shadow: 5px 5px 10px rgba(0,0,0,0.5); text-align: center;">
-		<span style="font-weight: bold; font-size: 20px;">Session Timeout</span><br>
-		<div style="width: 100%; margin-left: auto; margin-right: auto; text-align: center;">
-		</div>
-
-		<div style="width: 100%; margin-left: auto; margin-right: auto; text-align: center;">
-			Your session is about to time out due to inactivity, at which point you will automatically be logged out. You may click "extend" to renew your session,
-			or you can manually log out.
-		</div>
-		<div style="margin-top: 20px; margin-left: auto; margin-right: auto; text-align: center;">
-			<button class="formgo" id="extend" value="extend" style="margin-left: 0; margin-right: 0;">Extend</button> <button class="formgo" id="logout" value="logout" style="margin-left: 0; margin-right: 0;">Log Out</button>
-		</div>
+	<div class="overlay-popup">
+		<span id="overlay-title" style="font-weight: bold; font-size: 20px;"></span><br>
+		<div id="overlay-message" style="margin-top: 15px;"></div>
+		<div id="overlay-buttons" style="margin-top: 20px;"></div>
 	</div>
 </div>
 

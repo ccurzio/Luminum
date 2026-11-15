@@ -389,6 +389,68 @@ code=$(curl -k -s -o "$RUN/cstatus.html" -w '%{http_code}' -b "$RUN/cookies" \
 check "console: Client Status page renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
 check "console: Client Status table markup present" \
     $(grep -q 'id="cstable"' "$RUN/cstatus.html" 2>/dev/null; echo $?)
+# The inactivity client must be initialized on the page (footer.php injects
+# the deadline/timeout/warn config from the live session): timeout is the
+# seeded UTIMEOUT in seconds and the 2-minute warning is seeded Enabled.
+check "console: inactivity client initialized with the UTIMEOUT config" \
+    $(grep -q 'LuminumSession.init' "$RUN/cstatus.html" 2>/dev/null \
+        && grep -q 'timeout: 900' "$RUN/cstatus.html" 2>/dev/null \
+        && grep -q 'warn: true' "$RUN/cstatus.html" 2>/dev/null; echo $?)
+
+# --- inactivity session timeout ----------------------------------------------
+# Login must stamp the deadline from the UTIMEOUT server option (seeded 15M),
+# not the old hardcoded 60 minutes.
+delta=$(dbq "select timestampdiff(second, now(), EXPIRES) from AUTH.SESSION;")
+check "session: EXPIRES stamped from UTIMEOUT (15M)" \
+    $([ "$delta" -gt 870 ] && [ "$delta" -lt 930 ]; echo $?) "delta: ${delta}s"
+
+# The extend endpoint refreshes the deadline and reports it to the client.
+before=$(dbq "select unix_timestamp(EXPIRES) from AUTH.SESSION;")
+sleep 2
+code=$(curl -k -s -o "$RUN/touch.json" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/api/touch.php")
+after=$(dbq "select unix_timestamp(EXPIRES) from AUTH.SESSION;")
+check "api: touch.php refreshes the deadline (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+check "api: touch.php moved EXPIRES forward" $([ "$after" -gt "$before" ]; echo $?) \
+    "before=$before after=$after"
+python3 - "$RUN/touch.json" <<'EOF'
+import json, sys
+data = json.load(open(sys.argv[1]))
+assert data.get("ok") is True, "ok flag missing"
+assert isinstance(data.get("expires"), int) and data["expires"] > 0, "expires missing"
+assert isinstance(data.get("now"), int) and data["now"] > 0, "now missing"
+EOF
+check "api: touch.php reports ok/expires/now" $? "see $RUN/touch.json"
+
+# Background API polling must NOT refresh the deadline: the Client Status
+# table polls /api/clients.php every 5 seconds, and that is what used to
+# hold idle sessions alive.
+before=$(dbq "select unix_timestamp(EXPIRES) from AUTH.SESSION;")
+curl -k -s -o /dev/null -b "$RUN/cookies" "https://127.0.0.1:$WPORT/api/clients.php"
+curl -k -s -o /dev/null -b "$RUN/cookies" "https://127.0.0.1:$WPORT/api/clients.php"
+after=$(dbq "select unix_timestamp(EXPIRES) from AUTH.SESSION;")
+check "api: polling clients.php does not extend the deadline" \
+    $([ "$before" -eq "$after" ]; echo $?) "before=$before after=$after"
+
+# A page load IS activity and refreshes the deadline.
+before=$(dbq "select unix_timestamp(EXPIRES) from AUTH.SESSION;")
+sleep 2
+curl -k -s -o /dev/null -b "$RUN/cookies" "https://127.0.0.1:$WPORT/index.php?view=clientstatus"
+after=$(dbq "select unix_timestamp(EXPIRES) from AUTH.SESSION;")
+check "console: page load refreshes the deadline" $([ "$after" -gt "$before" ]; echo $?) \
+    "before=$before after=$after"
+
+# An expired session is rejected by the API gate and bounced from pages, and
+# the server-side session row is removed.
+dbq "update AUTH.SESSION set EXPIRES = now() - interval 1 minute;"
+code=$(curl -k -s -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/api/clients.php")
+check "api: expired session rejected (401)" $([ "$code" = "401" ]; echo $?) "got: $code"
+code=$(curl -k -s -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/index.php?view=clientstatus")
+check "console: expired session bounced to login (302)" $([ "$code" = "302" ]; echo $?) "got: $code"
+check "console: expired session row removed" \
+    $([ "$(dbq "select count(*) from AUTH.SESSION;")" -eq 0 ]; echo $?)
 
 echo "------------------------------------------------------------"
 if [ "$FAILURES" -gt 0 ]; then
