@@ -2277,7 +2277,7 @@ mod tests {
 	fn x509_chain_anchor() {
 		let Some(dir) = test_dir() else { return };
 		let signing = read(&dir, "server-signing.crt");
-		let root = read(&dir, "server.crt");
+		let root = read(&dir, "luminum-ca.crt");
 		let expected_hex = std::str::from_utf8(&read(&dir, "server-signing.pub.hex"))
 			.expect("expected pubkey hex")
 			.trim()

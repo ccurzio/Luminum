@@ -14,7 +14,9 @@
 # always matches the running server:
 #   - config/broker.conf  -> database credentials (DBUSER/DBPASS/DBSOCKET/DBHOST)
 #   - SYSTEM.CONFIG       -> SHOST, LPORT, SKEY, SSLCERT
-#   - <ssldir>/server.crt            (SSLCERT)
+#   - <ssldir>/luminum-ca.crt        (the TLS trust anchor; generate mode)
+#   - <ssldir>/server.crt            (the anchor in import mode, where no
+#                                     in-tree CA exists)
 #   - <ssldir>/server-signing.crt    (dirname of SSLCERT)
 #
 # The client's UID/SID/MQTT credentials and the server signing public key are
@@ -113,6 +115,9 @@ die "FATAL: SYSTEM.CONFIG is missing SSLCERT (run the installer)\n" unless defin
 my $ssldir = $cert;
 $ssldir =~ s{/[^/]+$}{};   # dirname of SSLCERT
 my $signcert = "$ssldir/server-signing.crt";
+# The client's TLS trust anchor is the server CA (generate mode); import
+# mode has no in-tree CA, so the imported certificate is the anchor.
+my $anchor = -e "$ssldir/luminum-ca.crt" ? "$ssldir/luminum-ca.crt" : $cert;
 
 sub slurp {
 	my ($path) = @_;
@@ -123,9 +128,9 @@ sub slurp {
 	return $data;
 }
 
-my $server_pem = slurp($cert);
+my $server_pem = slurp($anchor);
 my $signing_pem = slurp($signcert);
-die "FATAL: server certificate is empty: $cert\n" unless $server_pem =~ /BEGIN CERTIFICATE/;
+die "FATAL: server certificate is empty: $anchor\n" unless $server_pem =~ /BEGIN CERTIFICATE/;
 die "FATAL: server signing certificate is empty: $signcert\n" unless $signing_pem =~ /BEGIN CERTIFICATE/;
 
 # --- emit --------------------------------------------------------------------

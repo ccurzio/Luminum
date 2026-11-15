@@ -129,8 +129,8 @@ check "installer completed (provisioning)" $([ $? -eq 0 ]; echo $?) "see $RUN/se
 # --- verify the installer's mosquitto provisioning ---------------------------
 check "mosquitto.conf was generated" $([ -s "$ROOT/config/mosquitto/mosquitto.conf" ]; echo $?)
 check "mosquitto TLS leaf was generated" $([ -s "$ROOT/config/ssl/mosquitto.crt" ]; echo $?)
-openssl verify -CAfile "$ROOT/config/ssl/server.crt" "$ROOT/config/ssl/mosquitto.crt" >/dev/null 2>&1
-check "mosquitto leaf chains to the server certificate" "$?"
+openssl verify -CAfile "$ROOT/config/ssl/luminum-ca.crt" "$ROOT/config/ssl/mosquitto.crt" >/dev/null 2>&1
+check "mosquitto leaf chains to the server CA" "$?"
 openssl x509 -in "$ROOT/config/ssl/mosquitto.crt" -noout -ext subjectAltName 2>/dev/null | grep -q "DNS:127.0.0.1"
 check "mosquitto leaf has a DNS SAN for the IP host" "$?"
 check "start-mosquitto script was generated" $([ -x "$ROOT/bin/start-mosquitto" ]; echo $?)
