@@ -422,8 +422,9 @@ code=$(curl -k -s -D "$RUN/sensor-post.hdr" -o /dev/null -w '%{http_code}' -b "$
     --data-urlencode "lscript=echo probe-output-42" \
     "https://127.0.0.1:$WPORT/admin/sensors.php")
 check "console: valid sensor POST redirects (302)" $([ "$code" = "302" ]; echo $?) "got: $code"
-check "console: POST redirected to the list with saved=1" \
-    $(grep -qi "Location:.*view=sensors&saved=1" "$RUN/sensor-post.hdr" 2>/dev/null; echo $?)
+check "console: POST redirected to the plain list (no saved flag)" \
+    $(grep -qi "Location:.*view=sensors" "$RUN/sensor-post.hdr" 2>/dev/null \
+        && ! grep -qi "saved=1" "$RUN/sensor-post.hdr" 2>/dev/null; echo $?)
 
 srow=$(dbq "select concat(NAME,'|',DESCRIPTION,'|',CSET,'|',TIMEOUT,'|',RTYPE,'|',LSTYPE,'|',LSCRIPT,'|',ifnull(MSCRIPT,'NULL'),'|',ifnull(WSCRIPT,'NULL'),'|',USECASE,'|',CSPLIT,'|',WITHPARAMS,'|',AUTHOR) from CONTENT.SENSORS where NAME='Deploy Test Sensor';")
 check "sensor row stored with the posted fields" \
@@ -431,12 +432,12 @@ check "sensor row stored with the posted fields" \
     "got: $srow"
 
 code=$(curl -k -s -o "$RUN/sensors.html" -w '%{http_code}' -b "$RUN/cookies" \
-    "https://127.0.0.1:$WPORT/index.php?view=sensors&saved=1")
+    "https://127.0.0.1:$WPORT/index.php?view=sensors")
 check "console: sensor list renders after save (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
 check "console: created sensor appears in the list" \
     $(grep -q "Deploy Test Sensor" "$RUN/sensors.html" 2>/dev/null; echo $?)
-check "console: saved banner shown on the list" \
-    $(grep -q "Sensor created." "$RUN/sensors.html" 2>/dev/null; echo $?)
+check "console: no success message on the list" \
+    $(! grep -q "Sensor created." "$RUN/sensors.html" 2>/dev/null; echo $?)
 
 # A duplicate name is rejected (case-insensitive collation) and adds no row.
 code=$(curl -k -s -D "$RUN/sensor-dup.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
@@ -455,6 +456,14 @@ check "console: duplicate name redirected with err=dupname" \
     $(grep -qi "Location:.*err=dupname" "$RUN/sensor-dup.hdr" 2>/dev/null; echo $?)
 check "duplicate POST did not add a second row" \
     $([ "$(dbq "select count(*) from CONTENT.SENSORS where NAME='Deploy Test Sensor';")" = "1" ]; echo $?)
+
+# The save failure is shown in the overlay popup on the create form.
+code=$(curl -k -s -o "$RUN/sensor-dup-form.html" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/index.php?view=sensors&action=new&err=dupname")
+check "console: create form renders with err=dupname (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+check "console: save failure shown via the overlay popup" \
+    $(grep -q "LuminumOverlay.show" "$RUN/sensor-dup-form.html" 2>/dev/null \
+        && grep -q "A sensor with that name already exists." "$RUN/sensor-dup-form.html" 2>/dev/null; echo $?)
 
 # A POST with no platform enabled fails validation (err=os) and inserts nothing.
 code=$(curl -k -s -D "$RUN/sensor-bad.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \

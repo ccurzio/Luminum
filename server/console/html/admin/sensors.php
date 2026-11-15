@@ -7,7 +7,8 @@ require_once __DIR__ . '/sensormap.php';
 // session and DB on its own (the index.php include path is GET only),
 // validates the payload (admin/sensormap.php), inserts the sensor into
 // CONTENT.SENSORS, and redirects back to the list (PRG). Validation
-// failures redirect to the form with ?err=<code>, which renders a banner.
+// failures redirect to the form with ?err=<code>, which shows the error
+// in the overlay popup (LuminumOverlay in layout/session.js).
 //
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	require_once __DIR__ . '/../layout/db.php';
@@ -72,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 		header('Location: /index.php?view=sensors&action=new&err=save');
 		exit;
 	}
-	header('Location: /index.php?view=sensors&saved=1');
+	header('Location: /index.php?view=sensors');
 	exit;
 }
 
@@ -92,10 +93,6 @@ $sensorcount = mysqli_num_rows($sensorquery);
 <?php if ($_GET["view"] == "sensors"): ?>
 	<?php if (!isset($_GET["action"])): ?>
 	<h1>Sensors</h1>
-
-	<?php if (isset($_GET["saved"])): ?>
-	<div style="margin: -35px auto 10px auto; padding: 8px 12px; background-color: #14351f; border: 1px solid #0ec940; color: #b4ffd0; width: 98%; text-align: center;">Sensor created.</div>
-	<?php endif; ?>
 
 	<div class="module-content">
 		<?php
@@ -148,7 +145,17 @@ $sensorcount = mysqli_num_rows($sensorquery);
 		<h1>Create New Sensor</h1>
 
 		<?php if (isset($_GET["err"])): ?>
-		<div style="margin: -35px auto 10px auto; padding: 8px 12px; background-color: #3a1414; border: 1px solid #cf1104; color: #ffb4b4; width: 98%; text-align: center;"><?php print luminum_sensor_error_message($_GET["err"]); ?></div>
+		<script>
+		// layout/session.js (LuminumOverlay) is loaded in the footer, so the
+		// error popup is shown once the page has finished loading.
+		window.addEventListener('DOMContentLoaded', function () {
+			LuminumOverlay.show({
+				title: 'Save Error',
+				message: <?php print json_encode(luminum_sensor_error_message($_GET["err"]), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
+				buttons: [{ label: 'OK', onclick: function () { LuminumOverlay.hide(); } }]
+			});
+		});
+		</script>
 		<?php endif; ?>
 
 		<form id="nsform" action="/admin/sensors.php" method="POST">

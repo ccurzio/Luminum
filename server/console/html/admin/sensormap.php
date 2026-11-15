@@ -131,8 +131,9 @@ function luminum_validate_sensor_create($post) {
 	return ['ok' => true, 'sensor' => $sensor];
 }
 
-// The human-readable banner text for a validation error code (the ?err=
-// value the POST handler redirects back to the form with).
+// The human-readable message for a validation error code (the ?err= value
+// the POST handler redirects back to the form with; shown in the overlay
+// popup on the create form).
 function luminum_sensor_error_message($code) {
 	$msgs = [
 		'name' => 'The sensor name is invalid: it must be 1-128 characters, begin with a letter or number, and contain only letters, numbers, spaces, underscores, dashes, and dots.',
