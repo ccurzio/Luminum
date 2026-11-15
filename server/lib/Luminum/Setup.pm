@@ -1305,7 +1305,7 @@ sub seed_admin_user {
 			}
 		else {
 			my @cols = ("USERNAME", "FULLNAME", "PASSWORD");
-			my @vals = ($username, "Administrator", $hash);
+			my @vals = ($username, "Luminum Administrator", $hash);
 			if ($have{EMAIL} && defined $email && $email ne "") { push(@cols, "EMAIL"); push(@vals, $email); }
 			if ($have{PHONE}) { push(@cols, "PHONE"); push(@vals, ""); }
 			if ($have{TYPE})  { push(@cols, "TYPE");  push(@vals, "local"); }
