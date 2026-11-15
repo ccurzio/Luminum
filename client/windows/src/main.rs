@@ -1906,10 +1906,31 @@ fn get_os_release() -> String {
 	{
 		use windows_sys::Win32::System::Registry::HKEY_LOCAL_MACHINE;
 		const NT: &str = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion";
+		// The registry ProductName is not reliable for the major version:
+		// Windows 11 machines report "Windows 10 Home"/"Windows 10 Pro"
+		// there. The build number is authoritative: 22000+ is Windows 11.
 		let product = registry_value(HKEY_LOCAL_MACHINE, NT, "ProductName")
 			.unwrap_or_else(|| String::from("Windows"));
+		let build: Option<u64> = registry_value(HKEY_LOCAL_MACHINE, NT, "CurrentBuildNumber")
+			.and_then(|b| b.trim().parse().ok());
+		let major = match build {
+			Some(b) if b >= 22000 => "Windows 11",
+			Some(_) => "Windows 10",
+			None => "Windows",
+		};
+		// Keep only the edition (Home, Pro, ...) from ProductName, dropping
+		// its (possibly wrong) "Windows 10"/"Windows 11" prefix.
+		let edition = product
+			.strip_prefix("Windows 11")
+			.or_else(|| product.strip_prefix("Windows 10"))
+			.unwrap_or(&product)
+			.trim();
+		let mut s = if edition.is_empty() {
+			major.to_string()
+		} else {
+			format!("{} {}", major, edition)
+		};
 		let display = registry_value(HKEY_LOCAL_MACHINE, NT, "DisplayVersion");
-		let mut s = product;
 		if let Some(d) = display {
 			if !d.trim().is_empty() {
 				s.push(' ');
