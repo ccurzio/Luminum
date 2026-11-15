@@ -30,8 +30,6 @@
 			 <option value="minutes">Minute(s)</option>
 			 <option value="hours">Hour(s)</option>
 			 <option value="days">Day(s)</option>
-			 <option value="weeks">Week(s)</option>
-			 <option value="months">Month(s)</option>
 		</select>
 		<button id="fapply" class="formgo" style="margin-top: 5px; margin-right: 0; margin-left: 1px; height: 30px; padding-top: 5px;" disabled="disabled">Apply</button>
 	</p>
