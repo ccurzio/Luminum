@@ -1514,9 +1514,9 @@ sub prepare_signing {
 			&& system("openssl", "x509", "-req", "-in", $csr,
 				"-CA", $tls_cert, "-CAkey", $tls_key,
 				"-set_serial", "0x" . randomhex(16),
-				"-days", "3650", "-extfile", $ext, "-out", $signcert) == 0;
+				"-days", "365", "-extfile", $ext, "-out", $signcert) == 0;
 	} else {
-		$rc = system("openssl", "req", "-x509", "-key", $signkey, "-days", "3650",
+		$rc = system("openssl", "req", "-x509", "-key", $signkey, "-days", "365",
 			"-subj", "/CN=$shost", "-out", $signcert) == 0;
 	}
 	unlink($csr, $ext);
@@ -1610,7 +1610,7 @@ sub prepare_ssl {
 			}
 		# CA:TRUE: the self-signed certificate also acts as the issuing
 		# CA for the Ed25519 signing certificate (protocol 7.1).
-		my $cmd = "openssl req -new -x509 -key \"$key\" -days 3650 "
+		my $cmd = "openssl req -new -x509 -key \"$key\" -days 365 "
 			. "-out \"$cert\" -subj \"/CN=$shost\" -addext \"subjectAltName=$san\" "
 			. "-addext \"basicConstraints=critical,CA:TRUE\" 2>/dev/null";
 		return $fail->("certificate generation failed") unless system($cmd) == 0;
@@ -1627,7 +1627,7 @@ sub prepare_ssl {
 	# generate / new: fresh RSA key + self-signed certificate (CN + SAN =
 	# $shost). CA:TRUE: the self-signed certificate also acts as the
 	# issuing CA for the Ed25519 signing certificate (protocol 7.1).
-	my $cmd = "openssl req -x509 -newkey rsa:2048 -nodes -days 3650 "
+	my $cmd = "openssl req -x509 -newkey rsa:2048 -nodes -days 365 "
 		. "-keyout \"$key\" -out \"$cert\" "
 		. "-subj \"/CN=$shost\" -addext \"subjectAltName=$san\" "
 		. "-addext \"basicConstraints=critical,CA:TRUE\" 2>/dev/null";
@@ -1697,7 +1697,7 @@ sub prepare_mqtt_tls {
 	close($ef);
 	unless (system("openssl", "x509", "-req", "-in", $mcsr,
 		"-CA", $cacert, "-CAkey", $cakey, "-set_serial", "0x01",
-		"-days", "3650", "-extfile", $mext, "-out", $mcrt) == 0) {
+		"-days", "365", "-extfile", $mext, "-out", $mcrt) == 0) {
 		return $fail->("mosquitto certificate signing failed");
 		}
 	unlink($mcsr, $mext);
