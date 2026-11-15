@@ -1609,10 +1609,15 @@ sub prepare_ssl {
 			return $fail->("cannot install private key");
 			}
 		# CA:TRUE: the self-signed certificate also acts as the issuing
-		# CA for the Ed25519 signing certificate (protocol 7.1).
+		# CA for the Ed25519 signing certificate (protocol 7.1). The
+		# serverAuth EKU is required for the TLS leaf role (the macOS
+		# Security framework rejects a server certificate without it);
+		# no keyUsage extension is added, so the CA role stays
+		# unrestricted.
 		my $cmd = "openssl req -new -x509 -key \"$key\" -days 365 "
 			. "-out \"$cert\" -subj \"/CN=$shost\" -addext \"subjectAltName=$san\" "
-			. "-addext \"basicConstraints=critical,CA:TRUE\" 2>/dev/null";
+			. "-addext \"basicConstraints=critical,CA:TRUE\" "
+			. "-addext \"extendedKeyUsage=serverAuth\" 2>/dev/null";
 		return $fail->("certificate generation failed") unless system($cmd) == 0;
 		chmod(0644, $cert);
 		unless (derive_pub($cert, $pub)) { return $fail->("cannot derive public key"); }
@@ -1626,11 +1631,15 @@ sub prepare_ssl {
 
 	# generate / new: fresh RSA key + self-signed certificate (CN + SAN =
 	# $shost). CA:TRUE: the self-signed certificate also acts as the
-	# issuing CA for the Ed25519 signing certificate (protocol 7.1).
+	# issuing CA for the Ed25519 signing certificate (protocol 7.1). The
+	# serverAuth EKU is required for the TLS leaf role (the macOS
+	# Security framework rejects a server certificate without it); no
+	# keyUsage extension is added, so the CA role stays unrestricted.
 	my $cmd = "openssl req -x509 -newkey rsa:2048 -nodes -days 365 "
 		. "-keyout \"$key\" -out \"$cert\" "
 		. "-subj \"/CN=$shost\" -addext \"subjectAltName=$san\" "
-		. "-addext \"basicConstraints=critical,CA:TRUE\" 2>/dev/null";
+		. "-addext \"basicConstraints=critical,CA:TRUE\" "
+		. "-addext \"extendedKeyUsage=serverAuth\" 2>/dev/null";
 	return $fail->("certificate generation failed") unless system($cmd) == 0;
 	unless (derive_pub($cert, $pub)) { return $fail->("cannot derive public key"); }
 	chmod(0600, $key);
