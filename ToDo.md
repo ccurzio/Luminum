@@ -1098,8 +1098,18 @@ TBD
 ### Sensors
 
 <ul>
-<li>
 
+<li>
+#### Computer Name
+
+|        |Status         |OS |
+|--------|---------------|---|
+| --     |Not Started    |LIN|
+| --     |Not Started    |MAC|
+| --     |Not Started    |WIN|
+</li>
+
+<li>
 #### Operating System
 
 |        |Status         |OS |
@@ -1110,7 +1120,6 @@ TBD
 </li>
 
 <li>
-
 #### CPU Information
 
 |        |Status         |OS |
@@ -1121,7 +1130,6 @@ TBD
 </li>
 
 <li>
-
 #### Disk Information
 
 |        |Status         |OS |
@@ -1132,7 +1140,6 @@ TBD
 </li>
 
 <li>
-
 #### Memory Information
 
 |        |Status         |OS |
@@ -1143,7 +1150,6 @@ TBD
 </li>
 
 <li>
-
 #### Uptime
 
 |        |Status         |OS |
@@ -1154,7 +1160,6 @@ TBD
 </li>
 
 <li>
-
 #### File Exists
 
 |        |Status         |OS |
@@ -1165,7 +1170,6 @@ TBD
 </li>
 
 <li>
-
 #### Is Virtual
 
 |        |Status         |OS |
