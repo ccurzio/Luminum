@@ -151,7 +151,7 @@ if ($existing) {
 	sc.exe delete $svcName | Out-Null
 	Start-Sleep -Seconds 1
 }
-New-Service -Name $svcName -BinaryPathName $exePath -DisplayName "Luminum Client" -StartupType Automatic | Out-Null
+New-Service -Name $svcName -BinaryPathName $exePath -DisplayName "Luminum Client" -Description "Luminum Endpoint Security Client" -StartupType Automatic | Out-Null
 # Restart on failure: retry at 5s, 10s, 30s; reset the failure counter after 24h.
 sc.exe failure $svcName reset= 86400 actions= restart/5000/restart/10000/restart/30000 | Out-Null
 Write-Host "Created service $svcName (auto-start, restart on failure)"
