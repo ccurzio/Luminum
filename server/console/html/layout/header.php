@@ -141,8 +141,8 @@ $ienabled = $invinfo["CVAL"];
 				<div class="submenu">
 					<a href="#" class="submenu-link" style="cursor: default;">Content <span class="arrow" style="margin-left: 65%;">▸</span></a>
 					<div class="submenu-content">
-						<a href="/index.php?view=packages">Packages</a>
 						<a href="/index.php?view=sensors">Sensors</a>
+						<a href="/index.php?view=packages">Packages</a>
 						<a href="/index.php?view=csets">Content Sets</a>
 					</div>
 				</div>

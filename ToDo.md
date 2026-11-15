@@ -1106,7 +1106,7 @@ TBD
 |--------|---------------|---|
 |&#10003;|**Completed**  |LIN|
 |&#10003;|**Completed**  |MAC|
-| --     |Not Started    |WIN|
+|&#10003;|**Completed**  |WIN|
 </li>
 
 <li>
@@ -1148,9 +1148,9 @@ TBD
 
 |        |Status         |OS |
 |--------|---------------|---|
-|&#9654; |*In Progress*  |LIN|
+|&#10003;|**Completed**  |LIN|
 |&#10003;|**Completed**  |MAC|
-| --     |Not Started    |WIN|
+|&#10003;|**Completed**  |WIN|
 </li>
 
 <li>
@@ -1159,9 +1159,9 @@ TBD
 
 |        |Status         |OS |
 |--------|---------------|---|
-| --     |Not Started    |LIN|
-| --     |Not Started    |MAC|
-| --     |Not Started    |WIN|
+|&#10003;|**Completed**  |LIN|
+|&#10003;|**Completed**  |MAC|
+|&#10003;|**Completed**  |WIN|
 </li>
 
 <li>
@@ -1170,9 +1170,9 @@ TBD
 
 |        |Status         |OS |
 |--------|---------------|---|
-| --     |Not Started    |LIN|
+|&#10003;|**Completed**  |LIN|
 | --     |Not Started    |MAC|
-| --     |Not Started    |WIN|
+|&#10003;|**Completed**  |WIN|
 </li>
 </ul>
 

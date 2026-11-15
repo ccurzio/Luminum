@@ -94,7 +94,7 @@ $pkgcount = mysqli_num_rows($pkgquery);
 
 			</div>
 
-		<hr style="width: 99%; margin-bottom: 20px;">
+		<hr style="width: 99%;">
 
 		<div style="float: left; margin-left: 10px;">
 			<table style="width: 250px; margin-left: auto; margin-right: auto; margin-top: 20px;">
@@ -105,7 +105,7 @@ $pkgcount = mysqli_num_rows($pkgquery);
 			</table>
 		</div>
 
-		<div class="module-content" style="padding: 0 1px 1px 0; width: 800px; margin-left: auto; margin-right: auto; margin-top: 40px;">
+		<div class="module-content" style="padding: 0 1px 1px 0; width: 700px; margin-left: auto; margin-right: auto; margin-top: 30px;">
 			<div class="tabbar tabbarback">
 				<button type="button" class="tabbaritem tabbutton tablink tabbarsel" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Linux')">Linux</button>
 				<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'macOS')">macOS</button>
