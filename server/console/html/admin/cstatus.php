@@ -23,15 +23,15 @@
 
 	<div class="module-content" style="width: 21%; float: right; font-size: 13px;">
 	<p>
-		<b><input type="checkbox" id="checkinfilter" onclick="checkinform()"> Show systems that have checked in within:</b><br>
-		<input id="intnum" type="text" style="font-size: 15px; padding: 5px; margin-top: 3px; width: 20px;" value="1" maxlength="2" disabled="disabled">
-		<select name="filterint" id="filterint" style="font-size: 15px; height: 30px; margin-left: 2px;" disabled="disabled">
+		<b><input type="checkbox" id="checkinfilter" checked onclick="checkinform()"> Show systems that have checked in within:</b><br>
+		<input id="intnum" type="text" style="font-size: 15px; padding: 5px; margin-top: 3px; width: 20px;" value="1" maxlength="2">
+		<select name="filterint" id="filterint" style="font-size: 15px; height: 30px; margin-left: 2px;">
 			 <option value="reg">Registration Interval</option>
 			 <option value="minutes">Minute(s)</option>
 			 <option value="hours">Hour(s)</option>
 			 <option value="days">Day(s)</option>
 		</select>
-		<button id="fapply" class="formgo" style="margin-top: 5px; margin-right: 0; margin-left: 1px; height: 30px; padding-top: 5px;" disabled="disabled">Apply</button>
+		<button id="fapply" class="formgo" style="margin-top: 5px; margin-right: 0; margin-left: 1px; height: 30px; padding-top: 5px;">Apply</button>
 	</p>
 
 	<p style="margin-top: 20px;">
@@ -61,7 +61,7 @@ var cstatusConfig = {
 	columns: [
 		{ type: 'checkbox', width: '15px', inputClass: 'client', idPrefix: 'ID',
 		  header: '<input id="selectall" type="checkbox">' },
-		{ key: 'hostname', label: 'Hostname' },
+		{ key: 'hostname', label: 'Computer Name' },
 		{ key: 'ip', label: 'IP Address', width: '125px' },
 		{ key: 'platform', label: 'Platform', width: '50px', align: 'center',
 		  render: function (row) {
@@ -71,7 +71,7 @@ var cstatusConfig = {
 		{ key: 'clientver', label: 'Client Version', width: '120px' },
 		{ key: 'state', label: 'Status', width: '60px', align: 'center', padTop: '7px',
 		  render: function (row) {
-			var icon = row.state === 'OK' ? 'sysgreen.png' : (row.state === 'WARN' ? 'sysyellow.png' : 'sysred.png');
+			var icon = row.state === 'OK' ? 'sysgreen.png' : (row.state === 'WARN' ? 'sysyellow.png' : (row.state === 'OFFLINE' ? 'sysgray.png' : 'sysred.png'));
 			return '<img src="/icons/' + icon + '" title="' + LuminumTable.escapeHTML(row.state) + '">';
 		  } },
 		{ key: 'lastseen', label: 'Last Check-In', width: '175px' }
@@ -156,6 +156,12 @@ function checkinform() {
 	['intnum', 'filterint', 'fapply'].forEach(function (id) {
 		document.getElementById(id).disabled = on ? false : 'disabled';
 	});
+	if (on) {
+		document.getElementById('intnum').value = '1';
+		document.getElementById('filterint').value = 'reg';
+	} else {
+		document.getElementById('intnum').value = '';
+	}
 }
 
 // --- render the static header (contains the select-all checkbox) ----------
