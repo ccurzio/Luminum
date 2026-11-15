@@ -205,7 +205,7 @@ $ienabled = $invinfo["CVAL"];
 		</div>
 	</div>
 	<div class="user-menu" style="height: 100%;">
-		<button class="user-button" style="width: 175px; padding-bottom: 15px;"><?php print $_SESSION["NAME"]; ?> <span style="margin-left: 2px; font-size: 18px;">▾</span></button>
+		<button class="user-button" style="padding-bottom: 15px;"><?php print $_SESSION["NAME"]; ?> <span style="margin-left: 2px; font-size: 18px;">▾</span></button>
 		<div class="user-dropdown">
 			<a href="/user.php">Account</a>
 			<a href="/user.php?view=prefs">Preferences</a>
