@@ -23,7 +23,9 @@ body h1 {
 	background-color: #333;
 	padding: 10px 20px;
 	position: fixed;
-	width: 100%;
+	/* content-box: subtract the horizontal padding so the bar spans the
+	   viewport exactly (width: 100% alone would overflow 40px to the right) */
+	width: calc(100% - 40px);
 	top: 0;
 	left: 0;
 	height: 45px;
