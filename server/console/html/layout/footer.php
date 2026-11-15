@@ -1,5 +1,10 @@
 <div class="footer">
-<div style="padding-bottom: 10px;"><b>Session Start:</b> <?php print $_SESSION['START']; ?></div><div class="nav-text-right" style="padding-bottom: 10px; color: white; font-size: 15px;"><b>System Health:</b> <a href="/maintenance.php?view=diagnostics"><img style="vertical-align: text-bottom; width: 18px; height: 18px;" src="icons/sysgreen.png"></a></div>
+<!-- TEMP test hook: clicking the session start time forces the 2-minute
+     logout warning so it can be inspected on demand. onActivity is
+     neutralized first because any activity (including the mousedown that
+     would click the warning's own buttons) dismisses it. Remove after
+     testing. -->
+<div style="padding-bottom: 10px;"><b>Session Start:</b> <span style="cursor: pointer; text-decoration: underline dotted;" title="TEST: force the logout warning" onclick="LuminumSession.onActivity = function () {}; LuminumSession.showWarning();"><?php print $_SESSION['START']; ?></span></div><div class="nav-text-right" style="padding-bottom: 10px; color: white; font-size: 15px;"><b>System Health:</b> <a href="/maintenance.php?view=diagnostics"><img style="vertical-align: text-bottom; width: 18px; height: 18px;" src="icons/sysgreen.png"></a></div>
 </div>
 
 <script>
