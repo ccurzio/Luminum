@@ -1802,7 +1802,9 @@ fn clientimport(path: &str, debug: bool) {
 fn get_os_release() -> String {
 	// The server validates osrel against ^[A-Za-z0-9\s\.\-]+$ (protocol
 	// 6.1), so strip anything outside that set. sw_vers -productVersion
-	// yields e.g. "15.2"; report it as "macOS 15.2".
+	// yields e.g. "15.2"; report it as "macOS Sequoia 15.2", inserting the
+	// marketing name for known major versions (unlisted majors report
+	// without a name).
 	let out = Command::new("sw_vers")
 		.arg("-productVersion")
 		.output();
@@ -1819,7 +1821,21 @@ fn get_os_release() -> String {
 			if version.is_empty() {
 				String::from("macOS")
 			} else {
-				format!("macOS {}", version)
+				let major = version.split('.').next().and_then(|m| m.parse::<u32>().ok());
+				let name = match major {
+					Some(12) => "Monterey",
+					Some(13) => "Ventura",
+					Some(14) => "Sonoma",
+					Some(15) => "Sequoia",
+					Some(26) => "Tahoe",
+					Some(27) => "Golden Gate",
+					_ => "",
+				};
+				if name.is_empty() {
+					format!("macOS {}", version)
+				} else {
+					format!("macOS {} {}", name, version)
+				}
 			}
 		}
 		_ => String::from("macOS"),
