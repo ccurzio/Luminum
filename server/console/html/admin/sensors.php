@@ -113,7 +113,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 				print "<option value=\"" . $csrow["ID"] . "\">" . $csrow["NAME"] . "</option>\n";
 				}
 			?>
-		</select> Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($sensorcount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
+		</select> Filter: <input type="text" id="sensorsfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($sensorcount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
 		<tr><td style="width: 15px;">
 		<?php
 			if ($sensorcount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
@@ -537,7 +537,10 @@ formCheck();
 	<?php endif; ?>
 <?php endif; ?>
 
+<script src="layout/table.js"></script>
 <script>
+LuminumTable.attachTextFilter('sensorsfilter');
+
 function rowHighlight(idnum) {
 	var checkbox = document.getElementById("ID" + idnum);
 	const checkboxes = document.querySelectorAll('input[class="sensorrow"]');

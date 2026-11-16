@@ -37,7 +37,7 @@ $pkgcount = mysqli_num_rows($pkgquery);
 				print "<option value=\"" . $csrow["ID"] . "\">" . $csrow["NAME"] . "</option>\n";
 				}
 			?>
-		</select> Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($pkgcount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
+		</select> Filter: <input type="text" id="packagesfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($pkgcount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
 		<tr><td style="width: 15px;">
 		<?php
 			if ($pkgcount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
@@ -58,6 +58,11 @@ $pkgcount = mysqli_num_rows($pkgquery);
 		<tr style="height: 35px;"><td colspan="10"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;"><i>Query Completed in <?php print $duration; ?> Seconds</i></div></td></tr>
 		</table>
 	</div>
+
+<script src="layout/table.js"></script>
+<script>
+LuminumTable.attachTextFilter('packagesfilter');
+</script>
 
 	<?php elseif ($_GET["action"] == "new"): ?>
 

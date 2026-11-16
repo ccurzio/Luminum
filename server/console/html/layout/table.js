@@ -153,6 +153,61 @@
 		};
 	}
 
+	// Attach a live text filter to a server-rendered table (the console pages
+	// that print their rows in PHP instead of rendering them client-side). As
+	// the user types, data rows whose visible text does not contain the
+	// case-insensitive filter string are hidden, and a "No Results" row is
+	// shown when every data row is filtered out — the same behaviour as the
+	// Client Status page's filter.
+	//
+	//   filterId - id of the <input> to listen on; its enclosing <table> is the
+	//              table that gets filtered.
+	//
+	// Data rows are the <tr> elements that contain a row checkbox
+	// (input[id^="ID"]); the header, counter and footer rows do not. When the
+	// table has data rows but no "No Results" row in the markup, one is created
+	// (hidden) and toggled as the filter changes.
+	function attachTextFilter(filterId) {
+		var filterEl = document.getElementById(filterId);
+		if (!filterEl) { return; }
+		var tableEl = filterEl.closest('table');
+		if (!tableEl) { return; }
+
+		var rows = Array.prototype.filter.call(tableEl.querySelectorAll('tr'), function (tr) {
+			return !!tr.querySelector('input[id^="ID"]');
+		});
+
+		var emptyRow = tableEl.querySelector('tr[data-luminum-empty]');
+		if (!emptyRow && rows.length) {
+			emptyRow = document.createElement('tr');
+			emptyRow.setAttribute('data-luminum-empty', '');
+			emptyRow.style.display = 'none';
+			var td = document.createElement('td');
+			td.colSpan = rows[0].querySelectorAll('td').length;
+			td.setAttribute('style', 'text-align: center; background-color: ' + ROW_BASE + '; font-weight: normal; font-style: italic;');
+			td.textContent = 'No Results';
+			emptyRow.appendChild(td);
+			rows[rows.length - 1].parentNode.insertBefore(emptyRow, rows[rows.length - 1].nextSibling);
+		}
+		var emptyRowDefault = emptyRow ? emptyRow.style.display : '';
+
+		function apply() {
+			var text = (filterEl.value || '').toLowerCase();
+			var visible = 0;
+			rows.forEach(function (tr) {
+				var match = text === '' || tr.textContent.toLowerCase().indexOf(text) !== -1;
+				tr.style.display = match ? '' : 'none';
+				if (match) { visible++; }
+			});
+			if (emptyRow) {
+				emptyRow.style.display = (text === '') ? emptyRowDefault : (visible === 0 ? '' : 'none');
+			}
+		}
+
+		filterEl.addEventListener('input', apply);
+		apply();
+	}
+
 	return {
 		ROW_BASE: ROW_BASE,
 		ROW_SELECTED: ROW_SELECTED,
@@ -162,6 +217,7 @@
 		rowsHTML: rowsHTML,
 		filterRows: filterRows,
 		render: render,
-		poll: poll
+		poll: poll,
+		attachTextFilter: attachTextFilter
 	};
 }));

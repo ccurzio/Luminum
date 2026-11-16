@@ -15,7 +15,7 @@ $actioncount = 0;
 			<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Get Info</button>
 		</div>
 		<table id="satable" style="margin-top: 10px;">
-		<tr><td colspan="10"><div style="position: absolute; padding-top: 5px; padding-left: 5px;">0 of 0 items <img id="refresh" src="icons/refresh.png" style="cursor: pointer; margin-left: 10px; width: 15px; height: 15px; vertical-align: top;" onclick="reloadTable()"></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($actioncount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
+		<tr><td colspan="10"><div style="position: absolute; padding-top: 5px; padding-left: 5px;">0 of 0 items <img id="refresh" src="icons/refresh.png" style="cursor: pointer; margin-left: 10px; width: 15px; height: 15px; vertical-align: top;" onclick="reloadTable()"></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="actionsfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($actioncount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
 		<tr><td style="width: 15px;">
 		<?php
 		if ($actioncount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
@@ -27,7 +27,10 @@ $actioncount = 0;
 		</table>
 	</div>
 
+<script src="layout/table.js"></script>
 <script>
+LuminumTable.attachTextFilter('actionsfilter');
+
 function reloadTable() {
 	var refreshButton = document.getElementById("refresh");
 	if (refreshButton.className != "refresh") {

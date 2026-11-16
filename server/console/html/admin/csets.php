@@ -28,7 +28,7 @@ $cscount = mysqli_num_rows($csquery);
                 ?>
 		<table style="margin-top: 10px;">
 		<tr><td colspan="10"><div style="position: absolute; padding-top: 7px; padding-left: 5px;"><span id="selcount">0</span> <span id="totcount">of <?php print $cscount; ?></span> items</div>
-		<div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($cscount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
+		<div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="csetsfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($cscount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
 		<tr><td style="width: 15px;">
 		<?php
 			if ($cscount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
@@ -50,7 +50,10 @@ $cscount = mysqli_num_rows($csquery);
 		</table>
 	</div>
 
+<script src="layout/table.js"></script>
 <script>
+LuminumTable.attachTextFilter('csetsfilter');
+
 function rowHighlight(idnum) {
 	var checkBox = document.getElementById("ID" + idnum);
 	const checkboxes = document.querySelectorAll('input[class="contentset"]');
