@@ -15,6 +15,9 @@
 #     and the per-sensor result is stored in QUERYRESULTS
 #   - an unanswered query is marked TIMEDOUT at its deadline (not republished)
 #   - the offline LWT on client death flips STATUS.CSTATE to OFFLINE
+#   - the startup missing-client sweep (protocol 7.5) marks a stale offline
+#     client MISSING per MISSINGAFTER, skips deactivated and recently-seen
+#     clients, and a live check-in clears the flag again
 #
 # Unlike tests/mqtt_client_test.sh (which stands in for the server with
 # mosquitto_pub), this test exercises the actual worker: it signs commands
@@ -187,15 +190,28 @@ create table QUERYRESULTS (
   primary key (ID),
   key IDX_QUERYRESULTS_QID (QID)
 ) engine=InnoDB default charset=utf8mb4;
+create table CONFIG (
+  CKEY tinytext not null,
+  CVAL tinytext not null
+) engine=InnoDB default charset=utf8mb4;
+insert into CONFIG (CKEY,CVAL) values ('MISSINGAFTER','90');
 SQL
 [ $? -eq 0 ] || { echo "SKIP - could not create the scratch database"; exit 0; }
 
 # Seed a registered client (UID 42) + a group. MQTTSECRET stores the SHA-256
 # hash (as the broker does); the client and mosquitto use the raw secret.
+# UID 42 is seeded MISSING=1: its first live check-in must clear the flag
+# (protocol 7.5). The sweep scenario rows (MISSINGAFTER=90 above): 44 is
+# offline and last seen years ago (must be swept), 45 is deactivated and
+# stale (must NOT be swept - it left by choice), 46 is offline but seen 10
+# days ago (within the window, must NOT be swept).
 SECHASH=$(printf '%s' "$CLIENT_SECRET" | sha256sum | cut -d' ' -f1)
 dbq "insert into AUTH (ID,NAME,FINGERPRINT,PUBKEY,MQTTSECRET) values ($UID_TEST,'worker-test','deadbeef','$SRVPUB_B64','$SECHASH');"
 dbq "insert into GROUPS (ID,NAME,AUTHOR,CREATED) values (1,'$GROUP',1,now());"
-dbq "insert into STATUS (ID,HOSTNAME,IPV4,OSPLATFORM,OSRELEASE,CLIENTVER,CSTATE,INGROUPS,REGDATE,LASTSEEN) values ($UID_TEST,'sentinel-host','127.0.0.1','Linux','6.1','0.0.1','OK','$GROUP',now(),'1970-01-01 00:00:00');"
+dbq "insert into STATUS (ID,HOSTNAME,IPV4,OSPLATFORM,OSRELEASE,CLIENTVER,CSTATE,INGROUPS,REGDATE,LASTSEEN,MISSING) values ($UID_TEST,'sentinel-host','127.0.0.1','Linux','6.1','0.0.1','OK','$GROUP',now(),'1970-01-01 00:00:00',1);"
+dbq "insert into STATUS (ID,HOSTNAME,IPV4,OSPLATFORM,OSRELEASE,CLIENTVER,CSTATE,REGDATE,LASTSEEN) values (44,'stale-host','127.0.0.1','Linux','6.1','0.0.1','OFFLINE',now(),'2020-01-01 00:00:00');"
+dbq "insert into STATUS (ID,HOSTNAME,IPV4,OSPLATFORM,OSRELEASE,CLIENTVER,CSTATE,REGDATE,LASTSEEN) values (45,'deact-host','127.0.0.1','Linux','6.1','0.0.1','DEACT',now(),'2020-01-01 00:00:00');"
+dbq "insert into STATUS (ID,HOSTNAME,IPV4,OSPLATFORM,OSRELEASE,CLIENTVER,CSTATE,REGDATE,LASTSEEN) values (46,'recent-host','127.0.0.1','Linux','6.1','0.0.1','OFFLINE',now(),date_sub(now(), interval 10 day));"
 
 # --- ACL file: generated from the DB by regen_acl ----------------------------
 PERL5LIB="$PERL_LIBS" perl -e '
@@ -277,12 +293,13 @@ cp "$CERTDIR/ca.pem" "$HOME_TEST/config/server.crt"
 cat > "$SCRATCH/worker.pl" <<'EOF'
 use strict; use warnings;
 use Luminum::MQTT;
-my ($seedfile, $sid, $host, $port, $ca, $user, $secret, $dbname, $dbsock, $cmdtimeout, $depltimeout) = @ARGV;
+my ($seedfile, $sid, $host, $port, $ca, $user, $secret, $dbname, $dbsock, $cmdtimeout, $depltimeout, $sysdb) = @ARGV;
 open(my $sf, "<", $seedfile) or die "seed: $!"; binmode($sf); read($sf, my $seed, 32); close($sf);
 Luminum::MQTT::worker(
     sid => $sid, host => $host, port => $port, ca => $ca,
     user => $user, secret => $secret, seed => $seed,
     dbname => $dbname, dbuser => "root", dbpass => "", dbsock => $dbsock,
+    sysdb_name => $sysdb,
     poll_secs => 1,
     cmd_timeout => $cmdtimeout, depl_timeout => $depltimeout,
     log => sub { print "[worker] $_[0]\n"; },
@@ -291,7 +308,7 @@ EOF
 
 PERL5LIB="$PERL_LIBS" perl "$SCRATCH/worker.pl" \
     "$CERTDIR/srv.seed" "$SID" 127.0.0.1 "$PORT" "$CERTDIR/ca.pem" \
-    "$SERVER_USER" "$SERVER_SECRET" "$DBNAME" "$DBSOCK" 5 30 \
+    "$SERVER_USER" "$SERVER_SECRET" "$DBNAME" "$DBSOCK" 5 30 "$DBNAME" \
     > "$SCRATCH/worker.log" 2>&1 &
 WORKER_PID=$!
 sleep 1
@@ -313,6 +330,22 @@ done
 check "check-in updated STATUS.HOSTNAME (no longer sentinel)" "$HOSTNAME_OK" "see $SCRATCH/worker.log"
 CSTATE=$(dbq "select CSTATE from STATUS where ID=$UID_TEST;")
 check "check-in set STATUS.CSTATE=OK" "$([ "$CSTATE" = "OK" ]; echo $?)" "got: $CSTATE"
+
+# --- missing-client sweep (protocol 7.5) -------------------------------------
+# The worker ran the sweep at startup against MISSINGAFTER=90: the stale
+# offline client (44) is marked missing, the deactivated client (45) and the
+# recently-seen client (46) are not, and the live client's check-in cleared
+# the MISSING flag it was seeded with.
+SWEEP_OK=1
+for i in $(seq 1 20); do
+    m44=$(dbq "select MISSING from STATUS where ID=44;")
+    [ "$m44" = "1" ] && { SWEEP_OK=0; break; }
+    sleep 0.5
+done
+check "sweep: stale offline client marked MISSING" "$SWEEP_OK" "missing: $(dbq "select MISSING from STATUS where ID=44;")"
+check "sweep: deactivated client not marked MISSING" $([ "$(dbq "select MISSING from STATUS where ID=45;")" = "0" ]; echo $?) "missing: $(dbq "select MISSING from STATUS where ID=45;")"
+check "sweep: recently-seen client not marked MISSING" $([ "$(dbq "select MISSING from STATUS where ID=46;")" = "0" ]; echo $?) "missing: $(dbq "select MISSING from STATUS where ID=46;")"
+check "check-in cleared the seeded MISSING flag on the live client" $([ "$(dbq "select MISSING from STATUS where ID=$UID_TEST;")" = "0" ]; echo $?) "missing: $(dbq "select MISSING from STATUS where ID=$UID_TEST;")"
 
 # --- outbox command round trip (per-UID target) ------------------------------
 # Insert a PENDING command; the worker publishes it, the client verifies the

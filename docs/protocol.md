@@ -358,11 +358,12 @@ Server                          Client
 
 Same shape as query/answer with `deploy`/`report`. Package bytes travel via the data channel reference pattern (§8.3); the `deploy` command carries only the reference and metadata.
 
-### 7.5 Offline detection (LWT)
+### 7.5 Offline detection (LWT) and missing clients
 
 - The client's will message is a **pre-signed** `status: "offline"` envelope, retained, on the `status` topic.
 - On abnormal disconnect the MQTT broker publishes the will ⇒ server marks the client offline immediately (UI `CSTATE` update, `LASTSEEN` preserved).
-- `MISSINGAFTER` (days) still governs the *missing* classification; LWT only provides promptness.
+- `MISSINGAFTER` (days, `SYSTEM.CONFIG`, default 90) governs the *missing* classification; LWT only provides promptness. The MQTT worker runs a sweep once at startup and then hourly: any client whose `LASTSEEN` is older than `MISSINGAFTER` days gets `STATUS.MISSING = 1`, moving it from the Client Status list to the Missing Clients list. Deactivated clients (`CSTATE = 'DEACT'`) are excluded — they left by choice, not by going dark. `MISSINGAFTER` is read live, so an admin change takes effect on the next sweep without a restart.
+- A live check-in (MQTT status or bootstrap channel) clears `STATUS.MISSING = 0`, so a client that was swept missing and later comes back returns to the live list without any console action.
 - The client MUST update (re-set) its will on every reconnect. A retained `offline` status from a stale will is corrected by the first post-connect check-in (retained overwrite).
 
 ---

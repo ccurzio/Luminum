@@ -1104,11 +1104,14 @@ sub checkin {
 	if ($EPID =~ /^[0-9]+$/) {
 		my $dbh = dbconnect("CLIENTS");
 		my $sth;
+		# A live check-in also clears the missing flag (protocol 7.5), so a
+		# client swept into the Missing Clients list that comes back returns
+		# to the live list without any console action.
 		if (defined $ipv4) {
-			$sth = $dbh->prepare("update STATUS set HOSTNAME = '$EPNAME', IPV4 = '$ipv4', OSPLATFORM = '$osplat', OSRELEASE = '$osrel', CLIENTVER = '$clientver', CSTATE = 'OK', LASTSEEN = now() where ID = $EPID");
+			$sth = $dbh->prepare("update STATUS set HOSTNAME = '$EPNAME', IPV4 = '$ipv4', OSPLATFORM = '$osplat', OSRELEASE = '$osrel', CLIENTVER = '$clientver', CSTATE = 'OK', LASTSEEN = now(), MISSING = 0 where ID = $EPID");
 			}
 		else {
-			$sth = $dbh->prepare("update STATUS set HOSTNAME = '$EPNAME', OSPLATFORM = '$osplat', OSRELEASE = '$osrel', CLIENTVER = '$clientver', CSTATE = 'OK', LASTSEEN = now() where ID = $EPID");
+			$sth = $dbh->prepare("update STATUS set HOSTNAME = '$EPNAME', OSPLATFORM = '$osplat', OSRELEASE = '$osrel', CLIENTVER = '$clientver', CSTATE = 'OK', LASTSEEN = now(), MISSING = 0 where ID = $EPID");
 			}
 		$sth->execute();
 		Broker::debugout(0,"Received check-in from client on $EPADDR (ID $EPID)");

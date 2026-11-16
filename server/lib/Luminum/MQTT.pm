@@ -261,7 +261,10 @@ sub _on_status {
 	}
 	else {
 		my $data = (ref($env->{data}) eq "HASH") ? $env->{data} : {};
-		my $sth = $dbh->prepare("update STATUS set HOSTNAME = ?, IPV4 = ?, OSPLATFORM = ?, OSRELEASE = ?, CLIENTVER = ?, CSTATE = 'OK', LASTSEEN = now() where ID = ?");
+		# A live check-in also clears the missing flag (protocol 7.5): a
+		# client that was swept into the Missing Clients list and comes back
+		# returns to the live list without any console action.
+		my $sth = $dbh->prepare("update STATUS set HOSTNAME = ?, IPV4 = ?, OSPLATFORM = ?, OSRELEASE = ?, CLIENTVER = ?, CSTATE = 'OK', LASTSEEN = now(), MISSING = 0 where ID = ?");
 		$sth->execute($data->{hostname} // "", $data->{ipv4} // "", $data->{osplat} // "", $data->{osrel} // "", $data->{clientver} // "", $uid)
 			or do { $log->("status: update failed for UID $uid: " . $dbh->errstr); return; };
 		$log->("status: UID $uid OK");
@@ -302,6 +305,29 @@ sub _checkin_secs {
 	my $val = $row[0];
 	return undef unless defined $val && $val =~ /^[0-9]+$/ && $val > 0;
 	return $val * 60;
+}
+
+# Missing-client sweep (protocol 7.5): mark clients whose LASTSEEN is older
+# than MISSINGAFTER days (SYSTEM.CONFIG, read live so an admin change takes
+# effect on the next sweep) as MISSING, moving them from the Client Status
+# list to the Missing Clients list. Deactivated clients (CSTATE = 'DEACT')
+# are excluded - they left by choice, not by going dark. A live check-in
+# clears the flag again, so a recovered client returns to the live list on
+# its own. Runs once at worker startup and then hourly.
+sub _sweep_missing {
+	my ($db, $sysdb, $log) = @_;
+	my $sysdbh = eval { _dbh($sysdb) };
+	return if $@;
+	my @row = eval { $sysdbh->selectrow_array("select CVAL from CONFIG where CKEY = 'MISSINGAFTER'") };
+	return if $@;
+	my $days = $row[0];
+	return unless defined $days && $days =~ /^[0-9]+$/ && $days > 0;
+	my $dbh = _dbh($db);
+	my $n = $dbh->do("update STATUS set MISSING = 1 where MISSING = 0 and CSTATE != 'DEACT' and LASTSEEN is not null and LASTSEEN < date_sub(now(), interval $days day)")
+		or do { $log->("missing: sweep update failed: " . $dbh->errstr); return; };
+	if ($n && $n != -1) {
+		$log->("missing: marked $n client(s) missing (no check-in for $days day(s))");
+	}
 }
 
 # Handle a response (resp) message. An answer to a query is correlated by
@@ -452,6 +478,9 @@ sub _ensure_schema {
 # Config keys:
 #   sid, host, port, ca, user, secret, seed   - MQTT connection + signing
 #   dbname, dbuser, dbpass, dbsock, dbhost    - database connection
+#   sysdb_name                                - SYSTEM database name (default
+#                                               "SYSTEM"; the server config the
+#                                               worker reads live)
 #   poll_secs                                 - outbox poll interval (default 1)
 #   cmd_timeout, depl_timeout                 - command deadlines in seconds
 #                                               (protocol 9.3; defaults 120/3600)
@@ -463,11 +492,12 @@ sub worker {
 		params => { dbname => $a{dbname}, dbuser => $a{dbuser}, dbpass => $a{dbpass}, dbsock => $a{dbsock}, dbhost => $a{dbhost} },
 		h => undef,
 	};
-	# The SYSTEM database holds CHECKININT (protocol 7.2); the worker reads it
-	# live so an admin change propagates on the next check-in without a broker
-	# restart. Same credentials/socket as the CLIENTS database.
+	# The SYSTEM database holds CHECKININT (protocol 7.2) and MISSINGAFTER
+	# (protocol 7.5); the worker reads them live so an admin change propagates
+	# on the next check-in / sweep without a broker restart. Same
+	# credentials/socket as the CLIENTS database.
 	my $sysdb = {
-		params => { dbname => "SYSTEM", dbuser => $a{dbuser}, dbpass => $a{dbpass}, dbsock => $a{dbsock}, dbhost => $a{dbhost} },
+		params => { dbname => ($a{sysdb_name} // "SYSTEM"), dbuser => $a{dbuser}, dbpass => $a{dbpass}, dbsock => $a{dbsock}, dbhost => $a{dbhost} },
 		h => undef,
 	};
 	my $cmd_timeout = ($a{cmd_timeout} && $a{cmd_timeout} =~ /^[0-9]+$/) ? $a{cmd_timeout} : 120;
@@ -483,6 +513,10 @@ sub worker {
 
 	my $schema_ok = 0;
 	my $last = 0;
+	# The missing-client sweep (protocol 7.5) runs hourly; the zero start
+	# value makes the first sweep happen at startup, so clients that went
+	# dark while the server was down are caught as soon as it comes back.
+	my $last_sweep = 0;
 	while (1) {
 		eval {
 			$m->tick(0.25);
@@ -490,6 +524,10 @@ sub worker {
 			if (time() - $last >= ($a{poll_secs} // 1)) {
 				$last = time();
 				_pump_outbox($db, $m, $a{sid}, $a{seed}, $cmd_timeout, $depl_timeout, $log);
+			}
+			if (time() - $last_sweep >= 3600) {
+				$last_sweep = time();
+				_sweep_missing($db, $sysdb, $log);
 			}
 			1;
 		} or do { $log->("worker: " . $@); sleep 2; };
