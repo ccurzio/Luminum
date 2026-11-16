@@ -666,8 +666,16 @@ fn server_send(server_host: &str, server_port: &str, cert_path: &str, message: &
 // Registration / check-in
 // ---------------------------------------------------------------------------
 
+// The endpoint name reported to the server: the system hostname with a
+// trailing ".local" (Bonjour/mDNS) suffix removed, since macOS commonly
+// reports the full mDNS name (e.g. "MyMac.local").
+fn endpoint_name() -> String {
+	let name = gethostname().to_string_lossy().into_owned();
+	name.strip_suffix(".local").map(str::to_string).unwrap_or(name)
+}
+
 fn register_with_server(debug: bool, ccfg: &HashMap<String, String>) {
-	let endpointname = gethostname().to_string_lossy().into_owned();
+	let endpointname = endpoint_name();
 	let ip_address = local_ip().map(|a| a.to_string()).unwrap_or_default();
 	let (seed, pubb) = client_keypair(debug, ccfg);
 
@@ -1052,7 +1060,7 @@ fn checkin_secs(ccfg: &HashMap<String, String>) -> u64 {
 // client is currently using (seconds); the server compares it with its own
 // CHECKININT and pushes a correction when they differ (protocol §7.2).
 fn build_checkin(uid: &str, seed: &[u8; 32], checkin: u64) -> Vec<u8> {
-	let endpointname = gethostname().to_string_lossy().into_owned();
+	let endpointname = endpoint_name();
 	let ip_address = local_ip().map(|a| a.to_string()).unwrap_or_default();
 	let data = serde_json::json!({
 		"hostname": endpointname,
@@ -1378,7 +1386,7 @@ fn handle_ipc(stream: TcpStream, debug: bool) -> Result<(), Box<dyn Error>> {
 		(_, "newconfig") => {
 			dbout(debug, 4, &format!("Received newconfig request from {} Lumy", env.lumy));
 			let data = serde_json::json!({
-				"hostname": gethostname().to_string_lossy().into_owned(),
+				"hostname": endpoint_name(),
 				"uid": uid
 			});
 			let mut req = new_envelope("client", &uid, &env.lumy.to_lowercase(), "newconfig", "new", Some(data));
