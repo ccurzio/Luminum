@@ -519,8 +519,8 @@ check "anonymous POST inserted nothing" \
 code=$(curl -k -s -o "$RUN/query.html" -w '%{http_code}' -b "$RUN/cookies" \
     "https://127.0.0.1:$WPORT/modules.php?view=query")
 check "console: query page renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
-check "console: query page offers the sensor dropdowns" \
-    $(grep -q "sensor-select" "$RUN/query.html" 2>/dev/null \
+check "console: query page offers the sensor fields and catalog" \
+    $(grep -q 'placeholder="Sensor"' "$RUN/query.html" 2>/dev/null \
         && grep -q "Deploy Test Sensor" "$RUN/query.html" 2>/dev/null; echo $?)
 
 SENSOR_Q=$(dbq "select ID from CONTENT.SENSORS where NAME='Deploy Test Sensor';")
