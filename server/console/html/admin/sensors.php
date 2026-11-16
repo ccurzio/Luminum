@@ -106,7 +106,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 		print "</div>\n";
 		?>
 		<table style="margin-top: 10px;">
-		<tr><td colspan="8"><div style="position: absolute; padding-top: 7px; padding-left: 5px;">0 of 0 items</div><div style="float: right; text-align: right; padding-right: 5px;">Content Set: <select id="contentset" name="contentset" style="margin-left: 2px; margin-right: 30px; margin-top: 2px; width: 170px; height: 28px;" <?php if ($sensorcount == 0) { print "disabled=\"disabled\""; } ?>>
+		<tr><td colspan="8"><div style="position: absolute; padding-top: 7px; padding-left: 5px;"><span id="selcount">0</span> <span id="totcount">of <?php print $sensorcount; ?></span> items</div><div style="float: right; text-align: right; padding-right: 5px;">Content Set: <select id="contentset" name="contentset" style="margin-left: 2px; margin-right: 30px; margin-top: 2px; width: 170px; height: 28px;" <?php if ($sensorcount == 0) { print "disabled=\"disabled\""; } ?>>
 			<option value="all">All</option>
 			<?php
 			while ($csrow = mysqli_fetch_assoc($csets)) {
@@ -595,6 +595,7 @@ function allToggle() {
 		var rowId = removeLetters(checkbox.id);
 		rowHighlight(rowId);
 		});
+	allCheck();
 	}
 
 function allCheck() {
@@ -604,6 +605,8 @@ function allCheck() {
 	checkboxes.forEach(checkbox => {
 		if (checkbox.checked == true) { checkTrigger++; }
 		});
+
+	document.getElementById("selcount").textContent = checkTrigger;
 
 	if (checkTrigger == checkboxes.length) {
 		document.getElementById("selectall").checked = "checked";
