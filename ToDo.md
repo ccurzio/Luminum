@@ -2,7 +2,7 @@
 In order to be accountable to the community - but more importantly to myself - I figured it would be a good idea to create a to-do list for the project as a quick reference for what's being worked on, what's been accomplished, and what still needs doing. 
 
 ## Server Installation
-  
+
 ### First-Run Setup
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
@@ -273,7 +273,7 @@ TBD
 ### Command-Line Tools
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-| --     |Not Started    |Configuration Tool          |Set server configuration parameters from the command line                               |
+|&#10003;|**Completed**  |Configuration Tool          |Set server configuration parameters from the command line                               |
 | --     |Not Started    |Query Builder               |Create queries and get answers from the server command line                             |
 | --     |Not Started    |Package Delivery            |Deploy packages to endpoints from the server command line                               |
 
@@ -282,7 +282,9 @@ TBD
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 | --     |Not Started    |Processor                   |Luminum API Core                                                                        |
+| --     |Not Started    |API Keys                    |Functions to create API Keys                                                            |
 | --     |Not Started    |Comms Syntax                |Structures for sending and receiving data via Luminum API                               |
+| --     |Not Started    |Permissions                 |Structure to define permissions for API Keys                                            |
 
 
 ### Investigate
@@ -291,9 +293,10 @@ TBD
 | --     |Not Started    |Network Quarantine Action   |Routines to isolate endpoints from the larger network                                   |
 | --     |Not Started    |User Lockout Action         |Routines to lock users out of endpoints for forensics analysis                          |
 | --     |Not Started    |IoC Integration             |Implementation for importing YAML to scan and detect for IoCs                           |
-| --     |Not Started    |Real-Time Shell             |Manages connections to specified endpoints offering remote shell access                 |
+| --     |Not Started    |Real-Time Shell (Full)      |Offers full system-level remote shell access to endpoints                               |
+| --     |Not Started    |Real-Time Shell (Limited)   |Offers a limited logged remote shell on endpoints                                       |
 
-  
+
 ### Content
 
 <ul>
@@ -313,7 +316,7 @@ TBD
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#10003;|**Completed**  |Database Sensor Storage     |Create structure for storing sensors in the database                                    |
-| --     |Not Started    |Sensor Management           |Routines for adding/modifying/deleting sensors                                          |
+|&#9654; |*In Progress*  |Sensor Management           |Routines for adding/modifying/deleting sensors                                          |
 | --     |Not Started    |Revision Control            |Routines to manage and view previous versions of sensors                                |
 </li>
 
@@ -347,7 +350,7 @@ TBD
 #### Discovery
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-|&#9654; |*In Progress*  |Include File                |Create module include for broker process to attach the Discovery Lumy                   |
+| --     |Not Started    |Include File                |Create module include for broker process to attach the Discovery Lumy                   |
 | --     |Not Started    |Database Structure          |Create and grant permissions to Discovery-specific databases and tables                 |
 | --     |Not Started    |Profiles                    |Establish configuration profiles for Discovery deployments                              |
 </li>
@@ -408,7 +411,7 @@ TBD
 |&#9654; |*In Progress*  |Include Architecture        |Rebuild include system for user interface code block elements                           |
 |&#10003;|**Completed**  |Console Header              |Dynamic UI header with logo and dropdown menus                                          |
 |&#10003;|**Completed**  |Console Footer              |Dynamic UI footer with session and system information                                   |
-| --     |Not Started    |Table Generation Functions  |Functions to automatically generate HTML tables on-demand                               |
+|&#9654; |*In Progress*  |Table Generation Functions  |Functions to automatically generate HTML tables on-demand                               |
 | --     |Not Started    |Form Generation Functions   |Functions to automatically generate HTML forms on-demand                                |
 | --     |Not Started    |Element Generation Functions|Functions to automatically generate HTML elements on-demand                             |
 |&#10003;|**Completed**  |Invalid Input Highlight     |Create stylesheet definitions highlighting fields with invalid values                   |
@@ -456,7 +459,7 @@ TBD
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#10003;|**Completed**  |Client Status               |User interface to view/filter and take action against checked-in clients                |
-| --     |Not Started    |Missing Clients             |User interface allowing administrators to manage missing clients                        |
+|&#9654; |*In Progress*  |Missing Clients             |User interface allowing administrators to manage missing clients                        |
 |&#10003;|**Completed**  |Scheduled Actions           |Presents a table displaying information about current scheduled actions                 |
 |&#10003;|**Completed**  |Action History              |Presents a table displaying information about past actions                              |
 | --     |Not Started    |Computer Groups             |Presents a table displaying information about all computer groups                       |
@@ -582,10 +585,10 @@ TBD
 
 <li>
 
-#### Summary
+#### Trajectory
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-| --     |Not Started    |Configuration               |User interface to configure Summary sources and destinations                            |
+| --     |Not Started    |Configuration               |User interface to configure Trajectory sources and destinations                         |
 </li>
 
 <li>
@@ -676,10 +679,10 @@ TBD
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9654; |*In Progress*  |Setup Utility (Text)        |Create plaintext interface for a step-by-step setup wizard                              |
 | --     |Not Started    |Setup Utility (ncurses)     |Create ncurses interface for a step-by-step setup wizard                                |
-| --     |Not Started    |Unattended Install          |Create automated process for unattended installation                                    |
+|&#9654; |*In Progress*  |Unattended Install          |Create automated process for unattended installation                                    |
 |&#10003;|**Completed**  |Key Management              |Routines to create a new public/private key pair                                        |
 | --     |Not Started    |x86 Client Binaries         |Create x86-compiled client binaries                                                     |
-| --     |Not Started    |x64 Client Binaries         |Create x64-compiled client binaries                                                     |
+|&#9654; |*In Progress*  |x64 Client Binaries         |Create x64-compiled client binaries                                                     |
 | --     |Not Started    |ARM Client Binaries         |Create ARM-compiled client binaries                                                     |
 
 
@@ -687,9 +690,9 @@ TBD
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 | --     |Not Started    |Setup Utility (GUI)         |Create grapical step-by-step setup wizard                                               |
-| --     |Not Started    |Unattended Install          |Create automated process for unattended installation                                    |
+|&#9654; |*In Progress*  |Unattended Install          |Create automated process for unattended installation                                    |
 | --     |Not Started    |Key Management              |Routines to create a new public/private key pair                                        |
-| --     |Not Started    |Apple Silicon Binaries      |Create client binaries for Apple Silicon                                                |
+|&#9654; |*In Progress*  |Apple Silicon Binaries      |Create client binaries for Apple Silicon                                                |
 | --     |Not Started    |Intel Binaries              |Create client binaries for Intel                                                        |
 | --     |Not Started    |Universal Binaries          |Create universal client binaries                                                        |
 
@@ -698,7 +701,7 @@ TBD
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 | --     |Not Started    |Setup Utility (GUI)         |Create grapical step-by-step setup wizard                                               |
-| --     |Not Started    |Unattended Install          |Create automated process for unattended installation                                    |
+|&#9654; |*In Progress*  |Unattended Install          |Create automated process for unattended installation                                    |
 | --     |Not Started    |Key Management              |Routines to create a new public/private key pair                                        |
 | --     |Not Started    |x86 Client Binaries         |Create x86-compiled client binaries                                                     |
 | --     |Not Started    |x64 Client Binaries         |Create x64-compiled client binaries                                                     |
@@ -782,7 +785,7 @@ TBD
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9654; |*In Progress*  |Main Client Process         |The primary client application process                                                  |
-|&#10003;|**Completed**  |Computer ID                 |Create a method to generate a reproduceable computer ID                                 |
+|&#10003;|**Completed**  |Computer ID                 |Create a method to generate a unique computer ID                                        |
 |&#10003;|**Completed**  |Parameter Functions         |Create functions to set client configuration parameters                                 |
 |&#10003;|**Completed**  |Config Save/Import          |Routines to save configuration and import an existing config on first setup             |
 |&#10003;|**Completed**  |Service Management          |Routines to register the client as a service with the host operating system             |
@@ -808,14 +811,14 @@ TBD
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9654; |*In Progress*  |Main Client Process         |The primary client application process                                                  |
-| --     |Not Started    |Computer ID                 |Create a method to generate a reproduceable computer ID                                 |
-| --     |Not Started    |Parameter Functions         |Create functions to set client configuration parameters                                 |
+|&#10003;|**Completed**  |Computer ID                 |Create a method to generate a unique computer ID                                        |
+|&#9654; |*In Progress*  |Parameter Functions         |Create functions to set client configuration parameters                                 |
 | --     |Not Started    |Config Save/Import          |Routines to save configuration and import an existing config on first setup             |
 | --     |Not Started    |Service Management          |Routines to register the client as a service with the host operating system             |
 | --     |Not Started    |Tamper Protection           |Configure the operating system to secure the client against user access                 |
 | --     |Not Started    |Sanctioned Uninstall        |Routines to validate permission to uninstall the client against the server              |
 |&#9654; |*In Progress*  |Message Handling            |Routines that parse and generate client/server messages                                 |
-| --     |Not Started    |Sensor Processing           |Routines to execute sensor scripts and collect the output                               |
+|&#9654; |*In Progress*  |Sensor Processing           |Routines to execute sensor scripts and collect the output                               |
 | --     |Not Started    |Package Processing          |Routines to store packages and execute embedded commands                                |
 | --     |Not Started    |Message Queueing            |Development of the queue structure for pending messages                                 |
 | --     |Not Started    |Message Compression         |Compress message contents before sending                                                |
@@ -834,14 +837,14 @@ TBD
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#9654; |*In Progress*  |Main Client Process         |The primary client application process                                                  |
-| --     |Not Started    |Computer ID                 |Create a method to generate a reproduceable computer ID                                 |
+|&#10003;|**Completed**  |Computer ID                 |Create a method to generate a unique computer ID                                        |
 | --     |Not Started    |Parameter Functions         |Create functions to set client configuration parameters                                 |
 | --     |Not Started    |Config Save/Import          |Routines to save configuration and import an existing config on first setup             |
 | --     |Not Started    |Service Management          |Routines to register the client as a service with the host operating system             |
 | --     |Not Started    |Tamper Protection           |Configure the operating system to secure the client against user access                 |
 | --     |Not Started    |Sanctioned Uninstall        |Routines to validate permission to uninstall the client against the server              |
 |&#9654; |*In Progress*  |Message Handling            |Routines that parse and generate client/server messages                                 |
-| --     |Not Started    |Sensor Processing           |Routines to execute sensor scripts and collect the output                               |
+|&#9654; |*In Progress*  |Sensor Processing           |Routines to execute sensor scripts and collect the output                               |
 | --     |Not Started    |Package Processing          |Routines to store packages and execute embedded commands                                |
 | --     |Not Started    |Message Queueing            |Development of the queue structure for pending messages                                 |
 | --     |Not Started    |Message Compression         |Compress message contents before sending                                                |
@@ -859,7 +862,7 @@ TBD
 ### Query
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
-| --     |Not Started    |Query Processing            |Accept, parse, and respond to server-initiated queries                                  |
+|&#9654; |*In Progress*  |Query Processing            |Accept, parse, and respond to server-initiated queries                                  |
 
 <ul>
 <li>
@@ -1054,7 +1057,7 @@ TBD
 </li>
 
 <li>
-  
+
 #### Windows
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
@@ -1073,6 +1076,7 @@ TBD
 #### Linux
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+| --     |Not Started    |Notification Utility        |Client-side utility to display custom notifications to users                            |
 </li>
 
 <li>
@@ -1080,6 +1084,7 @@ TBD
 #### macOS
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+| --     |Not Started    |Notification Utility        |Client-side utility to display custom notifications to users                            |
 </li>
 
 <li>
@@ -1087,6 +1092,7 @@ TBD
 #### Windows
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
+| --     |Not Started    |Notification Utility        |Client-side utility to display custom notifications to users                            |
 </li>
 </ul>
 
@@ -1178,6 +1184,17 @@ TBD
 
 <li>
 
+#### Installed Applications
+
+|        |Status         |OS |
+|--------|---------------|---|
+| --     |Not Started    |LIN|
+| --     |Not Started    |MAC|
+| --     |Not Started    |WIN|
+</li>
+
+<li>
+
 #### Is Virtual
 
 |        |Status         |OS |
@@ -1186,6 +1203,40 @@ TBD
 | --     |Not Started    |MAC|
 |&#10003;|**Completed**  |WIN|
 </li>
+
+<li>
+
+#### Kernel Information
+
+|        |Status         |OS |
+|--------|---------------|---|
+| --     |Not Started    |LIN|
+| --     |Not Started    |MAC|
+| --     |Not Started    |WIN|
+</li>
+
+<li>
+
+#### System Services Information
+
+|        |Status         |OS |
+|--------|---------------|---|
+| --     |Not Started    |LIN|
+| --     |Not Started    |MAC|
+| --     |Not Started    |WIN|
+</li>
+
+<li>
+
+#### Running Processes
+
+|        |Status         |OS |
+|--------|---------------|---|
+| --     |Not Started    |LIN|
+| --     |Not Started    |MAC|
+| --     |Not Started    |WIN|
+</li>
+
 </ul>
 
 ### Packages
