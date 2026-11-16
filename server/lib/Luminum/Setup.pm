@@ -238,7 +238,7 @@ sub run {
 	# --- Step 1: sync code from the source tree ------------------------------
 	$step->("Synchronizing server files...");
 	$log->("Synchronizing server files from $srcdir ...");
-	for my $item (qw(broker.pl mkprovision.pl luminum-backup.pl lib sql)) {
+	for my $item (qw(broker.pl mkprovision.pl luminum-backup.pl luminum-config.pl lib sql)) {
 		my $s = "$srcdir/$item";
 		my $d = "$root/$item";
 		next unless -e $s;
@@ -256,6 +256,7 @@ sub run {
 	# "perl <tool>.pl" by the console/tests).
 	chmod(0755, "$root/mkprovision.pl") if -e "$root/mkprovision.pl";
 	chmod(0755, "$root/luminum-backup.pl") if -e "$root/luminum-backup.pl";
+	chmod(0755, "$root/luminum-config.pl") if -e "$root/luminum-config.pl";
 	if (-d "$srcdir/console") {
 		# Refresh the console tree but keep generated nginx configs in place.
 		for my $sub (qw(html)) {
