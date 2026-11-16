@@ -256,6 +256,14 @@ check "client stored MQTTHOST from the registration response" $([ "$(cfgval MQTT
 check "client stored MQTTPORT from the registration response" $([ "$(cfgval MQTTPORT)" = "$MPORT" ]; echo $?)
 check "client stored SRVPUB from the registration response" $([ -n "$(cfgval SRVPUB)" ]; echo $?)
 
+# Install UUID: the client generates CLUUID on first start and presents it
+# at registration; the broker must store it in AUTH.UUID (protocol 3.1).
+CLUUID_C=$(cfgval CLUUID)
+check "client generated and stored CLUUID (UUIDv4)" \
+    $([[ -n "$CLUUID_C" && "$CLUUID_C" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]]; echo $?) "cluuid=[$CLUUID_C]"
+AUTH_UUID=$(dbq "select UUID from CLIENTS.AUTH where ID=$UID_C;")
+check "broker stored the client UUID in AUTH.UUID" $([ "$AUTH_UUID" = "$CLUUID_C" ]; echo $?) "got: [$AUTH_UUID]"
+
 # --- MQTT: the client connects and its check-in updates STATUS via the worker
 conn_ok=1
 for i in $(seq 1 40); do

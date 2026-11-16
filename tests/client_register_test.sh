@@ -181,6 +181,7 @@ $cs->close();
 
 open(my $out, ">", $issued) or die "fake server: cannot write $issued: $!\n";
 print $out "UID=$uid\n";
+print $out "UUID=", ($req->{data}{uuid} // ""), "\n";
 print $out "MQTTSECRET=$secret\n";
 print $out "MQTTHOST=$mqtthost\n";
 print $out "MQTTPORT=$mqttport\n";
@@ -249,6 +250,13 @@ check "registration: stored MQTTSECRET matches the issued secret" \
     $([ "$(cfgval MQTTSECRET "$SCEN_HOME")" = "$(issued_val MQTTSECRET "$SCEN_ISSUED")" ]; echo $?)
 check "registration: stored UID" \
     $([ "$(cfgval UID "$SCEN_HOME")" = "$UID_EXPECTED" ]; echo $?)
+# The client must present its install UUID (CLUUID): a well-formed UUIDv4,
+# persisted in the config DB, and the same value on the wire.
+CLUUID=$(cfgval CLUUID "$SCEN_HOME")
+check "registration: client sent a UUIDv4" \
+    $([[ -n "$CLUUID" && "$CLUUID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]]; echo $?) "cluuid=[$CLUUID]"
+check "registration: sent UUID matches stored CLUUID" \
+    $([ -n "$CLUUID" ] && [ "$CLUUID" = "$(issued_val UUID "$SCEN_ISSUED")" ]; echo $?)
 check "registration: stored MQTTHOST" \
     $([ "$(cfgval MQTTHOST "$SCEN_HOME")" = "$MQTTHOST_EXPECTED" ]; echo $?)
 check "registration: stored MQTTPORT" \

@@ -323,6 +323,21 @@ fn server_pubkey(ccfg: &HashMap<String, String>) -> Option<[u8; 32]> {
 	Some(out)
 }
 
+/// The client's install UUID (CLUUID): a UUIDv4 generated on first start
+/// and persisted in the config DB alongside the signing keypair. A
+/// reinstalled client gets a fresh keypair and a fresh UUID, so it
+/// registers as a new endpoint and never collides with the record its
+/// predecessor left behind.
+fn client_uuid(debug: bool, ccfg: &HashMap<String, String>) -> String {
+	if let Some(u) = ccfg.get("CLUUID") {
+		if is_uuid4(u) { return u.clone(); }
+	}
+	let u = uuid4();
+	config_set("CLUUID", &u);
+	dbout(debug, 3, "Generated new client UUID.");
+	u
+}
+
 /// The server's Ed25519 signing public key (raw 32 bytes) extracted from
 /// the signing certificate distributed out of band (config/server-signing.crt),
 /// which is the bootstrap trust anchor (protocol §7.1). The certificate is
@@ -435,6 +450,7 @@ fn register_with_server(debug: bool, ccfg: &HashMap<String, String>) {
 
 	let data = serde_json::json!({
 		"hostname": endpointname,
+		"uuid": client_uuid(debug, ccfg),
 		"serverkey": ccfg.get("SVRKEY").cloned().unwrap_or_default(),
 		"uid": "0",
 		"pubkey": base64ct::Base64::encode_string(spki_der(&pubb).as_slice()),

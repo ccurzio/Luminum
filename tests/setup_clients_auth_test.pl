@@ -185,12 +185,17 @@ my ($rc, $o) = run_setup("$tmp/root1", "lumca1");
 check("migration: install succeeds", $rc == 0, $o);
 check("migration: column added is logged",
     $o =~ /CLIENTS\.AUTH: added missing column MQTTSECRET/, $o);
+check("migration: UUID column added is logged",
+    $o =~ /CLIENTS\.AUTH: added missing column UUID/, $o);
 my %cols = map { $_ => 1 } auth_columns();
 check("migration: MQTTSECRET column present", $cols{MQTTSECRET});
-my $row = `$cli -S $sock -u root -ptestrootpw -N -e "select NAME, MQTTSECRET from CLIENTS.AUTH where FINGERPRINT = '$fpnt'" 2>&1`;
+check("migration: UUID column present", $cols{UUID});
+# The CLI prints a NULL column as the literal string NULL (an empty
+# string column, like MQTTSECRET, comes back as an empty field).
+my $row = `$cli -S $sock -u root -ptestrootpw -N -e "select NAME, MQTTSECRET, UUID from CLIENTS.AUTH where FINGERPRINT = '$fpnt'" 2>&1`;
 chomp($row);
-check("migration: pre-existing row preserved with empty hash",
-    $row eq "oldhost\t", "row=[$row]");
+check("migration: pre-existing row preserved with empty hash and NULL UUID",
+    $row eq "oldhost\t\tNULL", "row=[$row]");
 my $sidtype = `$cli -S $sock -u root -ptestrootpw -N -e "select COLUMN_TYPE from information_schema.COLUMNS where TABLE_SCHEMA = 'CLIENTS' and TABLE_NAME = 'COMMANDS' and COLUMN_NAME = 'SID'" 2>&1`;
 chomp($sidtype);
 check("migration: COMMANDS.SID is tinytext", $sidtype eq "tinytext", "type=[$sidtype]");
@@ -209,9 +214,10 @@ skip_all("could not drop CLIENTS: $out") unless $? == 0;
 ($rc, $o) = run_setup("$tmp/root2", "lumca2");
 check("fresh install: install succeeds", $rc == 0, $o);
 check("fresh install: no migration needed",
-    $o !~ /CLIENTS\.AUTH: added missing column MQTTSECRET/, $o);
+    $o !~ /CLIENTS\.AUTH: added missing column (?:MQTTSECRET|UUID)/, $o);
 %cols = map { $_ => 1 } auth_columns();
 check("fresh install: MQTTSECRET column present", $cols{MQTTSECRET});
+check("fresh install: UUID column present", $cols{UUID});
 $sidtype = `$cli -S $sock -u root -ptestrootpw -N -e "select COLUMN_TYPE from information_schema.COLUMNS where TABLE_SCHEMA = 'CLIENTS' and TABLE_NAME = 'COMMANDS' and COLUMN_NAME = 'SID'" 2>&1`;
 chomp($sidtype);
 check("fresh install: COMMANDS.SID is tinytext", $sidtype eq "tinytext", "type=[$sidtype]");

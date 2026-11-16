@@ -714,6 +714,7 @@ sub routemessage {
 				}
 			# Data field validation (protocol 6.1).
 			my $EPNAME = validstr($data->{hostname},'^[A-Za-z0-9_\.\-]+$');
+			my $EPUUID = validstr($data->{uuid},'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$');
 			my $svrkey = validstr($data->{serverkey},'^[A-Za-z0-9]+$');
 			my $EPFPNT = validstr($data->{fingerprint},'^[a-f0-9]{64}$');
 			my $osplat = validstr($data->{osplat},'^[A-Za-z]+$');
@@ -724,7 +725,7 @@ sub routemessage {
 			my $pubder = defined $data->{pubkey} ? eval { decode_base64($data->{pubkey}) } : undef;
 			my $pubraw = defined $pubder ? Luminum::Protocol::spki_to_raw($pubder) : undef;
 
-			if (!$EPNAME || !$svrkey || !$EPFPNT || !$osplat || !$osrel || !$ipv4 || !defined $pubraw) {
+			if (!$EPNAME || !$EPUUID || !$svrkey || !$EPFPNT || !$osplat || !$osrel || !$ipv4 || !defined $pubraw) {
 				Broker::debugout(2,"Attempted registration with missing data from $EPADDR");
 				sendresponse($cs,$env,"ERR","MISSING_DATA",undef);
 				return;
@@ -748,7 +749,7 @@ sub routemessage {
 				}
 			# Store the base64 SPKI/DER as sent (schema: PUBKEY is base64;
 			# getpubkey() decodes it on read).
-			newreg($cs,$env,$EPNAME,$EPFPNT,$data->{pubkey},$ipv4,$osplat,$osrel,$clientver,$EPADDR);
+			newreg($cs,$env,$EPNAME,$EPUUID,$EPFPNT,$data->{pubkey},$ipv4,$osplat,$osrel,$clientver,$EPADDR);
 			return;
 			}
 		elsif ($action eq "checkin") {
@@ -992,6 +993,7 @@ sub newreg {
 	my $cs = shift;
 	my $env = shift;
 	my $EPNAME = shift;
+	my $EPUUID = shift;
 	my $EPFPNT = shift;
 	my $EPPKEY = shift;
 	my $ipv4 = shift;
@@ -1007,7 +1009,7 @@ sub newreg {
 	my $sechash = sha256_hex($secret);
 
 	my $dbh = dbconnect("CLIENTS");
-	my $sth = $dbh->prepare("insert into AUTH (NAME,FINGERPRINT,PUBKEY,MQTTSECRET) values ('$EPNAME','$EPFPNT','$EPPKEY','$sechash')");
+	my $sth = $dbh->prepare("insert into AUTH (NAME,UUID,FINGERPRINT,PUBKEY,MQTTSECRET) values ('$EPNAME','$EPUUID','$EPFPNT','$EPPKEY','$sechash')");
 	$sth->execute();
 	$sth = $dbh->prepare("select ID from AUTH where FINGERPRINT = '$EPFPNT'");
 	$sth->execute();

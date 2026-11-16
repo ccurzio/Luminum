@@ -1178,11 +1178,15 @@ sub apply_schema {
 # because strict mode refuses a bare NOT NULL addition on a table that
 # already has rows. Pre-existing rows carry an empty hash, which the
 # MQTT login check (when it lands) must treat as "secret not issued".
+# UUID (the client's install UUIDv4, presented at registration) was
+# added later still; pre-existing rows keep NULL - their UUID was never
+# known to the server.
 #
 sub migrate_clients_auth {
 	my ($dbh, $log) = @_;
 	my %defs = (
 		MQTTSECRET => "MQTTSECRET char(64) NOT NULL DEFAULT ''",
+		UUID       => "UUID char(36) DEFAULT NULL",
 		);
 	my %have = map { $_->[0] => 1 }
 		@{ $dbh->selectall_arrayref(qq{select COLUMN_NAME from information_schema.COLUMNS where TABLE_SCHEMA = 'CLIENTS' and TABLE_NAME = 'AUTH'}) || [] };

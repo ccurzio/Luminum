@@ -46,10 +46,12 @@ Non-goals: user-facing web console traffic (nginx/PHP), inter-endpoint communica
 | Server signing keypair (Ed25519) | Server (setup) | Private: server only. Public: carried in the server signing certificate (§7.1) | Signing server→client messages |
 | Client signing keypair (Ed25519) | Client, at first run | Private: client config DB (file mode 0600). Public: sent at registration, stored server-side in `CLIENTS.AUTH.PUBKEY` | Signing client→server messages |
 | Client fingerprint | Client, at first run | Client config DB; server `CLIENTS.AUTH.FINGERPRINT` | Client identity binding |
+| Client UUID (UUIDv4) | Client, at first run | Client config DB (`CLUUID`); server `CLIENTS.AUTH.UUID` | Per-install endpoint identifier; a reinstalled client (fresh keypair, fresh UUID) registers as a new endpoint and never overwrites its predecessor's record |
 | Client MQTT secret | Server, at registration | Client config DB (0600); server stores SHA-256 hash only | MQTT broker authentication |
 
 - **Fingerprint** = lowercase hex SHA-256 of the client's public key in SPKI/DER encoding. This matches the existing `FINGERPRINT` column and the hex validation already present in `iafis()`.
 - The fingerprint is the client's stable identity. If the client's keypair is regenerated (reinstall, key loss), the fingerprint changes and the client must re-register; the old record is deactivated, not silently replaced.
+- The **client UUID** is a UUIDv4 the client generates at first run (persisted as `CLUUID` next to the keypair) and presents in the `register` message. The server stores it in `CLIENTS.AUTH.UUID` (legacy rows pre-dating the field keep `NULL`). It identifies the *installation*: because uninstall removes the config DB, a reinstall presents a fresh UUID (and fresh fingerprint) and is registered as a new endpoint, leaving the previous entry in place.
 
 ### 3.2 Registration (credential bootstrap)
 
@@ -281,7 +283,7 @@ Both implementations MUST include a shared test vector (a fixed envelope with it
 
 | Direction | lumy | action | `data` fields | Description |
 |---|---|---|---|---|
-| c→s (bootstrap) | core | `register` | `hostname`, `fingerprint`, `pubkey` (base64 SPKI/DER), `osplat`, `osrel`, `clientver`, `ipv4`, `ipv6` (opt), `serverkey` | First-time registration. Only valid with `uid` = `"0"`. |
+| c→s (bootstrap) | core | `register` | `hostname`, `uuid` (UUIDv4, §3.1), `fingerprint`, `pubkey` (base64 SPKI/DER), `osplat`, `osrel`, `clientver`, `ipv4`, `ipv6` (opt), `serverkey` | First-time registration. Only valid with `uid` = `"0"`. |
 | s→c (bootstrap) | core | `register` | `uid`, `sid`, `mqtthost`, `mqttport`, `mqttsecret`, `serverpubkey` (base64 SPKI/DER) | Registration response. Only valid over the bootstrap channel. `sid` is the Luminum Server ID used to build MQTT topics (§4.2). |
 | c→s | core | `checkin` | `hostname`, `osplat`, `osrel`, `clientver`, `ipv4` (opt), `ipv6` (opt), `checkin_secs` (the client's current interval, seconds) | Periodic liveness + state refresh. Interval = `CHECKININT`; the reported `checkin_secs` lets the server detect drift and push a correction (§7.2). |
 | c→s | core | `unregister` | — | Client-initiated deactivation request (sanctioned uninstall flow). |
