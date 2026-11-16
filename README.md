@@ -1,5 +1,5 @@
 # Luminum
-**Autonomous Endpoint Security &amp; Management**  
+**Autonomous Endpoint Security &amp; Management**
 by Christopher R. Curzio
 
 ## Introduction
@@ -16,7 +16,7 @@ Keep in mind that Luminum is still in the initial development stages, so it does
 
 #### The current planned Lumy modules include:
 - **Query\*:** The core module of the system which allows administrators and users to retrieve data from endpoints
-- **Summary\*:** Automatically report query result data in specified intervals to various logging, reporting, and communication systems
+- **Trajectory\*:** Automatically report query result data in specified intervals to various logging, reporting, and communication systems
 - **Delivery:** Deploys applications to endpoints and provides application installation management
 - **Discovery:** Performs network scanning from the server as well as endpoints to discover devices and services
 - **Efficiency:** Analyzes and logs various aspects of endpoint performance
