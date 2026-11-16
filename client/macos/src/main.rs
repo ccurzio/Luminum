@@ -970,27 +970,104 @@ async fn run_sensor(sid: i64, params: &HashMap<String, String>, defs: &HashMap<i
 	}
 }
 
+// Compare a sensor output to a condition value (protocol §7.3): numerically
+// when both sides parse as finite numbers, otherwise as case-insensitive
+// strings, with =~ / !~ as substring tests.
+fn cond_compare(out: &str, op: &str, value: &str) -> bool {
+	let a = out.trim();
+	let b = value.trim();
+	let (na, nb): (Option<f64>, Option<f64>) = (
+		a.parse::<f64>().ok().filter(|x| x.is_finite()),
+		b.parse::<f64>().ok().filter(|x| x.is_finite()),
+	);
+	let numeric = na.is_some() && nb.is_some();
+	let (la, lb) = (a.to_ascii_lowercase(), b.to_ascii_lowercase());
+	match op {
+		"==" => { if numeric { na.unwrap() == nb.unwrap() } else { la == lb } }
+		"!=" => { if numeric { na.unwrap() != nb.unwrap() } else { la != lb } }
+		"=~" => la.contains(&lb),
+		"!~" => !la.contains(&lb),
+		">" => { if numeric { na.unwrap() > nb.unwrap() } else { la > lb } }
+		">=" => { if numeric { na.unwrap() >= nb.unwrap() } else { la >= lb } }
+		"<" => { if numeric { na.unwrap() < nb.unwrap() } else { la < lb } }
+		"<=" => { if numeric { na.unwrap() <= nb.unwrap() } else { la <= lb } }
+		_ => false, // an unknown operator cannot match
+	}
+}
+
+// Evaluate a query condition tree against this endpoint (protocol §7.3).
+// A leaf runs its condition sensor and compares the output to the value; a
+// leaf whose sensor is unknown to the endpoint or fails to run evaluates
+// false, so the endpoint stays silent rather than answering a query it
+// cannot filter.
+async fn eval_condition(node: &serde_json::Value, defs: &HashMap<i64, (String, String)>, debug: bool) -> bool {
+	if let Some(logic) = node.get("logic").and_then(|v| v.as_str()) {
+		let (left, right) = match (node.get("left"), node.get("right")) {
+			(Some(l), Some(r)) => (l, r),
+			_ => return false,
+		};
+		let l = Box::pin(eval_condition(left, defs, debug)).await;
+		let r = Box::pin(eval_condition(right, defs, debug)).await;
+		return if logic == "AND" { l && r } else { l || r };
+	}
+	let sid = match node.get("sid").and_then(|v| v.as_i64()) {
+		Some(s) if s > 0 => s,
+		_ => return false,
+	};
+	let op = match node.get("op").and_then(|v| v.as_str()) {
+		Some(o) => o.to_string(),
+		None => return false,
+	};
+	let value = match node.get("value").and_then(|v| v.as_str()) {
+		Some(v) => v.to_string(),
+		None => return false,
+	};
+	let mut params: HashMap<String, String> = HashMap::new();
+	if let Some(obj) = node.get("params").and_then(|v| v.as_object()) {
+		for (k, v) in obj {
+			if let Some(s) = v.as_str() { params.insert(k.clone(), s.to_string()); }
+		}
+	}
+	match run_sensor(sid, &params, defs, debug).await.get("output").and_then(|v| v.as_str()) {
+		Some(out) => cond_compare(out, &op, &value),
+		None => {
+			dbout(debug, 3, &format!("condition sensor {} did not run; treating as non-matching", sid));
+			false
+		}
+	}
+}
+
 // core/query (protocol §6.1, §7.3): execute the named sensors and build the
 // answer envelope (action=answer, data.qid echoed, one results entry per
 // sensor). A malformed query is answered with the qid echoed when it is
 // recoverable, so the server can still correlate it. An answer that would
 // exceed the 64 KiB MQTT cap comes back as ERR/OUTPUT_TOO_LARGE until the
-// data channel (§8.3) is in place.
-async fn apply_query(env: &Envelope, uid: &str, debug: bool) -> Envelope {
+// data channel (§8.3) is in place. When the query carries a condition tree
+// that evaluates false on this endpoint, None is returned: the endpoint
+// publishes no answer at all (§7.3).
+async fn apply_query(env: &Envelope, uid: &str, debug: bool) -> Option<Envelope> {
 	let (qid, sensors) = match env.data.as_ref() {
 		Some(d) => {
 			let qid = match d.get("qid").and_then(|v| v.as_str()).filter(|q| is_uuid4(q)) {
 				Some(q) => q.to_string(),
-				None => return query_err(uid, None, "INVALID_DATA"),
+				None => return Some(query_err(uid, None, "INVALID_DATA")),
 			};
 			match d.get("sensors").and_then(|v| v.as_array()) {
 				Some(list) if !list.is_empty() => (qid, list.clone()),
-				_ => return query_err(uid, Some(&qid), "INVALID_DATA"),
+				_ => return Some(query_err(uid, Some(&qid), "INVALID_DATA")),
 			}
 		}
-		None => return query_err(uid, None, "INVALID_DATA"),
+		None => return Some(query_err(uid, None, "INVALID_DATA")),
 	};
 	let defs = sensor_definitions(debug);
+	// Condition filtering (§7.3): before running any retrieve sensor, an
+	// endpoint on which the tree evaluates false stays silent.
+	if let Some(conds) = env.data.as_ref().and_then(|d| d.get("conditions")) {
+		if !eval_condition(conds, &defs, debug).await {
+			dbout(debug, 3, &format!("query {} conditions not met on this endpoint; not answering", qid));
+			return None;
+		}
+	}
 	let mut results: Vec<serde_json::Value> = Vec::new();
 	let mut ok_count = 0usize;
 	for entry in sensors {
@@ -1043,9 +1120,9 @@ async fn apply_query(env: &Envelope, uid: &str, debug: bool) -> Envelope {
 		let mut oob = new_envelope("client", uid, "core", "answer", "ERR", Some(serde_json::json!({ "qid": qid })));
 		oob.err = Some(String::from("OUTPUT_TOO_LARGE"));
 		dbout(debug, 1, &format!("answer for qid {} is {} bytes, over the MQTT limit; reporting OUTPUT_TOO_LARGE", qid, payload.len()));
-		return oob;
+		return Some(oob);
 	}
-	resp
+	Some(resp)
 }
 
 // A malformed query is answered on the answer action, echoing the qid when
@@ -1230,12 +1307,14 @@ async fn mqtt_run(debug: bool, ccfg: HashMap<String, String>) {
 				// envelope; the response is signed and published on the
 				// per-UID resp topic (the server's worker correlates it back
 				// to the outbox: setgroups/config by action, answers by
-				// data.qid).
-				let mut resp = handle_command(&client, &mut cmd_topics, &env, &uid, &sid, &checkin_interval, debug).await;
-				sign_envelope(&mut resp, &seed);
-				let payload = serde_json::to_vec(&resp).expect("Error: unable to serialize response");
-				if let Err(err) = client.publish(&resp_topic, QoS::AtLeastOnce, false, payload).await {
-					dbout(debug, 1, &format!("MQTT response publish failed: {}", err));
+				// data.qid). A query whose conditions do not match on this
+				// endpoint produces no response at all (§7.3).
+				if let Some(mut resp) = handle_command(&client, &mut cmd_topics, &env, &uid, &sid, &checkin_interval, debug).await {
+					sign_envelope(&mut resp, &seed);
+					let payload = serde_json::to_vec(&resp).expect("Error: unable to serialize response");
+					if let Err(err) = client.publish(&resp_topic, QoS::AtLeastOnce, false, payload).await {
+						dbout(debug, 1, &format!("MQTT response publish failed: {}", err));
+					}
 				}
 			}
 			Ok(_) => {}
@@ -1254,11 +1333,13 @@ async fn mqtt_run(debug: bool, ccfg: HashMap<String, String>) {
 }
 
 // Dispatch a verified command and build its response envelope (protocol 6).
-// The response is signed and published by the caller. Core actions:
-// setgroups/setcheckinint/config/query are applied; deploy awaits the data
-// channel (§8.3); client-originated actions and unknown actions/lumys are
-// rejected per §6.3. Lumy namespaces are routed over MQTT as a follow-on
-// (§6.2); until then a non-core lumy is answered UNKNOWN_LUMY.
+// The response is signed and published by the caller; None means the command
+// produces no response (a query whose conditions do not match, §7.3). Core
+// actions: setgroups/setcheckinint/config/query are applied; deploy awaits
+// the data channel (§8.3); client-originated actions and unknown
+// actions/lumys are rejected per §6.3. Lumy namespaces are routed over MQTT
+// as a follow-on (§6.2); until then a non-core lumy is answered
+// UNKNOWN_LUMY.
 async fn handle_command(
 	client: &rumqttc::AsyncClient,
 	cmd_topics: &mut Vec<String>,
@@ -1267,30 +1348,31 @@ async fn handle_command(
 	sid: &str,
 	checkin_interval: &Arc<AtomicU64>,
 	debug: bool,
-) -> Envelope {
+) -> Option<Envelope> {
 	if env.lumy != "core" {
-		return cmd_error(uid, &env.lumy, &env.action, "UNKNOWN_LUMY");
+		return Some(cmd_error(uid, &env.lumy, &env.action, "UNKNOWN_LUMY"));
 	}
 	match env.action.as_str() {
 		"setgroups" => match apply_setgroups(client, cmd_topics, env, sid, debug).await {
-			Some(err) => cmd_error(uid, &env.lumy, &env.action, &err),
-			None => cmd_ok(uid, &env.lumy, &env.action),
+			Some(err) => Some(cmd_error(uid, &env.lumy, &env.action, &err)),
+			None => Some(cmd_ok(uid, &env.lumy, &env.action)),
 		},
 		"setcheckinint" => match apply_checkinint(env, checkin_interval, debug) {
-			Some(err) => cmd_error(uid, &env.lumy, &env.action, &err),
-			None => cmd_ok(uid, &env.lumy, &env.action),
+			Some(err) => Some(cmd_error(uid, &env.lumy, &env.action, &err)),
+			None => Some(cmd_ok(uid, &env.lumy, &env.action)),
 		},
 		"config" => match apply_sensor_config(env, debug) {
-			Some(err) => cmd_error(uid, &env.lumy, &env.action, &err),
-			None => cmd_ok(uid, &env.lumy, &env.action),
+			Some(err) => Some(cmd_error(uid, &env.lumy, &env.action, &err)),
+			None => Some(cmd_ok(uid, &env.lumy, &env.action)),
 		},
+		// None: the query's conditions did not match on this endpoint (§7.3).
 		"query" => apply_query(env, uid, debug).await,
-		"deploy" => cmd_error(uid, &env.lumy, &env.action, "NOT_IMPLEMENTED"),
+		"deploy" => Some(cmd_error(uid, &env.lumy, &env.action, "NOT_IMPLEMENTED")),
 		// Client-originated actions (protocol §6.1): never valid on a cmd topic.
 		"register" | "checkin" | "unregister" | "report" | "answer" => {
-			cmd_error(uid, &env.lumy, &env.action, "INVALID_DIRECTION")
+			Some(cmd_error(uid, &env.lumy, &env.action, "INVALID_DIRECTION"))
 		}
-		_ => cmd_error(uid, &env.lumy, &env.action, "UNKNOWN_ACTION"),
+		_ => Some(cmd_error(uid, &env.lumy, &env.action, "UNKNOWN_ACTION")),
 	}
 }
 

@@ -1,3 +1,46 @@
+<?php
+//
+// Query builder. The markup is the builder UI; the PHP below loads the
+// sensor catalog (every sensor in CONTENT.SENSORS, with its declared
+// parameter fields) so the builder can offer sensor dropdowns and a value
+// input per parameter. Submitting posts the built query statement to
+// /api/commands.php (protocol 7.3): it is broadcast to all endpoints, and
+// only the endpoints on which the conditions evaluate true answer.
+//
+mysqli_select_db($db, "CONTENT") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
+$sq = mysqli_query($db, "select ID,NAME,WITHPARAMS from SENSORS order by NAME");
+$sensorlist = [];
+while ($srow = mysqli_fetch_assoc($sq)) {
+	$sensorlist[] = ['id' => (int)$srow['ID'], 'name' => $srow['NAME'], 'withparams' => (int)$srow['WITHPARAMS'], 'params' => []];
+}
+$byid = [];
+foreach ($sensorlist as $i => $s) { $byid[$s['id']] = $i; }
+if (count($sensorlist) > 0) {
+	$ids = implode(',', array_map('intval', array_column($sensorlist, 'id')));
+	$pq = mysqli_query($db, "select SID,FIELD,DEFAULTVAL from SENSORPARAMS where SID in ($ids)");
+	while ($prow = mysqli_fetch_assoc($pq)) {
+		$idx = isset($byid[(int)$prow['SID']]) ? $byid[(int)$prow['SID']] : null;
+		if ($idx === null) { continue; }
+		if (!is_string($prow['FIELD']) || $prow['FIELD'] === '') { continue; }
+		$dup = false;
+		foreach ($sensorlist[$idx]['params'] as $p) {
+			if ($p['field'] === $prow['FIELD']) { $dup = true; break; }
+		}
+		if ($dup) { continue; }
+		$sensorlist[$idx]['params'][] = ['field' => $prow['FIELD'], 'default' => is_string($prow['DEFAULTVAL']) ? $prow['DEFAULTVAL'] : ''];
+	}
+}
+// The catalog for the builder's JS (parameter inputs, submit validation).
+$sensorjson = json_encode($sensorlist, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+
+// The <option> list shared by every sensor dropdown in the builder's
+// initial markup (retrieve rows and condition rows); cloned rows inherit it.
+$sensoroptions = "<option value=\"\">(select a sensor)</option>\n";
+foreach ($sensorlist as $s) {
+	$sensoroptions .= "<option value=\"" . $s['id'] . "\">" . htmlspecialchars($s['name'], ENT_QUOTES) . "</option>\n";
+}
+?>
+
 <div class="content">
 	<h1>Luminum Query</h1>
 
@@ -15,20 +58,23 @@
 				<span style="font-size: 20px; font-weight: bold; color: #444;">I want to retrieve:</span>
 				</p>
 				<div id="get-list">
-					<div class="list-item" style="margin-bottom: 5px;"><img src="/icons/reorder-dis.png" class="drag-handle" style="vertical-align: middle"> <input type="text" placeholder="Sensor" style="width: 200px;" maxlength="128"> <img src="/icons/add.png" class="add" style="vertical-align: middle; margin-bottom: 3px;"></div>
+					<div class="list-item" style="margin-bottom: 5px;"><img src="/icons/reorder-dis.png" class="drag-handle" style="vertical-align: middle"> <select class="sensor-select" style="font-size: 15px; height: 30px; width: 220px; margin-left: 2px;"><?php print $sensoroptions ?></select> <span class="param-fields"></span> <img src="/icons/add.png" class="add" style="vertical-align: middle; margin-bottom: 3px;"></div>
 				</div>
 
 				<p style="margin-top: 20px;">
-				<span style="font-size: 20px; font-weight: bold; color: #444;">From</span> <select style="font-size: 15px; height: 30px; margin-left: 2px; margin-right: 2px;" name="targets" id="targets" class="target-dropdown" onchange="selectSuffix();"><option name="matching" value="matching" default="default">endpoints matching</option><option name="all" value="all">all endpoints</option></select> <span id="tsuffix" style="font-size: 20px; font-weight: bold; color: #444;"> the following condition:</span>
+				<span style="font-size: 20px; font-weight: bold; color: #444;">From</span> <select style="font-size: 15px; height: 30px; margin-left: 2px; margin-right: 2px;" name="targets" id="targets" class="target-dropdown" onchange="selectSuffix();"><option name="matching" value="matching" default="default">endpoints matching</option><option name="all" value="all">all endpoints</select> <span id="tsuffix" style="font-size: 20px; font-weight: bold; color: #444;"> the following condition:</span>
 				</p>
 				<div id="from-list">
-					<div class="list-item"><img src="/icons/reorder-dis.png" class="drag-handle" style="vertical-align: middle;"> <input type="text" placeholder="Sensor" style="width: 200px;" maxlength="128"> <select class="row-dropdown" style="font-size: 15px; height: 30px; margin-left: 5px; margin-right: 10px;" name="fromop"><option name="equals" value="equals">==</option><option name="notequals" value="notequals">!=</option><option name="contains" value="contains">=~</option><option name="notcontains" value="notcontains">!~</option><option name="greaterthan" value="greaterthan">&gt;</option><option name="greaterthan" value="greaterorequal">&gt;=</option><option name="lessthan" value="lessthan">&lt;</option><option name="greaterthan" value="lessorequal">&lt;=</option></select><input type="text" placeholder="Value" maxlength="128"> <img src="/icons/add.png" class="add" style="vertical-align: middle; margin-bottom: 3px;"></div>
+					<div class="list-item"><img src="/icons/reorder-dis.png" class="drag-handle" style="vertical-align: middle;"> <select class="sensor-select" style="font-size: 15px; height: 30px; width: 220px; margin-left: 2px;"><?php print $sensoroptions ?></select> <select class="row-dropdown" style="font-size: 15px; height: 30px; margin-left: 5px; margin-right: 10px;" name="fromop"><option name="equals" value="equals">==</option><option name="notequals" value="notequals">!=</option><option name="contains" value="contains">=~</option><option name="notcontains" value="notcontains">!~</option><option name="greaterthan" value="greaterthan">&gt;</option><option name="greaterthan" value="greaterorequal">&gt;=</option><option name="lessthan" value="lessthan">&lt;</option><option name="greaterthan" value="lessorequal">&lt;=</option></select><input type="text" class="cond-value" placeholder="Value" maxlength="1024"> <img src="/icons/add.png" class="add" style="vertical-align: middle; margin-bottom: 3px;"></div>
 				</div>
 			</div>
 		</div>
+		<div id="Saved" class="configtab" style="display: none;">
+			<div style="margin: 20px; text-align: center; font-style: italic; color: #777;">No saved queries yet.</div>
+		</div>
 	</div>
 	<div style="width: 100%; text-align: right; padding-top: 10px;">
-		<button id="resetform" class="formgo" style="margin-right: 0;">Reset Form</button> <button id="querygo" class="formgo" style="margin-left: 0;" disabled="disabled">Submit Query</button> 
+		<button id="resetform" class="formgo" style="margin-right: 0;">Reset Form</button> <button id="querygo" class="formgo" style="margin-left: 0;" disabled="disabled" onclick="submitQuery()">Submit Query</button>
 	</div>
 
 </div>
@@ -36,6 +82,170 @@
 <script src="/layout/Sortable.min.js"></script>
 
 <script>
+// --- query builder wiring ---------------------------------------------------
+// The builder posts a query statement to /api/commands.php (protocol 7.3):
+// the retrieve sensors plus the condition tree, broadcast to all endpoints;
+// only the endpoints on which the conditions evaluate true answer.
+
+const sensorCatalog = <?php print $sensorjson; ?>;
+
+// The builder's operator dropdown values -> the protocol's operators (7.3).
+const COND_OPS = {
+	equals: '==', notequals: '!=', contains: '=~', notcontains: '!~',
+	greaterthan: '>', greaterorequal: '>=', lessthan: '<', lessorequal: '<='
+};
+
+function sensorById(id) {
+	for (let i = 0; i < sensorCatalog.length; i++) {
+		if (sensorCatalog[i].id === parseInt(id, 10)) { return sensorCatalog[i]; }
+		}
+	return null;
+	}
+
+// A retrieve row whose sensor accepts parameters shows one value input per
+// declared field (prefilled with the default); anything else shows none.
+function renderParams(row, sensorId) {
+	const box = row.querySelector('.param-fields');
+	if (!box) { return; }
+	box.innerHTML = '';
+	const s = sensorById(sensorId);
+	if (!s || !s.withparams || s.params.length === 0) { return; }
+	s.params.forEach(p => {
+		const label = document.createElement('span');
+		label.textContent = p.field + ': ';
+		const inp = document.createElement('input');
+		inp.type = 'text';
+		inp.className = 'param-input';
+		inp.dataset.field = p.field;
+		inp.value = p.default;
+		inp.maxLength = 1024;
+		inp.style.fontSize = '15px';
+		inp.style.padding = '3px';
+		inp.style.width = '120px';
+		inp.style.marginLeft = '4px';
+		box.appendChild(label);
+		box.appendChild(inp);
+		});
+	}
+
+// One condition row -> a protocol leaf {sid, op, value}.
+function condRowLeaf(row) {
+	const sel = row.querySelector('.sensor-select');
+	const op = row.querySelector('.row-dropdown');
+	const val = row.querySelector('.cond-value');
+	return {
+		sid: parseInt(sel.value, 10),
+		op: COND_OPS[op.value] || op.value,
+		value: val.value
+		};
+	}
+
+// The row that carries a block's trailing AND/OR: the row itself, or the
+// group's last row (mirrors insertLogicalOperators' anchor).
+function condAnchor(block) {
+	if (block.classList.contains('group-container')) {
+		const rows = block.querySelectorAll(':scope > .list-item');
+		return rows.length ? rows[rows.length - 1] : null;
+		}
+	return block;
+	}
+
+// A container's blocks (rows and group containers) -> a condition subtree.
+// Consecutive blocks are joined with the operator stored on the preceding
+// block's anchor, left-associatively: A op1 B op2 C = (A op1 B) op2 C.
+function buildCondTree(container) {
+	const blocks = Array.from(container.children).filter(el =>
+		el.classList.contains('list-item') || el.classList.contains('group-container'));
+	if (blocks.length === 0) { return null; }
+	let node = blocks[0].classList.contains('group-container')
+		? buildCondTree(blocks[0])
+		: condRowLeaf(blocks[0]);
+	for (let i = 1; i < blocks.length; i++) {
+		const anchor = condAnchor(blocks[i - 1]);
+		const opSel = anchor ? anchor.querySelector('.logical-operator') : null;
+		const logic = opSel ? opSel.value : 'AND';
+		const right = blocks[i].classList.contains('group-container')
+			? buildCondTree(blocks[i])
+			: condRowLeaf(blocks[i]);
+		node = { logic: logic, left: node, right: right };
+		}
+	return node;
+	}
+
+function condRowsComplete() {
+	const rows = document.querySelectorAll('#from-list .list-item');
+	if (rows.length === 0) { return false; }
+	let ok = true;
+	rows.forEach(row => {
+		const sel = row.querySelector('.sensor-select');
+		const val = row.querySelector('.cond-value');
+		if (!sel || !sel.value || !val || val.value.trim() === '') { ok = false; }
+		});
+	return ok;
+	}
+
+// Submit is enabled with at least one retrieve sensor, and - when the query
+// is condition-filtered - every condition row complete.
+function updateSubmitState() {
+	const btn = document.getElementById('querygo');
+	if (!btn) { return; }
+	let sensors = 0;
+	document.querySelectorAll('#get-list .list-item').forEach(row => {
+		const sel = row.querySelector('.sensor-select');
+		if (sel && sel.value) { sensors++; }
+		});
+	let ok = sensors > 0;
+	if (ok && document.getElementById('targets').value === 'matching') {
+		ok = condRowsComplete();
+		}
+	btn.disabled = !ok;
+	}
+
+function submitQuery() {
+	const sensors = [];
+	document.querySelectorAll('#get-list .list-item').forEach(row => {
+		const sel = row.querySelector('.sensor-select');
+		if (!sel || !sel.value) { return; }
+		const s = { sid: parseInt(sel.value, 10) };
+		const params = {};
+		row.querySelectorAll('.param-input').forEach(inp => { params[inp.dataset.field] = inp.value; });
+		if (Object.keys(params).length > 0) { s.params = params; }
+		sensors.push(s);
+		});
+	if (sensors.length === 0) { return; }
+	const body = { target: 'all', action: 'query', sensors: sensors };
+	if (document.getElementById('targets').value === 'matching') {
+		if (!condRowsComplete()) { return; }
+		body.conditions = buildCondTree(document.getElementById('from-list'));
+		}
+	fetch('/api/commands.php', {
+		method: 'POST',
+		credentials: 'same-origin',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(body)
+		})
+		.then(r => r.json().then(d => ({ ok: r.ok, d: d })))
+		.then(({ ok, d }) => {
+			if (ok && d && d.ok) {
+				window.location.href = '/modules.php?view=queryresults';
+				}
+			else {
+				LuminumOverlay.show({
+					title: 'Query Error',
+					message: (d && d.error) ? d.error : 'The query could not be submitted.',
+					buttons: [{ label: 'OK', onclick: function () { LuminumOverlay.hide(); } }]
+					});
+				}
+			})
+		.catch(() => {
+			LuminumOverlay.show({
+				title: 'Query Error',
+				message: 'The query could not be submitted.',
+				buttons: [{ label: 'OK', onclick: function () { LuminumOverlay.hide(); } }]
+				});
+			});
+	}
+
 window.addEventListener('DOMContentLoaded', () => {
 	// Capture pristine markup before any rows are added or mutated
 	initialGetList = document.getElementById('get-list').innerHTML;
@@ -48,6 +258,18 @@ window.addEventListener('DOMContentLoaded', () => {
 	updateDragHandleIcons(document.getElementById('from-list'));
 	attachHandlers();
 	initSortable();
+
+	// The sortable re-inits replace the list containers, so the builder's
+	// own listeners live on document (delegated) instead.
+	document.addEventListener('change', (e) => {
+		if (e.target.classList && e.target.classList.contains('sensor-select')) {
+			const row = e.target.closest('.list-item');
+			if (row && row.closest('#get-list')) { renderParams(row, e.target.value); }
+			}
+		updateSubmitState();
+		});
+	document.addEventListener('input', updateSubmitState);
+	updateSubmitState();
 	});
 
 let initialGetList = '';
@@ -65,6 +287,7 @@ function resetForm() {
 	fromContainer.style.opacity = '1';
 
 	initSortable();
+	updateSubmitState();
 	}
 
 function addRow(event) {
@@ -75,6 +298,8 @@ function addRow(event) {
 
 	newRow.querySelectorAll('input').forEach(input => input.value = '');
 	newRow.querySelectorAll('select').forEach(select => select.selectedIndex = 0);
+	const pbox = newRow.querySelector('.param-fields');
+	if (pbox) { pbox.innerHTML = ''; }
 
 	// Insert right after the clicked row (not at the end of the container).
 	// Appending to the end put a new row *after* a group and dropped the
@@ -97,6 +322,7 @@ function addRow(event) {
 		insertLogicalOperators(document.getElementById('from-list'));
 		document.getElementById("tsuffix").textContent = "the following conditions:";
 		}
+	updateSubmitState();
 	}
 
 function removeRow(event) {
@@ -133,6 +359,7 @@ function removeRow(event) {
 		// the next top-level row is kept when removing inside a group
 		insertLogicalOperators(document.getElementById('from-list'));
 		}
+	updateSubmitState();
 	}
 
 function updateRemoveButtons(container) {
@@ -230,7 +457,7 @@ function insertLogicalOperators(container) {
 			const anchor = anchorOf(blocks[i]);
 			if (!anchor) continue;
 
-			const br = document.createElement('br');
+			const br = document.createElement('br>');
 			br.className = 'logical-operator-br';
 
 			const select = document.createElement('select');
@@ -301,6 +528,8 @@ function toggleGroup(event) {
 		const newRow = nextRow.cloneNode(true);
 		newRow.querySelectorAll('input').forEach(input => input.value = '');
 		newRow.querySelectorAll('select').forEach(select => select.selectedIndex = 0);
+		const pbox = newRow.querySelector('.param-fields');
+		if (pbox) { pbox.innerHTML = ''; }
 		newRow.querySelectorAll('.logical-operator, .logical-operator-br, .group-button, .remove').forEach(el => el.remove());
 		groupContainer.appendChild(newRow);
 		}
@@ -334,6 +563,24 @@ function toggleGroup(event) {
 	insertLogicalOperators(fromContainer);
 	attachHandlers();
 	initSortable();
+	updateSubmitState();
+	}
+
+function switchTab(evt, configSect) {
+	var i, x, tablinks;
+	x = document.getElementsByClassName("configtab");
+
+	for (i = 0; i < x.length; i++) {
+		x[i].style.display = "none";
+		}
+
+	tablinks = document.getElementsByClassName("tablink");
+	for (i = 0; i < x.length; i++) {
+		tablinks[i].className = tablinks[i].className.replace(" tabbarsel", "");
+		}
+
+	document.getElementById(configSect).style.display = "block";
+	evt.currentTarget.className += " tabbarsel";
 	}
 
 function selectSuffix() {
@@ -349,6 +596,7 @@ function selectSuffix() {
 		else { document.getElementById("tsuffix").textContent = "the following condition:"; }
 		document.getElementById("from-list").style.opacity = "1";
 		}
+	updateSubmitState();
 	}
 
 function initSortable() {
@@ -382,6 +630,7 @@ function initSortable() {
 				updateDragHandleIcons(container);
 				attachHandlers();
 				if (container.id === 'from-list') insertLogicalOperators(container);
+				updateSubmitState();
 				}
 			});
 
@@ -407,6 +656,7 @@ function initSortable() {
 					updateDragHandleIcons(root);
 					attachHandlers();
 					insertLogicalOperators(root);
+					updateSubmitState();
 					}
 				});
 			});

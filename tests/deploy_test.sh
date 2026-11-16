@@ -194,6 +194,15 @@ SKEY=$(dbq "select CVAL from SYSTEM.CONFIG where CKEY='SKEY';")
 check "installer generated an SKEY" $([ -n "$SKEY" ]; echo $?)
 PERL5LIB="$PERL_LIBS" perl "$ROOT/mkprovision.pl" --out "$RUN/config.ini" > "$RUN/mkprov.log" 2>&1
 check "mkprovision.pl generated config.ini" $([ -s "$RUN/config.ini" ]; echo $?) "see $RUN/mkprov.log"
+# The CLI configuration tool is installed alongside the other operator tools
+# and works against the real install's SYSTEM.CONFIG: it reads a seeded value
+# (MISSINGAFTER, default 90) and an unseeded, flow-irrelevant key (USERLOGGING)
+# can be set and is persisted.
+check "luminum-config.pl is installed and executable" $([ -x "$ROOT/luminum-config.pl" ]; echo $?)
+PERL5LIB="$PERL_LIBS" perl "$ROOT/luminum-config.pl" get MISSINGAFTER > "$RUN/lumcfg.log" 2>&1
+check "luminum-config.pl reads the installed config" $([ "$(cat "$RUN/lumcfg.log")" = "MISSINGAFTER = 90" ]; echo $?) "see $RUN/lumcfg.log"
+PERL5LIB="$PERL_LIBS" perl "$ROOT/luminum-config.pl" set USERLOGGING=Enabled > "$RUN/lumcfg2.log" 2>&1
+check "luminum-config.pl set persists to SYSTEM.CONFIG" $([ "$(cat "$RUN/lumcfg2.log")" = "set USERLOGGING = Enabled" ] && [ "$(dbq "select CVAL from SYSTEM.CONFIG where CKEY='USERLOGGING';")" = "Enabled" ]; echo $?) "see $RUN/lumcfg2.log"
 python3 - "$RUN/config.ini" "$SKEY" "$LPORT" <<'EOF'
 import json, sys
 d = json.load(open(sys.argv[1]))
@@ -502,6 +511,79 @@ code=$(curl -k -s -o /dev/null -w '%{http_code}' \
 check "console: anonymous sensor POST rejected (302)" $([ "$code" = "302" ]; echo $?) "got: $code"
 check "anonymous POST inserted nothing" \
     $([ "$(dbq "select count(*) from CONTENT.SENSORS where NAME='Anon Sensor';")" = "0" ]; echo $?)
+
+# --- query builder + results (protocol 7.3 condition filtering) --------------
+# The query UI posts to /api/commands.php: a broadcast (target "all") query
+# whose condition tree the live client evaluates itself - it answers only
+# when the conditions match, and QUERYRESULTS is filled by the worker.
+code=$(curl -k -s -o "$RUN/query.html" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/modules.php?view=query")
+check "console: query page renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+check "console: query page offers the sensor dropdowns" \
+    $(grep -q "sensor-select" "$RUN/query.html" 2>/dev/null \
+        && grep -q "Deploy Test Sensor" "$RUN/query.html" 2>/dev/null; echo $?)
+
+SENSOR_Q=$(dbq "select ID from CONTENT.SENSORS where NAME='Deploy Test Sensor';")
+body=$(python3 -c 'import json,sys;print(json.dumps({"target":"all","action":"query","sensors":[{"sid":int(sys.argv[1])}],"conditions":{"sid":int(sys.argv[1]),"op":"==","value":"probe-output-42"}}))' "$SENSOR_Q")
+code=$(curl -k -s -o "$RUN/query-post.json" -w '%{http_code}' -b "$RUN/cookies" \
+    -H 'Content-Type: application/json' -d "$body" \
+    "https://127.0.0.1:$WPORT/api/commands.php")
+check "api: matching broadcast query accepted (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+QID_Q=$(python3 -c "import json;print(json.load(open('$RUN/query-post.json'))['qid'])")
+CMD_Q=$(python3 -c "import json;print(json.load(open('$RUN/query-post.json'))['command'])")
+CFG_Q=$(python3 -c "import json;print(json.load(open('$RUN/query-post.json'))['config_command'])")
+check "query row enqueued for the broadcast target" \
+    $([ "$(dbq "select concat(ACTION,'|',TARGET) from CLIENTS.COMMANDS where ID='$CMD_Q';")" = "query|all" ]; echo $?)
+check "config row enqueued for the broadcast target" \
+    $([ "$(dbq "select TARGET from CLIENTS.COMMANDS where ID='$CFG_Q';")" = "all" ]; echo $?)
+check "query DATA carries the condition tree" \
+    $([ "$(dbq "select if(DATA like '%conditions%','yes','no') from CLIENTS.COMMANDS where ID='$CMD_Q';")" = "yes" ]; echo $?)
+check "config DATA carries the sensor definition" \
+    $([ "$(dbq "select if(DATA like '%Deploy Test Sensor%','yes','no') from CLIENTS.COMMANDS where ID='$CFG_Q';")" = "yes" ]; echo $?)
+
+res_ok=1
+for i in $(seq 1 60); do
+    r=$(dbq "select concat(UID,'|',SENSORID,'|',STATUS) from CLIENTS.QUERYRESULTS where QID='$QID_Q';")
+    [ -n "$r" ] && { res_ok=0; break; }
+    sleep 0.5
+done
+check "matching query answered by the live client" "$res_ok" "no QUERYRESULTS row for $QID_Q"
+check "result row is from the live client with OK status" \
+    $([ "$r" = "$UID_C|$SENSOR_Q|OK" ]; echo $?) "got: $r"
+check "result row carries the sensor output" \
+    $([ "$(dbq "select if(OUTPUT like '%probe-output-42%','yes','no') from CLIENTS.QUERYRESULTS where QID='$QID_Q';")" = "yes" ]; echo $?)
+
+# A query whose condition the client cannot match must get NO answer: the
+# client evaluates the tree, finds it false, and publishes nothing.
+body=$(python3 -c 'import json,sys;print(json.dumps({"target":"all","action":"query","sensors":[{"sid":int(sys.argv[1])}],"conditions":{"sid":int(sys.argv[1]),"op":"==","value":"does-not-match"}}))' "$SENSOR_Q")
+code=$(curl -k -s -o "$RUN/query-nomatch.json" -w '%{http_code}' -b "$RUN/cookies" \
+    -H 'Content-Type: application/json' -d "$body" \
+    "https://127.0.0.1:$WPORT/api/commands.php")
+check "api: non-matching broadcast query accepted (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+QID_N=$(python3 -c "import json;print(json.load(open('$RUN/query-nomatch.json'))['qid'])")
+sent_ok=1
+for i in $(seq 1 60); do
+    st=$(dbq "select STATUS from CLIENTS.COMMANDS where QID='$QID_N';")
+    [ "$st" = "SENT" ] && { sent_ok=0; break; }
+    sleep 0.5
+done
+check "non-matching query reached the client (SENT)" "$sent_ok" "final status: $(dbq "select STATUS from CLIENTS.COMMANDS where QID='$QID_N';")"
+sleep 5
+check "non-matching query got no answer (client stayed silent)" \
+    $([ "$(dbq "select count(*) from CLIENTS.QUERYRESULTS where QID='$QID_N';")" = "0" ]; echo $?)
+
+code=$(curl -k -s -o "$RUN/queryresults.json" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/api/queryresults.php")
+check "api: queryresults renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+check "api: queryresults carries the answered query and its output" \
+    $(grep -q "$QID_Q" "$RUN/queryresults.json" 2>/dev/null \
+        && grep -q "probe-output-42" "$RUN/queryresults.json" 2>/dev/null; echo $?)
+
+code=$(curl -k -s -o "$RUN/queryresults.html" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/modules.php?view=queryresults")
+check "console: query results page renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+check "console: results page polls the results API" \
+    $(grep -q "/api/queryresults.php" "$RUN/queryresults.html" 2>/dev/null; echo $?)
 
 # --- inactivity session timeout ----------------------------------------------
 # Login must stamp the deadline from the UTIMEOUT server option (seeded 15M),

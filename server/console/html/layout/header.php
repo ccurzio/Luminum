@@ -104,7 +104,8 @@ $ienabled = $invinfo["CVAL"];
 					print "<div class=\"dropdown-divider\" style=\"width: 200px;\"></div>\n";
 					}
 				print "<a href=\"/modules.php?view=query\">Query</a>\n";
-				print "<a href=\"/modules.php?view=summary\">Summary</a>\n";
+				print "<a href=\"/modules.php?view=queryresults\">Query Results</a>\n";
+				print "<a href=\"/modules.php?view=trajectory\">Trajectory</a>\n";
 				mysqli_select_db($db, "SYSTEM") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
 				$lumyquery = mysqli_query($db, "select CVAL from CONFIG where CKEY = 'ENLUMYS'");
 				$lumyinfo = $lumyquery ? $lumyquery->fetch_assoc() : null;

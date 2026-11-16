@@ -1,13 +1,15 @@
 <?php
 //
 // console_api_test.php - offline test harness for the console API helpers
-// in server/console/html/api/clientmap.php and commandmap.php.
+// in server/console/html/api/clientmap.php, commandmap.php, and
+// queryresultmap.php.
 //
 // Usage: php tests/console_api_test.php
 // Exit code: 0 if all checks pass, 1 otherwise.
 
 require_once __DIR__ . '/../server/console/html/api/clientmap.php';
 require_once __DIR__ . '/../server/console/html/api/commandmap.php';
+require_once __DIR__ . '/../server/console/html/api/queryresultmap.php';
 
 $failures = 0;
 function ok($name, $cond, $detail = null) {
@@ -148,6 +150,118 @@ ok('tally: linux incremented case-insensitively', $tally['linux'] === 2, var_exp
 ok('tally: macos incremented', $tally['macos'] === 1);
 ok('tally: windows incremented', $tally['windows'] === 1);
 ok('tally: unknown platform ignored', array_sum($tally) === 4);
+
+// --- luminum_query_ops ------------------------------------------------------
+ok('ops: the eight protocol operators',
+	luminum_query_ops() === ['==', '!=', '=~', '!~', '>', '>=', '<', '<=']);
+
+// --- luminum_validate_query_conditions --------------------------------------
+$leaf = ['sid' => 3, 'op' => '==', 'value' => 'prod'];
+ok('conditions: valid leaf', luminum_validate_query_conditions($leaf) === $leaf);
+ok('conditions: leaf with params',
+	luminum_validate_query_conditions(['sid' => 3, 'op' => '==', 'value' => 'x', 'params' => ['h' => 'db-01']])
+		=== ['sid' => 3, 'op' => '==', 'value' => 'x', 'params' => ['h' => 'db-01']]);
+ok('conditions: empty params omitted',
+	luminum_validate_query_conditions(['sid' => 3, 'op' => '==', 'value' => 'x', 'params' => []])
+		=== ['sid' => 3, 'op' => '==', 'value' => 'x']);
+$node = ['logic' => 'AND', 'left' => $leaf, 'right' => ['sid' => 4, 'op' => '=~', 'value' => 'web']];
+ok('conditions: valid AND node', luminum_validate_query_conditions($node) === $node);
+ok('conditions: nested OR node', luminum_validate_query_conditions([
+	'logic' => 'OR',
+	'left' => $node,
+	'right' => ['sid' => 5, 'op' => '>', 'value' => '10'],
+]) !== null);
+ok('conditions: rejects null', luminum_validate_query_conditions(null) === null);
+ok('conditions: rejects non-array', luminum_validate_query_conditions('nope') === null);
+ok('conditions: rejects unknown op', luminum_validate_query_conditions(['sid' => 3, 'op' => 'eq', 'value' => 'x']) === null);
+ok('conditions: rejects string sid', luminum_validate_query_conditions(['sid' => '3', 'op' => '==', 'value' => 'x']) === null);
+ok('conditions: rejects zero sid', luminum_validate_query_conditions(['sid' => 0, 'op' => '==', 'value' => 'x']) === null);
+ok('conditions: rejects missing value', luminum_validate_query_conditions(['sid' => 3, 'op' => '==']) === null);
+ok('conditions: rejects non-string value', luminum_validate_query_conditions(['sid' => 3, 'op' => '==', 'value' => 3]) === null);
+ok('conditions: rejects over-long value', luminum_validate_query_conditions(['sid' => 3, 'op' => '==', 'value' => str_repeat('a', 1025)]) === null);
+ok('conditions: rejects bad param key', luminum_validate_query_conditions(['sid' => 3, 'op' => '==', 'value' => 'x', 'params' => ['bad key' => 'v']]) === null);
+ok('conditions: rejects bad param value', luminum_validate_query_conditions(['sid' => 3, 'op' => '==', 'value' => 'x', 'params' => ['k' => 3]]) === null);
+ok('conditions: rejects bad logic', luminum_validate_query_conditions(['logic' => 'XOR', 'left' => $leaf, 'right' => $leaf]) === null);
+ok('conditions: rejects node missing children', luminum_validate_query_conditions(['logic' => 'AND', 'left' => $leaf]) === null);
+ok('conditions: rejects node with bad child', luminum_validate_query_conditions(['logic' => 'AND', 'left' => $leaf, 'right' => ['sid' => 0, 'op' => '==', 'value' => 'x']]) === null);
+// 26 leaves is over the cap.
+$big = $leaf;
+for ($i = 0; $i < 25; $i++) { $big = ['logic' => 'AND', 'left' => $big, 'right' => $leaf]; }
+ok('conditions: rejects 26 leaves', luminum_validate_query_conditions($big) === null);
+// Depth over 8 (25 leaves also trips the leaf cap, so use a single-leaf chain).
+$deep = $leaf;
+for ($i = 0; $i < 10; $i++) { $deep = ['logic' => 'AND', 'left' => $deep, 'right' => $leaf]; }
+ok('conditions: rejects depth over 8', luminum_validate_query_conditions($deep) === null);
+
+// --- luminum_query_condition_sids -------------------------------------------
+ok('condition sids: flat leaf', luminum_query_condition_sids($leaf) === [3]);
+ok('condition sids: node, first-occurrence order, deduplicated',
+	luminum_query_condition_sids(['logic' => 'OR',
+		'left' => ['logic' => 'AND', 'left' => ['sid' => 4, 'op' => '==', 'value' => 'a'], 'right' => $leaf],
+		'right' => ['sid' => 4, 'op' => '==', 'value' => 'b']]) === [4, 3]);
+
+// --- luminum_sensor_has_script ----------------------------------------------
+$full = ['LSTYPE' => 'shell', 'LSCRIPT' => 'echo l', 'MSTYPE' => 'shell', 'MSCRIPT' => 'echo m', 'WSTYPE' => 'powershell', 'WSCRIPT' => 'echo w'];
+$linuxonly = ['LSTYPE' => 'shell', 'LSCRIPT' => 'echo l', 'MSTYPE' => null, 'MSCRIPT' => null, 'WSTYPE' => null, 'WSCRIPT' => null];
+$none = ['LSTYPE' => null, 'LSCRIPT' => null, 'MSTYPE' => null, 'MSCRIPT' => null, 'WSTYPE' => null, 'WSCRIPT' => null];
+ok('has_script: platform pair present', luminum_sensor_has_script($full, ['LSTYPE', 'LSCRIPT']) === true);
+ok('has_script: platform pair absent', luminum_sensor_has_script($linuxonly, ['MSTYPE', 'MSCRIPT']) === false);
+ok('has_script: empty type rejected', luminum_sensor_has_script(['LSTYPE' => '', 'LSCRIPT' => 'echo l'], ['LSTYPE', 'LSCRIPT']) === false);
+ok('has_script: empty script rejected', luminum_sensor_has_script(['LSTYPE' => 'shell', 'LSCRIPT' => ''], ['LSTYPE', 'LSCRIPT']) === false);
+ok('has_script: any platform (broadcast)', luminum_sensor_has_script($linuxonly, null) === true);
+ok('has_script: no platform (broadcast)', luminum_sensor_has_script($none, null) === false);
+ok('has_script: non-array row', luminum_sensor_has_script(null, null) === false);
+
+// --- luminum_merge_sensor_params --------------------------------------------
+$known = ['host' => 'db-01', 'port' => null];
+ok('merge params: provided wins', luminum_merge_sensor_params($known, ['host' => 'web-01']) === ['host' => 'web-01']);
+ok('merge params: default fills gap', luminum_merge_sensor_params($known, []) === ['host' => 'db-01']);
+ok('merge params: null default dropped', luminum_merge_sensor_params(['p' => null], []) === []);
+ok('merge params: declared order kept', luminum_merge_sensor_params(['a' => '1', 'b' => '2'], ['b' => 'x', 'a' => 'y']) === ['a' => 'y', 'b' => 'x']);
+ok('merge params: empty string provided wins over default', luminum_merge_sensor_params(['a' => '1'], ['a' => '']) === ['a' => '']);
+
+// --- luminum_query_command_data with conditions ------------------------------
+$data = luminum_query_command_data('qid-1', [['sid' => 7, 'params' => []]], $node);
+$decoded = json_decode($data, true);
+ok('query data: conditions carried when present',
+	$decoded === ['qid' => 'qid-1', 'sensors' => [['sid' => 7]], 'conditions' => $node],
+	$data);
+$data = luminum_query_command_data('qid-1', [['sid' => 7, 'params' => []]], null);
+$decoded = json_decode($data, true);
+ok('query data: conditions field omitted when null',
+	$decoded === ['qid' => 'qid-1', 'sensors' => [['sid' => 7]]],
+	$data);
+
+// --- luminum_truncate_output -------------------------------------------------
+ok('truncate: short output untouched', luminum_truncate_output('hello') === 'hello');
+ok('truncate: at the cap untouched', luminum_truncate_output(str_repeat('a', 4096)) === str_repeat('a', 4096));
+$cut = luminum_truncate_output(str_repeat('a', 4100));
+ok('truncate: over the cap cut + marked', $cut === str_repeat('a', 4096) . '…', var_export(substr($cut, 4090), true));
+ok('truncate: null passes through', luminum_truncate_output(null) === null);
+
+// --- luminum_result_row -------------------------------------------------------
+$rr = luminum_result_row([
+	'UID' => '42', 'HOSTNAME' => 'web-01', 'SENSORID' => '7', 'SENSORNAME' => 'probe',
+	'STATUS' => 'OK', 'OUTPUT' => "line1\nline2", 'ERR' => null, 'TS' => '2026-11-16 10:00:00',
+]);
+ok('result row: shaped fields',
+	$rr === ['uid' => 42, 'hostname' => 'web-01', 'sensor' => 7, 'sensor_name' => 'probe',
+		'status' => 'OK', 'output' => "line1\nline2", 'err' => null, 'ts' => '2026-11-16 10:00:00'],
+	json_encode($rr));
+$rr = luminum_result_row([
+	'UID' => '42', 'HOSTNAME' => null, 'SENSORID' => '7', 'SENSORNAME' => null,
+	'STATUS' => 'ERR', 'OUTPUT' => null, 'ERR' => 'TIMEOUT', 'TS' => '2026-11-16 10:00:00',
+]);
+ok('result row: deleted client/sensor fall back to ID labels',
+	$rr['hostname'] === 'client 42' && $rr['sensor_name'] === 'Sensor 7', json_encode($rr));
+
+// --- luminum_query_data_sids --------------------------------------------------
+ok('data sids: parsed from query DATA',
+	luminum_query_data_sids('{"qid":"q","sensors":[{"sid":7},{"sid":9,"params":{"h":"x"}}]}') === [7, 9]);
+ok('data sids: unparseable DATA -> []', luminum_query_data_sids('not json') === []);
+ok('data sids: non-string DATA -> []', luminum_query_data_sids(null) === []);
+ok('data sids: missing sensors -> []', luminum_query_data_sids('{"qid":"q"}') === []);
+ok('data sids: bad entries skipped', luminum_query_data_sids('{"sensors":[{"sid":7},{"sid":"x"},3]}') === [7]);
 
 echo str_repeat('-', 60), "\n";
 if ($failures) {

@@ -77,18 +77,112 @@ function luminum_validate_query_sensors($sensors) {
 	return $out;
 }
 
-// The DATA column payload for a query command (protocol 6.1). $sensors is
-// the normalized list from luminum_validate_query_sensors; "params" is
-// omitted for entries with none. $qid doubles as the outbox QID and the
-// envelope id, so the answer's data.qid correlates it (7.3).
-function luminum_query_command_data($qid, $sensors) {
+// The DATA column payload for a query command (protocol 6.1, 7.3).
+// $sensors is the normalized list from luminum_validate_query_sensors;
+// "params" is omitted for entries with none. $conditions is the resolved
+// condition tree (null when the query has none - the field is then omitted).
+// $qid doubles as the outbox QID and the envelope id, so the answer's
+// data.qid correlates it (7.3).
+function luminum_query_command_data($qid, $sensors, $conditions = null) {
 	$list = [];
 	foreach ($sensors as $s) {
 		$entry = ['sid' => $s['sid']];
 		if ($s['params'] !== []) { $entry['params'] = $s['params']; }
 		$list[] = $entry;
 	}
-	return json_encode(['qid' => $qid, 'sensors' => $list]);
+	$data = ['qid' => $qid, 'sensors' => $list];
+	if ($conditions !== null) { $data['conditions'] = $conditions; }
+	return json_encode($data);
+}
+
+// The comparison operators a query condition leaf may use (protocol 7.3).
+function luminum_query_ops() {
+	return ['==', '!=', '=~', '!~', '>', '>=', '<', '<='];
+}
+
+// A query condition tree (protocol 7.3): a leaf is {sid, op, value, params?}
+// (sid a positive int, op one of luminum_query_ops(), value a string of at
+// most 1024 chars, params an object of string values like a sensor's); an
+// internal node is {logic, left, right} with logic AND/OR and both children
+// valid nodes. At most 25 leaves, depth at most 8. Returns the normalized
+// tree (sid as int, params as an array, omitted when empty) or null when
+// malformed.
+function luminum_validate_query_conditions($node, $depth = 0, &$leaves = 0) {
+	if (!is_array($node)) { return null; }
+	if ($depth > 8) { return null; }
+	if (array_key_exists('logic', $node) || array_key_exists('left', $node) || array_key_exists('right', $node)) {
+		if (!in_array($node['logic'] ?? null, ['AND', 'OR'], true)) { return null; }
+		if (!array_key_exists('left', $node) || !array_key_exists('right', $node)) { return null; }
+		$left = luminum_validate_query_conditions($node['left'], $depth + 1, $leaves);
+		if ($left === null) { return null; }
+		$right = luminum_validate_query_conditions($node['right'], $depth + 1, $leaves);
+		if ($right === null) { return null; }
+		return ['logic' => $node['logic'], 'left' => $left, 'right' => $right];
+	}
+	$sid = $node['sid'] ?? null;
+	if (!is_int($sid) || $sid < 1) { return null; }
+	if (!in_array($node['op'] ?? null, luminum_query_ops(), true)) { return null; }
+	$value = $node['value'] ?? null;
+	if (!is_string($value) || strlen($value) > 1024) { return null; }
+	$params = [];
+	if (isset($node['params']) && $node['params'] !== null) {
+		if (!is_array($node['params'])) { return null; }
+		foreach ($node['params'] as $k => $v) {
+			if (!is_string($k) || !preg_match('/^[A-Za-z0-9_]{1,64}$/', $k)) { return null; }
+			if (!is_string($v) || strlen($v) > 1024) { return null; }
+			$params[$k] = $v;
+		}
+	}
+	$leaves++;
+	if ($leaves > 25) { return null; }
+	$out = ['sid' => $sid, 'op' => $node['op'], 'value' => $value];
+	if ($params !== []) { $out['params'] = $params; }
+	return $out;
+}
+
+// The unique sensor IDs referenced by a (validated) condition tree, in
+// first-occurrence order - the config command must carry their definitions
+// alongside the retrieve sensors' (protocol 7.3).
+function luminum_query_condition_sids($tree) {
+	$out = [];
+	$walk = function ($node) use (&$walk, &$out) {
+		if (isset($node['logic'])) {
+			$walk($node['left']);
+			$walk($node['right']);
+			return;
+		}
+		if (!in_array($node['sid'], $out, true)) { $out[] = $node['sid']; }
+	};
+	$walk($tree);
+	return $out;
+}
+
+// Whether a SENSORS row carries a usable script: for the given (type, script)
+// column pair (a specific platform), or for any platform when $cols is null
+// (a broadcast query - at least one platform must be able to run it).
+function luminum_sensor_has_script($sensor, $cols = null) {
+	if (!is_array($sensor)) { return false; }
+	if ($cols !== null) {
+		list($t, $s) = $cols;
+		return is_string($sensor[$t] ?? null) && $sensor[$t] !== ''
+			&& is_string($sensor[$s] ?? null) && $sensor[$s] !== '';
+	}
+	return luminum_sensor_has_script($sensor, ['LSTYPE', 'LSCRIPT'])
+		|| luminum_sensor_has_script($sensor, ['MSTYPE', 'MSCRIPT'])
+		|| luminum_sensor_has_script($sensor, ['WSTYPE', 'WSCRIPT']);
+}
+
+// Merge user-provided params with a sensor's declared defaults (the
+// SENSORPARAMS rows as a field => default|null map): provided values win, a
+// null default contributes nothing, and the result is ordered by the
+// declared fields. Unknown fields are the caller's job to reject.
+function luminum_merge_sensor_params($known, $params) {
+	$merged = [];
+	foreach ($known as $k => $default) {
+		if (array_key_exists($k, $params)) { $merged[$k] = $params[$k]; }
+		elseif ($default !== null) { $merged[$k] = $default; }
+	}
+	return $merged;
 }
 
 // The DATA column payload for the core/config command that delivers sensor
