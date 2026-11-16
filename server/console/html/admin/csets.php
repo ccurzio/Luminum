@@ -27,7 +27,7 @@ $cscount = mysqli_num_rows($csquery);
                 print "</div>\n";
                 ?>
 		<table style="margin-top: 10px;">
-		<tr><td colspan="10"><div style="position: absolute; padding-top: 7px; padding-left: 5px;">0 of <?php print $cscount; ?> items</div>
+		<tr><td colspan="10"><div style="position: absolute; padding-top: 7px; padding-left: 5px;"><span id="selcount">0</span> <span id="totcount">of <?php print $cscount; ?></span> items</div>
 		<div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($cscount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
 		<tr><td style="width: 15px;">
 		<?php
@@ -119,6 +119,7 @@ function allToggle() {
 		var rowId = removeLetters(checkbox.id);
 		rowHighlight(rowId);
 		});
+	allCheck();
 	}
 
 function allCheck() {
@@ -128,6 +129,8 @@ function allCheck() {
 	checkboxes.forEach(checkbox => {
 		if (checkbox.checked == true) { checkTrigger++; }
 		});
+
+	document.getElementById("selcount").textContent = checkTrigger;
 
 	if (checkTrigger == checkboxes.length) {
 		document.getElementById("selectall").checked = "checked";
