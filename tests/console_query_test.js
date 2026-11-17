@@ -25,34 +25,73 @@ function ok(name, cond, detail) {
 function eq(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
 
 // --- minimal DOM shim -------------------------------------------------------
-// Supports exactly the operations the querybuilder DOM helpers use:
-// children, classList.contains, querySelector(All) for the selectors they
-// use, setAttribute, and .value on inputs/selects.
+// Supports the operations the querybuilder DOM helpers and the page's
+// insertLogicalOperators use: children with parent links, classList,
+// className, style, value, querySelector(All) for the selectors they use,
+// appendChild/after/before/remove, and the sibling/parent accessors.
 class El {
 	constructor(tag, classes) {
 		this.tagName = String(tag).toLowerCase();
 		this.classes = classes || [];
 		this.children = [];
+		this.parent = null;
 		this.attrs = {};
 		this.value = "";
+		this.style = {};
+		this.textContent = "";
+		this.id = "";
+		this._listeners = {};
 	}
 	get classList() {
 		const self = this;
 		return { contains: (c) => self.classes.indexOf(c) >= 0 };
 	}
-	setAttribute(n, v) { this.attrs[n] = String(v); }
+	get className() { return this.classes.join(" "); }
+	set className(v) { this.classes = String(v).split(/\s+/).filter((x) => x !== ""); }
+	setAttribute(n, v) { this.attrs[n] = String(v); if (n === "id") { this.id = String(v); } }
 	getAttribute(n) { return (n in this.attrs) ? this.attrs[n] : null; }
-	appendChild(c) { this.children.push(c); return c; }
+	appendChild(c) { c.parent = this; this.children.push(c); return c; }
+	get parentElement() { return this.parent; }
+	get nextElementSibling() {
+		if (!this.parent) { return null; }
+		const i = this.parent.children.indexOf(this);
+		return (i >= 0 && i < this.parent.children.length - 1) ? this.parent.children[i + 1] : null;
+	}
+	get firstChild() { return this.children.length ? this.children[0] : null; }
+	addEventListener(type, fn) { (this._listeners[type] = this._listeners[type] || []).push(fn); }
+	remove() {
+		if (!this.parent) { return; }
+		const i = this.parent.children.indexOf(this);
+		if (i >= 0) { this.parent.children.splice(i, 1); }
+		this.parent = null;
+	}
+	after(el) {
+		if (!this.parent) { return; }
+		el.parent = this.parent;
+		this.parent.children.splice(this.parent.children.indexOf(this) + 1, 0, el);
+	}
+	before(el) {
+		if (!this.parent) { return; }
+		el.parent = this.parent;
+		this.parent.children.splice(this.parent.children.indexOf(this), 0, el);
+	}
 	_matches(sel) {
 		if (sel === "input") { return this.tagName === "input"; }
 		if (sel === 'select[name="fromop"]') { return this.tagName === "select" && this.attrs["name"] === "fromop"; }
 		if (sel === "select.logical-operator") { return this.tagName === "select" && this.classes.indexOf("logical-operator") >= 0; }
+		if (sel.charAt(0) === ".") { return this.classes.indexOf(sel.slice(1)) >= 0; }
 		throw new Error("unsupported selector: " + sel);
 	}
 	*walk() { for (const c of this.children) { yield c; yield* c.walk(); } }
 	querySelectorAll(sel) {
+		if (sel === ":scope > .list-item") {
+			return this.children.filter((c) => c.classes && c.classes.indexOf("list-item") >= 0);
+		}
+		const parts = sel.indexOf(",") >= 0 ? sel.split(",").map((s) => s.trim()) : [sel];
 		const out = [];
-		for (const n of this.walk()) { if (n._matches(sel)) { out.push(n); } }
+		for (const n of this.walk()) {
+			if (parts.some((p) => n._matches(p)) && out.indexOf(n) < 0) { out.push(n); }
+		}
 		return out;
 	}
 	querySelector(sel) { const r = this.querySelectorAll(sel); return r.length ? r[0] : null; }
@@ -68,7 +107,8 @@ global.document = doc;
 const catalog = [
 	{ id: 1, name: "Hostname" },
 	{ id: 2, name: "Deploy Test Sensor" },
-	{ id: 3, name: "CPU Load" }
+	{ id: 3, name: "CPU Load" },
+	{ id: 4, name: "Uptime" }
 ];
 
 // --- resolveSensorId --------------------------------------------------------
@@ -137,22 +177,29 @@ const fromList = new El("div");
 const r1 = condRow("Hostname", "equals", "web-01", "AND");
 const group = new El("div", ["group-container"]);
 group.appendChild(condRow("CPU Load", "greaterthan", "10", "OR"));
-const r3 = condRow("Deploy Test Sensor", "contains", "probe", null);
-const r3after = new El("select", ["logical-operator"]); r3after.value = "AND";
-r3.appendChild(r3after);
-group.appendChild(r3);
+group.appendChild(condRow("Deploy Test Sensor", "contains", "probe", null));
 fromList.appendChild(r1);
 fromList.appendChild(group);
+// The group's trailing operator sits outside the group, as the siblings
+// immediately after it (br, select, button)
+const gbr = new El("br"); gbr.classes.push("logical-operator-br");
+const gsel = new El("select", ["logical-operator"]); gsel.value = "AND";
+const gbtn = new El("img", ["group-button"]);
+fromList.appendChild(gbr);
+fromList.appendChild(gsel);
+fromList.appendChild(gbtn);
+fromList.appendChild(condRow("Uptime", "greaterthan", "5", null));
 
 const blocks = Q.collectCondBlocks(fromList, catalog);
-ok("collect: two top-level blocks (row + group)",
-	blocks.length === 2 && blocks[0].kind === "row" && blocks[1].kind === "group");
+ok("collect: three top-level blocks (row, group, row)",
+	blocks.length === 3 && blocks[0].kind === "row" && blocks[1].kind === "group" && blocks[2].kind === "row");
 ok("collect: row fields resolved",
 	blocks[0].sid === 1 && blocks[0].op === "==" && blocks[0].value === "web-01" && blocks[0].opAfter === "AND");
-ok("collect: group carries its rows and its trailing operator",
+ok("collect: group carries its rows and its trailing operator (outside the group)",
 	blocks[1].blocks.length === 2 && blocks[1].blocks[0].sid === 3 && blocks[1].blocks[1].sid === 2 && blocks[1].opAfter === "AND");
-ok("collect: the group's rows keep their operators (the last row's is the group's trailing one)",
-	blocks[1].blocks[0].opAfter === "OR" && blocks[1].blocks[1].opAfter === "AND");
+ok("collect: the group's rows keep their inner operator; the last row has none",
+	blocks[1].blocks[0].opAfter === "OR" && blocks[1].blocks[1].opAfter === null);
+ok("collect: the row after the group", blocks[2].sid === 4 && blocks[2].opAfter === null);
 ok("collect: unknown sensor resolves to a null sid",
 	Q.collectCondBlocks((function () {
 		const c = new El("div");
@@ -201,11 +248,13 @@ ok("payload: no error", !res.error, res.error);
 ok("payload: broadcast target + deduped sensors",
 	res.payload && res.payload.target === "all" && res.payload.action === "query" &&
 	JSON.stringify(res.payload.sensors) === JSON.stringify([{ sid: 1 }, { sid: 2 }]));
-ok("payload: conditions tree from the rows + group",
+ok("payload: conditions tree from the rows + group + trailing row",
 	res.payload && eq(res.payload.conditions,
 		{ logic: "AND",
-			left: { sid: 1, op: "==", value: "web-01" },
-			right: { logic: "OR", left: { sid: 3, op: ">", value: "10" }, right: { sid: 2, op: "=~", value: "probe" } } }));
+			left: { logic: "AND",
+				left: { sid: 1, op: "==", value: "web-01" },
+				right: { logic: "OR", left: { sid: 3, op: ">", value: "10" }, right: { sid: 2, op: "=~", value: "probe" } } },
+			right: { sid: 4, op: ">", value: "5" } }));
 
 doc.byId["targets"] = { value: "all" };
 res = Q.buildQueryPayload(catalog);
@@ -239,6 +288,86 @@ doc.byId["get-list"] = getEmpty;
 res = Q.buildQueryPayload(catalog);
 ok("payload: no retrieve sensors -> error",
 	res.error === "Name at least one sensor to retrieve.", res.error);
+
+// --- the page's insertLogicalOperators (extracted from modules/query.php) ---
+// The builder's inline JS is evaluated against the shim so the operator
+// placement - in particular that a group's trailing operator sits OUTSIDE
+// the group, below it - is covered offline.
+const fs = require("fs");
+const pageSrc = fs.readFileSync(path.join(__dirname, "..", "server", "console", "html", "modules", "query.php"), "utf8");
+const inlineMatch = pageSrc.match(/<script>([\s\S]*?)<\/script>/);
+ok("setup: the builder's inline script extracted", !!inlineMatch);
+global.window = { addEventListener: () => {} };
+global.Option = class Option extends El {
+	constructor(text, value) { super("option"); this.text = text; this.value = value; }
+};
+// (the eval'd function declarations also land in this module's scope; the
+// local binding is named differently to avoid the collision)
+const pageInsertLogicalOperators = eval(inlineMatch[1] + "\n;insertLogicalOperators;");
+
+function bareRow() {
+	const el = new El("div", ["list-item"]);
+	el.appendChild(new El("input"));
+	const opSel = new El("select"); opSel.setAttribute("name", "fromop"); el.appendChild(opSel);
+	el.appendChild(new El("input"));
+	return el;
+}
+doc.byId["tsuffix"] = new El("span");
+
+// Three plain rows: each operator sits inside the preceding row.
+const fl1 = new El("div");
+fl1.id = "from-list";
+const a1 = bareRow(); const a2 = bareRow(); const a3 = bareRow();
+fl1.appendChild(a1); fl1.appendChild(a2); fl1.appendChild(a3);
+pageInsertLogicalOperators(fl1);
+ok("page: a row's trailing operator sits inside the row",
+	a1.children.length === 6 &&
+	a1.children[3].classes.indexOf("logical-operator-br") >= 0 &&
+	a1.children[4].classes.indexOf("logical-operator") >= 0 &&
+	a1.children[5].classes.indexOf("group-button") >= 0);
+ok("page: the last row carries no trailing operator", a3.children.length === 3);
+
+// Row, group, row: the operator between the group and the last row must sit
+// outside the group, below it (the reported bug: it rendered inside the
+// group, on the group's last row).
+const fl2 = new El("div");
+fl2.id = "from-list";
+const b1 = bareRow();
+const g2 = new El("div", ["group-container"]);
+const b2 = bareRow(); const b4 = bareRow();
+g2.appendChild(b2); g2.appendChild(b4);
+const b3 = bareRow();
+fl2.appendChild(b1); fl2.appendChild(g2); fl2.appendChild(b3);
+pageInsertLogicalOperators(fl2);
+ok("page: the row above a group carries the collapse button inside the row",
+	b1.children.length === 6 && b1.children[5].src === "/icons/collapsegroup.png");
+ok("page: the group's trailing operator sits outside the group, below it",
+	fl2.children[1] === g2 &&
+	fl2.children[2].classes.indexOf("logical-operator-br") >= 0 &&
+	fl2.children[3].classes.indexOf("logical-operator") >= 0 &&
+	fl2.children[4].classes.indexOf("group-button") >= 0 &&
+	fl2.children[5] === b3);
+ok("page: the group's last row carries no trailing operator", b4.children.length === 3);
+ok("page: the group's inner operator sits inside its first row", b2.children.length === 6);
+ok("page: the sibling group button is the add button when a row follows",
+	fl2.children[4].src === "/icons/addgroup.png");
+
+// Group followed by group: the collapse button sits as a sibling after the
+// first group.
+const fl3 = new El("div");
+fl3.id = "from-list";
+const gA = new El("div", ["group-container"]);
+gA.appendChild(bareRow()); gA.appendChild(bareRow());
+const gB = new El("div", ["group-container"]);
+gB.appendChild(bareRow()); gB.appendChild(bareRow());
+fl3.appendChild(gA); fl3.appendChild(gB);
+pageInsertLogicalOperators(fl3);
+ok("page: group followed by group - the collapse button sits as a sibling after the first group",
+	fl3.children[1].classes.indexOf("logical-operator-br") >= 0 &&
+	fl3.children[2].classes.indexOf("logical-operator") >= 0 &&
+	fl3.children[3].classes.indexOf("group-button") >= 0 &&
+	fl3.children[3].src === "/icons/collapsegroup.png" &&
+	fl3.children[4] === gB);
 
 console.log("-".repeat(60));
 if (failures) {

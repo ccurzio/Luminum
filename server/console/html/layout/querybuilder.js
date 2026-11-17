@@ -74,12 +74,14 @@
 
 	// Walk the From list (rows and group containers, recursively) into the
 	// normalized block list condBlocksToTree builds from. The trailing
-	// AND/OR of a block sits on the block's anchor row - the row itself, or
-	// the group's last direct row (the page's insertLogicalOperators puts
-	// it there).
+	// AND/OR of a row sits inside the row; the trailing AND/OR of a group
+	// sits outside the group, as the siblings immediately after it (br,
+	// select, button) - the page's insertLogicalOperators puts them there.
 	function collectCondBlocks(container, catalog) {
 		const blocks = [];
-		for (const el of Array.from(container.children)) {
+		const kids = Array.from(container.children);
+		for (let i = 0; i < kids.length; i++) {
+			const el = kids[i];
 			if (!el.classList) { continue; }
 			if (el.classList.contains('list-item')) {
 				const inputs = el.querySelectorAll('input');
@@ -96,11 +98,12 @@
 					opAfter: afterSel ? afterSel.value : null
 				});
 			} else if (el.classList.contains('group-container')) {
-				let lastRow = null;
-				for (const c of Array.from(el.children)) {
-					if (c.classList && c.classList.contains('list-item')) { lastRow = c; }
+				let afterSel = null;
+				const br = kids[i + 1];
+				if (br && br.classList && br.classList.contains('logical-operator-br')) {
+					const sel = kids[i + 2];
+					if (sel && sel.classList && sel.classList.contains('logical-operator')) { afterSel = sel; }
 				}
-				const afterSel = lastRow ? lastRow.querySelector('select.logical-operator') : null;
 				blocks.push({
 					kind: 'group',
 					blocks: collectCondBlocks(el, catalog),

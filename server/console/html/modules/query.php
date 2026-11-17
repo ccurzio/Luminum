@@ -232,16 +232,6 @@ function insertLogicalOperators(container) {
 			el.classList.contains('list-item') || el.classList.contains('group-container'));
 	}
 
-	// The row that carries a block's trailing operator: the row itself, or
-	// the group's last row.
-	function anchorOf(block) {
-		if (block.classList.contains('group-container')) {
-			const rows = block.querySelectorAll(':scope > .list-item');
-			return rows.length ? rows[rows.length - 1] : null;
-			}
-		return block;
-	}
-
 	function processBlocks(parent) {
 		const blocks = getBlocks(parent);
 
@@ -250,8 +240,7 @@ function insertLogicalOperators(container) {
 			}
 
 		for (let i = 0; i < blocks.length - 1; i++) {
-			const anchor = anchorOf(blocks[i]);
-			if (!anchor) continue;
+			const isGroup = blocks[i].classList.contains('group-container');
 
 			const br = document.createElement('br');
 			br.className = 'logical-operator-br';
@@ -267,8 +256,8 @@ function insertLogicalOperators(container) {
 			select.appendChild(new Option('OR', 'OR'));
 
 			const groupImg = document.createElement('img');
-			// A row directly above a group carries the ungroup (collapse)
-			// button; every other row carries the group (add) button, which
+			// A block directly above a group carries the ungroup (collapse)
+			// button; every other block carries the group (add) button, which
 			// also creates nested groups from inside a group
 			groupImg.src = blocks[i + 1].classList.contains('group-container') ? '/icons/collapsegroup.png' : '/icons/addgroup.png';
 			groupImg.className = 'group-button';
@@ -280,9 +269,19 @@ function insertLogicalOperators(container) {
 			groupImg.style.verticalAlign = 'middle';
 			groupImg.addEventListener('click', toggleGroup);
 
-			anchor.appendChild(br);
-			anchor.appendChild(select);
-			anchor.appendChild(groupImg);
+			if (isGroup) {
+				// The operator that joins a group to the next block sits
+				// outside the group, below it - on the group's last row it
+				// would render inside the group's indent and border
+				blocks[i].after(groupImg);
+				blocks[i].after(select);
+				blocks[i].after(br);
+				}
+			else {
+				blocks[i].appendChild(br);
+				blocks[i].appendChild(select);
+				blocks[i].appendChild(groupImg);
+				}
 		}
 	}
 
@@ -297,11 +296,16 @@ function insertLogicalOperators(container) {
 
 function toggleGroup(event) {
 	const groupIcon = event.target;
+	// The operator triple that carries the button either sits inside the
+	// anchor row (row) or, when the block before the operator is a group,
+	// as the siblings immediately after that group (row === null); either
+	// way the block the operator joins to is the button's next sibling
 	const row = groupIcon.closest('.list-item');
+	const nextBlock = row ? row.nextElementSibling : groupIcon.nextElementSibling;
 
 	if (groupIcon.src.includes('addgroup.png')) {
 		// Start grouping: indent the row below the button and add a new empty row to the group
-		let nextRow = row.nextElementSibling;
+		let nextRow = nextBlock;
 		if (nextRow && nextRow.classList.contains('group-container')) {
 			// the row below is the first row of an existing group; pull it out
 			nextRow = nextRow.querySelector(':scope > .list-item');
@@ -315,7 +319,7 @@ function toggleGroup(event) {
 		groupContainer.style.borderLeft = '4px solid #aaa';
 		groupContainer.style.paddingLeft = '10px';
 
-		row.after(groupContainer);
+		(row || groupIcon).after(groupContainer);
 		groupContainer.appendChild(nextRow);
 		if (oldParent.classList.contains('group-container') && oldParent.children.length === 0) {
 			oldParent.remove();
@@ -328,13 +332,14 @@ function toggleGroup(event) {
 		groupContainer.appendChild(newRow);
 		}
 	else {
-		// Collapse: the ungroup button sits above the group it collapses. That
-		// group is normally the row's next sibling (the row sits directly above
-		// the group, including nested groups). When the row is instead the last
-		// row of a group that is itself followed by another group, the target is
-		// the next sibling of that group.
-		let groupContainer = row.nextElementSibling;
-		if (!groupContainer || !groupContainer.classList.contains('group-container')) {
+		// Collapse: the ungroup button sits above the group it collapses, so
+		// the target is the button's next sibling block - the row's next
+		// sibling when the button is in a row (the row sits directly above
+		// the group, including nested groups), or the group that follows a
+		// group's trailing operator when the button sits as a sibling after
+		// a group.
+		let groupContainer = nextBlock;
+		if (row && (!groupContainer || !groupContainer.classList.contains('group-container'))) {
 			const parent = row.parentElement;
 			if (parent && parent.classList.contains('group-container')) {
 				groupContainer = parent.nextElementSibling;
