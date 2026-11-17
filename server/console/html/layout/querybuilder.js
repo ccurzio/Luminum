@@ -387,7 +387,9 @@
 				})(i);
 				dd.appendChild(it);
 			}
-			highlight = 0;
+			// No row is highlighted until the operator picks one (mouseover or
+			// an arrow key), so the list reads as a plain white dropdown.
+			highlight = -1;
 			paint();
 			positionUnder(input);
 			dd.style.display = 'block';
@@ -414,9 +416,11 @@
 		function onKeyDown(e) {
 			if (!isSensorInput(e.target) || !dropdown || dropdown.style.display === 'none') { return; }
 			if (e.key === 'ArrowDown') {
-				if (items.length) { highlight = (highlight + 1) % items.length; paint(); scrollHighlight(); e.preventDefault(); }
+				// From no selection, the first row; otherwise wrap forward.
+				if (items.length) { highlight = highlight < 0 ? 0 : (highlight + 1) % items.length; paint(); scrollHighlight(); e.preventDefault(); }
 			} else if (e.key === 'ArrowUp') {
-				if (items.length) { highlight = (highlight - 1 + items.length) % items.length; paint(); scrollHighlight(); e.preventDefault(); }
+				// From no selection, the last row; otherwise wrap backward.
+				if (items.length) { highlight = highlight < 0 ? items.length - 1 : (highlight - 1 + items.length) % items.length; paint(); scrollHighlight(); e.preventDefault(); }
 			} else if (e.key === 'Enter') {
 				if (highlight >= 0 && items[highlight]) { selectItem(highlight); e.preventDefault(); }
 			} else if (e.key === 'Escape') {
