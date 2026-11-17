@@ -6,7 +6,7 @@ by Christopher R. Curzio
 Welcome to the Luminum project. Luminum is intended to be an open-source autonomous endpoint security and management system with a focus on security and high performance with a small overall footprint. Luminum is being developed primarily in the [Rust Programming Language](https://www.rust-lang.org/) for the endpoint clients, with the server components utilizing a combination of [Perl](https://www.perl.org/) and [PHP](https://www.php.net/) running atop [nginx](https://nginx.org/).
 
 ## Capabilities
-Keep in mind that Luminum is still in the initial development stages, so it doesn't really do much of anything yet. But the goal is to provide a range of extensible endpoint security and management functionality through the base server/client software plus modular components called Lumys.
+Keep in mind that Luminum is still in early development, so its current functionality and capabilities are somewhat limited. But the goal is to provide a range of extensible endpoint security and management functionality through the base server/client software plus modular components called Lumys.
 
 #### Core features:
 - **Rapid Data Retrieval:** Luminum allows administrators and users to quickly pull information from endpoints simply by constructing queries through an easy-to-use sensor selection and drag-and-drop interface. You ask the environment for the information you want, and any endpoints with relevent information will answer your questions.
