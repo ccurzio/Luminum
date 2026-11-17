@@ -20,7 +20,7 @@ function luminum_sensor_os_types($os) {
 
 // The result types the create form offers (CONTENT.SENSORS.RTYPE).
 function luminum_sensor_result_types() {
-	return ['text', 'number', 'ipaddress', 'datetime'];
+	return ['text', 'number', 'bool', 'ipaddress', 'datetime'];
 }
 
 // Maximum sensor script size in bytes. A query delivers every sensor's full
