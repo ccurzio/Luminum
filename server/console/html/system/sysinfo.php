@@ -18,6 +18,8 @@ else {
 	if ($urow = mysqli_fetch_assoc($uquery)) {
 		if ($urow["EMAIL"] !== null && $urow["EMAIL"] !== "") { $adminemail = $urow["EMAIL"]; }
 		}
+	// CPUHIST lives in SYSTEM, not AUTH - switch back before querying it.
+	mysqli_select_db($db, "SYSTEM") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
 	//$cpuhistquery = mysqli_query($db, "select TIMESTAMP,PCT from CPUHIST order by TIMESTAMP limit 8");
 	$cpuhistquery = mysqli_query($db, "select * from (select TIMESTAMP,PCT from CPUHIST order by TIMESTAMP desc limit 9) as sub order by TIMESTAMP asc");
 	$cpumodel = str_replace("\n", "", shell_exec("/usr/bin/cat /proc/cpuinfo | /usr/bin/grep -m 1 'model name' | /usr/bin/sed -e \"s/^.*\\\\: //\""));
