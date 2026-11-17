@@ -16,7 +16,7 @@
 //
 // The pure functions (findSensor, resolveSensorId, filterSensors,
 // opsForType, condBlocksToTree) are DOM-free so they can be unit-tested
-// under Node. The DOM helpers (applyOpsToSelect, applyOperatorForInput,
+// under Node. The DOM helpers (applyOpsToSelect, applyRowType,
 // collectCondBlocks, condRowsStatus, buildQueryPayload, init) only run in
 // the browser.
 //
@@ -151,15 +151,27 @@
 			if (el.classList.contains('list-item')) {
 				const inputs = el.querySelectorAll('input');
 				const sensor = inputs.length > 0 ? String(inputs[0].value).trim() : '';
-				const value = inputs.length > 1 ? String(inputs[1].value).trim() : '';
-				const opSel = el.querySelector('select[name="fromop"]');
+				// A bool row (tagged by applyRowType) holds its value in the
+				// TRUE/FALSE <select> and always compares with "=="; any other
+				// row reads the value <input> and the operator <select>.
+				let value;
+				let op;
+				if (el.classList.contains('bool-row')) {
+					const bv = el.querySelector('select.bool-value');
+					value = bv ? String(bv.value).trim() : '';
+					op = '==';
+				} else {
+					value = inputs.length > 1 ? String(inputs[1].value).trim() : '';
+					const opSel = el.querySelector('select[name="fromop"]');
+					op = COND_OPS[opSel ? opSel.value : 'equals'] || '==';
+				}
 				const afterSel = el.querySelector('select.logical-operator');
 				blocks.push({
 					kind: 'row',
 					sensor: sensor,
 					value: value,
 					sid: sensor === '' ? null : resolveSensorId(catalog, sensor),
-					op: COND_OPS[opSel ? opSel.value : 'equals'] || '==',
+					op: op,
 					opAfter: afterSel ? afterSel.value : null
 				});
 			} else if (el.classList.contains('group-container')) {
@@ -205,7 +217,15 @@
 			} else if (el.classList.contains('list-item')) {
 				const inputs = el.querySelectorAll('input');
 				const sensor = inputs.length > 0 ? String(inputs[0].value).trim() : '';
-				const value = inputs.length > 1 ? String(inputs[1].value).trim() : '';
+				// A bool row's value is the TRUE/FALSE <select> (always set);
+				// any other row's value is the value <input>.
+				let value;
+				if (el.classList.contains('bool-row')) {
+					const bv = el.querySelector('select.bool-value');
+					value = bv ? String(bv.value).trim() : '';
+				} else {
+					value = inputs.length > 1 ? String(inputs[1].value).trim() : '';
+				}
 				if (sensor === '' && value === '') { s = 'empty'; }
 				else if (sensor === '') { s = 'incomplete'; }
 				else { s = 'ok'; }
@@ -228,19 +248,42 @@
 		select.value = ops.some((o) => o.value === prev) ? prev : ops[0].value;
 	}
 
-	// Point a condition row's operator <select> at the options for the sensor
-	// its field currently names: the sensor's result type when the text
-	// resolves to a sensor, the full default set when it is empty or unknown.
-	// Retrieve rows have no operator select, so this is a no-op there.
-	function applyOperatorForInput(catalog, input) {
+	// Configure a condition row's operator and value controls for the sensor
+	// its field currently names. A bool sensor (CONTENT.SENSORS.RTYPE 'bool')
+	// shows a static "==" and a TRUE/FALSE value dropdown: the operator
+	// <select> and the value <input> are hidden, the row is tagged "bool-row",
+	// and the bool controls are shown. Any other sensor (or an empty/unknown
+	// field) shows the operator <select> (its options set to the sensor's
+	// result type) and the value <input>. collectCondBlocks and condRowsStatus
+	// read the "bool-row" class to know which controls hold the row's value
+	// and op. Retrieve rows carry none of these controls, so this is a no-op.
+	function applyRowType(catalog, input) {
 		let row = input;
 		while (row && !(row.classList && row.classList.contains('list-item'))) { row = row.parentElement || null; }
 		if (!row || !row.querySelector) { return; }
 		const opSel = row.querySelector('select[name="fromop"]');
-		if (!opSel) { return; }
+		const boolOp = row.querySelector('span.bool-op');
+		const valInp = row.querySelector('input[placeholder="Value"]');
+		const boolVal = row.querySelector('select.bool-value');
+		if (!opSel && !boolOp && !valInp && !boolVal) { return; }
 		const text = String(input.value === null || input.value === undefined ? '' : input.value).trim();
 		const sensor = text === '' ? null : findSensor(catalog, text);
-		applyOpsToSelect(opSel, sensor ? opsForType(sensor.rtype) : DEFAULT_OPS);
+		const isBool = !!sensor && String(sensor.rtype === null || sensor.rtype === undefined ? '' : sensor.rtype).toLowerCase() === 'bool';
+
+		if (isBool) {
+			if (!row.classList.contains('bool-row')) { row.classList.add('bool-row'); }
+			if (opSel) { opSel.style.display = 'none'; }
+			if (valInp) { valInp.style.display = 'none'; }
+			if (boolOp) { boolOp.style.display = 'inline-block'; }
+			if (boolVal) { boolVal.style.display = ''; }
+		} else {
+			if (row.classList.contains('bool-row')) { row.classList.remove('bool-row'); }
+			if (opSel) { opSel.style.display = ''; }
+			if (valInp) { valInp.style.display = ''; }
+			if (boolOp) { boolOp.style.display = 'none'; }
+			if (boolVal) { boolVal.style.display = 'none'; }
+			if (opSel) { applyOpsToSelect(opSel, sensor ? opsForType(sensor.rtype) : DEFAULT_OPS); }
+		}
 	}
 
 	// Read the builder (the retrieve fields, the From dropdown, the
@@ -352,7 +395,7 @@
 			if (!input || !s) { return; }
 			input.value = s.name;
 			hide();
-			applyOperatorForInput(catalog, input);
+			applyRowType(catalog, input);
 			// A programmatic value set does not fire the input event the
 			// document submit-state listener waits for, so dispatch one.
 			if (typeof input.dispatchEvent === 'function') {
@@ -398,7 +441,7 @@
 		function onInput(e) {
 			if (!isSensorInput(e.target)) { return; }
 			activeInput = e.target;
-			applyOperatorForInput(catalog, e.target);
+			applyRowType(catalog, e.target);
 			show(e.target);
 		}
 
@@ -455,7 +498,7 @@
 			if (!fl || !fl.querySelectorAll) { return; }
 			for (const r of Array.from(fl.querySelectorAll('.list-item'))) {
 				const inp = r.querySelector('input');
-				if (inp) { applyOperatorForInput(catalog, inp); }
+				if (inp) { applyRowType(catalog, inp); }
 			}
 		}
 		function onDocClick(e) {
@@ -534,7 +577,7 @@
 		resolveSensorId: resolveSensorId,
 		filterSensors: filterSensors,
 		applyOpsToSelect: applyOpsToSelect,
-		applyOperatorForInput: applyOperatorForInput,
+		applyRowType: applyRowType,
 		condBlocksToTree: condBlocksToTree,
 		collectCondBlocks: collectCondBlocks,
 		findUnresolved: findUnresolved,

@@ -44,7 +44,11 @@ class El {
 	}
 	get classList() {
 		const self = this;
-		return { contains: (c) => self.classes.indexOf(c) >= 0 };
+		return {
+			contains: (c) => self.classes.indexOf(c) >= 0,
+			add: (c) => { if (self.classes.indexOf(c) < 0) { self.classes.push(c); } },
+			remove: (c) => { const i = self.classes.indexOf(c); if (i >= 0) { self.classes.splice(i, 1); } }
+		};
 	}
 	get className() { return this.classes.join(" "); }
 	set className(v) { this.classes = String(v).split(/\s+/).filter((x) => x !== ""); }
@@ -79,6 +83,9 @@ class El {
 		if (sel === "input") { return this.tagName === "input"; }
 		if (sel === 'select[name="fromop"]') { return this.tagName === "select" && this.attrs["name"] === "fromop"; }
 		if (sel === "select.logical-operator") { return this.tagName === "select" && this.classes.indexOf("logical-operator") >= 0; }
+		if (sel === "span.bool-op") { return this.tagName === "span" && this.classes.indexOf("bool-op") >= 0; }
+		if (sel === "select.bool-value") { return this.tagName === "select" && this.classes.indexOf("bool-value") >= 0; }
+		if (sel === 'input[placeholder="Value"]') { return this.tagName === "input" && this.attrs["placeholder"] === "Value"; }
 		if (sel.charAt(0) === ".") { return this.classes.indexOf(sel.slice(1)) >= 0; }
 		throw new Error("unsupported selector: " + sel);
 	}
@@ -226,6 +233,24 @@ ok("status: a group with an incomplete row -> incomplete", (function () {
 	c.appendChild(g);
 	return Q.condRowsStatus(c) === "incomplete";
 })());
+ok("collect: a bool row reads its value from the TRUE/FALSE select and op '=='", (function () {
+	const cat = [{ id: 7, name: "Root FS Encrypted", rtype: "bool" }];
+	const r = condRowFull("Root FS Encrypted");
+	r.boolVal.value = "FALSE";
+	Q.applyRowType(cat, r.sensor); // tags the row bool-row
+	const c = new El("div");
+	c.appendChild(r.row);
+	const b = Q.collectCondBlocks(c, cat)[0];
+	return b.sid === 7 && b.op === "==" && b.value === "FALSE";
+})());
+ok("status: a bool row with a sensor -> ok (its value is always set)", (function () {
+	const cat = [{ id: 7, name: "Root FS Encrypted", rtype: "bool" }];
+	const r = condRowFull("Root FS Encrypted");
+	Q.applyRowType(cat, r.sensor); // tags the row bool-row
+	const c = new El("div");
+	c.appendChild(r.row);
+	return Q.condRowsStatus(c) === "ok";
+})());
 
 // --- buildQueryPayload ------------------------------------------------------
 function getRow(text) {
@@ -288,6 +313,27 @@ doc.byId["get-list"] = getEmpty;
 res = Q.buildQueryPayload(catalog);
 ok("payload: no retrieve sensors -> error",
 	res.error === "Name at least one sensor to retrieve.", res.error);
+ok("payload: a bool condition sends op '==' and the TRUE/FALSE value", (function () {
+	const cat = [
+		{ id: 1, name: "Hostname", rtype: "text" },
+		{ id: 7, name: "Root FS Encrypted", rtype: "bool" }
+	];
+	const gl = new El("div");
+	gl.appendChild(getRow("Hostname"));
+	doc.byId["get-list"] = gl;
+	doc.byId["targets"] = { value: "matching" };
+	const r = condRowFull("Root FS Encrypted");
+	r.boolVal.value = "TRUE";
+	Q.applyRowType(cat, r.sensor); // tags the row bool-row
+	const fl = new El("div");
+	fl.appendChild(r.row);
+	doc.byId["from-list"] = fl;
+	const res = Q.buildQueryPayload(cat);
+	return !res.error && res.payload && res.payload.conditions &&
+		res.payload.conditions.sid === 7 &&
+		res.payload.conditions.op === "==" &&
+		res.payload.conditions.value === "TRUE";
+})());
 
 // --- the page's insertLogicalOperators (extracted from modules/query.php) ---
 // The builder's inline JS is evaluated against the shim so the operator
@@ -377,7 +423,8 @@ const catalogR = [
 	{ id: 3, name: "CPU Load", rtype: "number" },
 	{ id: 4, name: "Uptime", rtype: "number" },
 	{ id: 5, name: "Last Login", rtype: "datetime" },
-	{ id: 6, name: "Default Gateway", rtype: "ipaddress" }
+	{ id: 6, name: "Default Gateway", rtype: "ipaddress" },
+	{ id: 7, name: "Root FS Encrypted", rtype: "bool" }
 ];
 
 // findSensor (returns the sensor object, not just the ID)
@@ -454,7 +501,8 @@ ok("applyOps: a dropped selection falls back to the first option", (function () 
 	return sel.value === "equals";
 })());
 
-// applyOperatorForInput (a row's operator follows its sensor's result type)
+// applyRowType (a row's operator + value controls follow its sensor's result
+// type; a bool sensor swaps to a static "==" and a TRUE/FALSE dropdown)
 function condRowR(sensorText) {
 	const el = new El("div", ["list-item"]);
 	const s = new El("input"); s.value = sensorText; el.appendChild(s);
@@ -462,37 +510,80 @@ function condRowR(sensorText) {
 	const v = new El("input"); el.appendChild(v);
 	return { row: el, sensor: s, op: opSel };
 }
-ok("applyOpForInput: a number sensor -> numeric operators", (function () {
+ok("applyRowType: a number sensor -> numeric operators", (function () {
 	const r = condRowR("CPU Load");
-	Q.applyOperatorForInput(catalogR, r.sensor);
+	Q.applyRowType(catalogR, r.sensor);
 	return r.op.children.length === 6 && r.op.children[2].value === "greaterthan";
 })());
-ok("applyOpForInput: a text sensor -> word operators", (function () {
+ok("applyRowType: a text sensor -> word operators", (function () {
 	const r = condRowR("Hostname");
-	Q.applyOperatorForInput(catalogR, r.sensor);
+	Q.applyRowType(catalogR, r.sensor);
 	return r.op.children.length === 4 && r.op.children[0].text === "matches";
 })());
-ok("applyOpForInput: an ipaddress sensor -> word operators", (function () {
+ok("applyRowType: an ipaddress sensor -> word operators", (function () {
 	const r = condRowR("Default Gateway");
-	Q.applyOperatorForInput(catalogR, r.sensor);
+	Q.applyRowType(catalogR, r.sensor);
 	return r.op.children.length === 4 && r.op.children[0].text === "matches";
 })());
-ok("applyOpForInput: an empty field -> the full default set", (function () {
+ok("applyRowType: an empty field -> the full default set", (function () {
 	const r = condRowR("");
-	Q.applyOperatorForInput(catalogR, r.sensor);
+	Q.applyRowType(catalogR, r.sensor);
 	return r.op.children.length === Q.DEFAULT_OPS.length;
 })());
-ok("applyOpForInput: an unknown sensor -> the full default set", (function () {
+ok("applyRowType: an unknown sensor -> the full default set", (function () {
 	const r = condRowR("Nope");
-	Q.applyOperatorForInput(catalogR, r.sensor);
+	Q.applyRowType(catalogR, r.sensor);
 	return r.op.children.length === Q.DEFAULT_OPS.length;
 })());
-ok("applyOpForInput: a retrieve row (no operator select) is a no-op", (function () {
+ok("applyRowType: a retrieve row (no operator select) is a no-op", (function () {
 	const el = new El("div", ["list-item"]);
 	const s = new El("input"); s.value = "CPU Load"; el.appendChild(s);
 	let threw = false;
-	try { Q.applyOperatorForInput(catalogR, s); } catch (e) { threw = true; }
+	try { Q.applyRowType(catalogR, s); } catch (e) { threw = true; }
 	return !threw;
+})());
+
+// A full condition row: sensor input, operator select, the bool "==" span,
+// the value input (placeholder "Value"), and the TRUE/FALSE bool-value select
+// - the same controls the page's from-list template row carries.
+function condRowFull(sensorText) {
+	const el = new El("div", ["list-item"]);
+	const s = new El("input"); s.value = sensorText; el.appendChild(s);
+	const opSel = new El("select"); opSel.setAttribute("name", "fromop"); el.appendChild(opSel);
+	const boolOp = new El("span", ["bool-op"]); el.appendChild(boolOp);
+	const v = new El("input"); v.setAttribute("placeholder", "Value"); el.appendChild(v);
+	const boolVal = new El("select", ["bool-value"]);
+	const t = new El("option"); t.value = "TRUE"; boolVal.appendChild(t);
+	const f = new El("option"); f.value = "FALSE"; boolVal.appendChild(f);
+	boolVal.value = "TRUE";
+	el.appendChild(boolVal);
+	return { row: el, sensor: s, op: opSel, boolOp: boolOp, value: v, boolVal: boolVal };
+}
+ok("applyRowType: a bool sensor tags the row and swaps to the bool controls", (function () {
+	const r = condRowFull("Root FS Encrypted");
+	Q.applyRowType(catalogR, r.sensor);
+	return r.row.classList.contains("bool-row") &&
+		r.op.style.display === "none" &&
+		r.value.style.display === "none" &&
+		r.boolOp.style.display === "inline-block" &&
+		r.boolVal.style.display === "";
+})());
+ok("applyRowType: switching a bool row to a text sensor restores the standard controls", (function () {
+	const r = condRowFull("Root FS Encrypted");
+	Q.applyRowType(catalogR, r.sensor);
+	r.sensor.value = "Hostname";
+	Q.applyRowType(catalogR, r.sensor);
+	return !r.row.classList.contains("bool-row") &&
+		r.op.style.display === "" &&
+		r.value.style.display === "" &&
+		r.boolOp.style.display === "none" &&
+		r.boolVal.style.display === "none" &&
+		r.op.children.length === 4; // the text ops are re-applied
+})());
+ok("applyRowType: an empty field on a full row leaves it in standard mode", (function () {
+	const r = condRowFull("");
+	Q.applyRowType(catalogR, r.sensor);
+	return !r.row.classList.contains("bool-row") && r.op.style.display === "";
 })());
 
 console.log("-".repeat(60));
