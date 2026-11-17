@@ -139,7 +139,7 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#10003;|**Completed**  |SENREVS        |5                |Maximum revision history for sensors                                                    |
 |&#10003;|**Completed**  |PKGREVS        |5                |Maximum revision history for packages                                                   |
 |&#10003;|**Completed**  |INVESTIGATE    |Enabled          |Enable or Disable Luminum Investigate                                                   |
-| --     |Not Started    |INSECURE       |Disabled         |Allow Unsigned Lumys                                                                    |
+| --     |Not Started    |UNSIGNEDLUMYS  |Disabled         |Allow Unsigned Lumys                                                                    |
 </li>
 
 <li>
@@ -173,7 +173,7 @@ TBD
 
 </li>
 
-<li>
+<!-- <li>
 
 #### Licensing
 |        |Status         |Task                        |Description                                                                             |
@@ -188,6 +188,8 @@ TBD
 | --     |Not Started    |Draft Commercial EULA       |End-user license agreement for Luminum Server Enterprise                                |
 
 </li>
+-->
+
 </ul>
 
 ### Server Health
@@ -793,6 +795,7 @@ TBD
 | --     |Not Started    |Sanctioned Uninstall        |Routines to validate permission to uninstall the client against the server              |
 |&#10003;|**Completed**  |Message Handling            |Routines that parse and generate client/server messages                                 |
 |&#10003;|**Completed**  |Sensor Processing           |Routines to execute sensor scripts and collect the output                               |
+| --     |Not Started    |Interpreter Validation      |Verification of available script interpreters                                           |
 | --     |Not Started    |Package Processing          |Routines to store packages and execute embedded commands                                |
 |&#10003;|**Completed**  |Message Queueing            |Development of the queue structure for pending messages                                 |
 | --     |Not Started    |Message Compression         |Compress message contents before sending                                                |
@@ -819,6 +822,7 @@ TBD
 | --     |Not Started    |Sanctioned Uninstall        |Routines to validate permission to uninstall the client against the server              |
 |&#9654; |*In Progress*  |Message Handling            |Routines that parse and generate client/server messages                                 |
 |&#9654; |*In Progress*  |Sensor Processing           |Routines to execute sensor scripts and collect the output                               |
+| --     |Not Started    |Interpreter Validation      |Verification of available script interpreters                                           |
 | --     |Not Started    |Package Processing          |Routines to store packages and execute embedded commands                                |
 | --     |Not Started    |Message Queueing            |Development of the queue structure for pending messages                                 |
 | --     |Not Started    |Message Compression         |Compress message contents before sending                                                |
@@ -845,6 +849,7 @@ TBD
 | --     |Not Started    |Sanctioned Uninstall        |Routines to validate permission to uninstall the client against the server              |
 |&#9654; |*In Progress*  |Message Handling            |Routines that parse and generate client/server messages                                 |
 |&#9654; |*In Progress*  |Sensor Processing           |Routines to execute sensor scripts and collect the output                               |
+| --     |Not Started    |Interpreter Validation      |Verification of available script interpreters                                           |
 | --     |Not Started    |Package Processing          |Routines to store packages and execute embedded commands                                |
 | --     |Not Started    |Message Queueing            |Development of the queue structure for pending messages                                 |
 | --     |Not Started    |Message Compression         |Compress message contents before sending                                                |
@@ -1129,6 +1134,17 @@ TBD
 
 <li>
 
+#### Manufacturer
+
+|        |Status         |OS |
+|--------|---------------|---|
+| --     |Not Started    |LIN|
+| --     |Not Started    |MAC|
+| --     |Not Started    |WIN|
+</li>
+
+<li>
+
 #### CPU Information
 
 |        |Status         |OS |
@@ -1184,6 +1200,17 @@ TBD
 
 <li>
 
+#### Directory Exists
+
+|        |Status         |OS |
+|--------|---------------|---|
+| --     |Not Started    |LIN|
+| --     |Not Started    |MAC|
+| --     |Not Started    |WIN|
+</li>
+
+<li>
+
 #### Installed Applications
 
 |        |Status         |OS |
@@ -1191,6 +1218,16 @@ TBD
 | --     |Not Started    |LIN|
 | --     |Not Started    |MAC|
 | --     |Not Started    |WIN|
+</li>
+
+<li>
+
+#### Installed Packages
+
+|        |Status         |OS |
+|--------|---------------|---|
+| --     |Not Started    |LIN|
+| --     |Not Started    |MAC|
 </li>
 
 <li>
