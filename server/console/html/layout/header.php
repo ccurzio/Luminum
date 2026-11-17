@@ -76,26 +76,17 @@ $ienabled = $invinfo["CVAL"];
 	<div style="width: 1200px;">
 		<div class="dropdown">
 			<a href="/index.php">
-					<button class="dropbtn" style="cursor: pointer;">
-						<img src="icons/home.png" class="icon">
-						Home
-					</button>
-				</a>
-			</div>
-			<?php if ($ienabled == "Enabled") {
-				print "\t\t\t\t<div class=\"dropdown\">\n";
-				print "\t\t\t\t<a href=\"/investigate.php\">\n";
-				print "\t\t\t\t<button class=\"dropbtn\" style=\"cursor: pointer;\">\n";
-				print "\t\t\t\t\t<img src=\"icons/investigate.png\" class=\"icon\">Investigate</button>\n";
-				print "\t\t\t\t</a>\n";
-				print "\t\t\t</div>\n\n";
-				}
-			?>
+				<button class="dropbtn" style="cursor: pointer;">
+					<img src="icons/home.png" class="icon">
+					Home
+				</button>
+			</a>
+		</div>
 
-			<div class="dropdown">
-				<button class="dropbtn">
-					<img src="icons/modules.png" class="icon">
-					Lumys
+		<div class="dropdown">
+			<button class="dropbtn">
+				<img src="icons/modules.png" class="icon">
+				Lumys
 			</button>
 			<div class="dropdown-content">
 				<?php
@@ -118,6 +109,16 @@ $ienabled = $invinfo["CVAL"];
 				?>
 			</div>
 		</div>
+
+		<?php if ($ienabled == "Enabled") {
+			print "\t\t\t\t<div class=\"dropdown\">\n";
+			print "\t\t\t\t<a href=\"/investigate.php\">\n";
+			print "\t\t\t\t<button class=\"dropbtn\" style=\"cursor: pointer;\">\n";
+			print "\t\t\t\t\t<img src=\"icons/investigate.png\" class=\"icon\">Investigate</button>\n";
+			print "\t\t\t\t</a>\n";
+			print "\t\t\t</div>\n\n";
+			}
+		?>
 
 		<div class="dropdown">
 			<button class="dropbtn">
