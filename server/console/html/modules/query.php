@@ -10,12 +10,14 @@
 // true answer.
 //
 mysqli_select_db($db, "CONTENT") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
-$sq = mysqli_query($db, "select ID,NAME from SENSORS order by NAME");
+$sq = mysqli_query($db, "select ID,NAME,RTYPE from SENSORS order by NAME");
 $sensorlist = [];
 while ($srow = mysqli_fetch_assoc($sq)) {
-	$sensorlist[] = ['id' => (int)$srow['ID'], 'name' => $srow['NAME']];
+	$sensorlist[] = ['id' => (int)$srow['ID'], 'name' => $srow['NAME'], 'rtype' => $srow['RTYPE']];
 }
-// The catalog for the builder's JS (typed sensor fields -> sensor IDs).
+// The catalog for the builder's JS: the typed sensor fields resolve to sensor
+// IDs, and each sensor's result type (RTYPE) drives the condition operator
+// options and the sensor autocomplete.
 $sensorjson = json_encode($sensorlist, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 ?>
 <div class="content">

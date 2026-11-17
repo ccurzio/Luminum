@@ -4,15 +4,21 @@
 //
 // The builder's markup and its own JS (row add/remove, drag-sort, grouping,
 // the AND/OR operators between the condition rows) live on the page; this
-// module only turns what the operator typed into the /api/commands.php
-// query statement (protocol 7.3): the retrieve sensors (the typed sensor
-// fields, resolved to sensor IDs), the condition tree (the From rows,
-// groups folded in), and the broadcast target. Only the endpoints on which
-// the condition tree evaluates true answer.
+// module turns what the operator typed into the /api/commands.php query
+// statement (protocol 7.3): the retrieve sensors (the typed sensor fields,
+// resolved to sensor IDs), the condition tree (the From rows, groups folded
+// in), and the broadcast target. Only the endpoints on which the condition
+// tree evaluates true answer. It also drives the sensor autocomplete (a
+// dropdown of sensors whose name starts with the text being typed) and
+// re-points each condition row's operator options at the chosen sensor's
+// result type (CONTENT.SENSORS.RTYPE): text/ipaddress compare as strings,
+// number/datetime numerically.
 //
-// The pure functions (resolveSensorId, condBlocksToTree) are DOM-free so
-// they can be unit-tested under Node. The DOM helpers (collectCondBlocks,
-// condRowsStatus, buildQueryPayload, init) only run in the browser.
+// The pure functions (findSensor, resolveSensorId, filterSensors,
+// opsForType, condBlocksToTree) are DOM-free so they can be unit-tested
+// under Node. The DOM helpers (applyOpsToSelect, applyOperatorForInput,
+// collectCondBlocks, condRowsStatus, buildQueryPayload, init) only run in
+// the browser.
 //
 (function (root, factory) {
 	if (typeof module === 'object' && module.exports) {
@@ -29,19 +35,78 @@
 		greaterthan: '>', greaterorequal: '>=', lessthan: '<', lessorequal: '<='
 	};
 
-	// Resolve the text the operator typed in a Sensor field to a sensor ID:
-	// a numeric field that matches a sensor ID wins, otherwise the sensor
-	// name (case-insensitive). null when nothing matches.
-	function resolveSensorId(catalog, text) {
+	// The condition operator options, by the sensor's result type
+	// (CONTENT.SENSORS.RTYPE). The option VALUES stay the COND_OPS keys so
+	// collectCondBlocks maps them to the protocol operators; only the labels
+	// and which options are offered change with the type. text and ipaddress
+	// compare as strings (word labels); number and datetime compare
+	// numerically (the comparison symbols). DEFAULT_OPS is the full set shown
+	// before a row's sensor resolves (or for an unknown type).
+	const DEFAULT_OPS = [
+		{ value: 'equals', label: '==' },
+		{ value: 'notequals', label: '!=' },
+		{ value: 'contains', label: '=~' },
+		{ value: 'notcontains', label: '!~' },
+		{ value: 'greaterthan', label: '>' },
+		{ value: 'greaterorequal', label: '>=' },
+		{ value: 'lessthan', label: '<' },
+		{ value: 'lessorequal', label: '<=' }
+	];
+	const TEXT_OPS = [
+		{ value: 'equals', label: 'matches' },
+		{ value: 'notequals', label: 'does not match' },
+		{ value: 'contains', label: 'contains' },
+		{ value: 'notcontains', label: 'does not contain' }
+	];
+	const NUMERIC_OPS = [
+		{ value: 'equals', label: '==' },
+		{ value: 'notequals', label: '!=' },
+		{ value: 'greaterthan', label: '>' },
+		{ value: 'greaterorequal', label: '>=' },
+		{ value: 'lessthan', label: '<' },
+		{ value: 'lessorequal', label: '<=' }
+	];
+
+	// The operator options for a sensor's result type (CONTENT.SENSORS.RTYPE):
+	// text and ipaddress compare as strings, number and datetime numerically.
+	// An unknown or missing type keeps the full default set.
+	function opsForType(rtype) {
+		switch (String(rtype === null || rtype === undefined ? '' : rtype).toLowerCase()) {
+			case 'text':
+			case 'ipaddress': return TEXT_OPS;
+			case 'number':
+			case 'datetime': return NUMERIC_OPS;
+			default: return DEFAULT_OPS;
+		}
+	}
+
+	// Resolve the text the operator typed in a Sensor field to the sensor
+	// object (or null): a numeric field that matches a sensor ID wins,
+	// otherwise the sensor name (case-insensitive).
+	function findSensor(catalog, text) {
 		const t = String(text === null || text === undefined ? '' : text).trim();
 		if (t === '') { return null; }
 		if (/^[0-9]+$/.test(t)) {
 			const id = parseInt(t, 10);
-			for (const s of catalog) { if (s.id === id) { return id; } }
+			for (const s of catalog) { if (s.id === id) { return s; } }
 		}
 		const lt = t.toLowerCase();
-		for (const s of catalog) { if (String(s.name).toLowerCase() === lt) { return s.id; } }
+		for (const s of catalog) { if (String(s.name).toLowerCase() === lt) { return s; } }
 		return null;
+	}
+
+	// Resolve the typed sensor text to a sensor ID (null when nothing matches).
+	function resolveSensorId(catalog, text) {
+		const s = findSensor(catalog, text);
+		return s ? s.id : null;
+	}
+
+	// The sensors whose name starts with the typed text (case-insensitive) -
+	// the autocomplete dropdown's matches. An empty text matches every sensor.
+	function filterSensors(catalog, text) {
+		const t = String(text === null || text === undefined ? '' : text).trim().toLowerCase();
+		if (t === '') { return catalog.slice(); }
+		return catalog.filter((s) => String(s.name).toLowerCase().indexOf(t) === 0);
 	}
 
 	// Build the protocol condition tree (7.3) from a normalized block list:
@@ -151,6 +216,33 @@
 		return status;
 	}
 
+	// Replace a condition operator <select>'s options with the given set,
+	// keeping the current selection when it is still offered (otherwise the
+	// first option). The select element itself (name, class, styles) is left
+	// untouched - only its <option> children are rebuilt.
+	function applyOpsToSelect(select, ops) {
+		if (!select) { return; }
+		const prev = select.value;
+		while (select.children.length) { select.children[0].remove(); }
+		for (const op of ops) { select.appendChild(new Option(op.label, op.value)); }
+		select.value = ops.some((o) => o.value === prev) ? prev : ops[0].value;
+	}
+
+	// Point a condition row's operator <select> at the options for the sensor
+	// its field currently names: the sensor's result type when the text
+	// resolves to a sensor, the full default set when it is empty or unknown.
+	// Retrieve rows have no operator select, so this is a no-op there.
+	function applyOperatorForInput(catalog, input) {
+		let row = input;
+		while (row && !(row.classList && row.classList.contains('list-item'))) { row = row.parentElement || null; }
+		if (!row || !row.querySelector) { return; }
+		const opSel = row.querySelector('select[name="fromop"]');
+		if (!opSel) { return; }
+		const text = String(input.value === null || input.value === undefined ? '' : input.value).trim();
+		const sensor = text === '' ? null : findSensor(catalog, text);
+		applyOpsToSelect(opSel, sensor ? opsForType(sensor.rtype) : DEFAULT_OPS);
+	}
+
 	// Read the builder (the retrieve fields, the From dropdown, the
 	// condition rows) and build the /api/commands.php query statement.
 	// Returns { payload } or { error }.
@@ -192,6 +284,183 @@
 		return { payload: payload };
 	}
 
+	// The sensor autocomplete: one floating list, repositioned under the
+	// sensor field being typed in, listing the sensors whose name starts with
+	// the text so far (it narrows as the operator types). Driven by
+	// document-level delegation - the page's Sortable init replaces the list
+	// containers and rows are added/removed at runtime, so per-field
+	// listeners would be lost. A sensor field is any input with
+	// placeholder "Sensor" (the retrieve rows and the condition rows both
+	// use it); the condition rows additionally get their operator options
+	// re-pointed at the chosen sensor's result type.
+	function initAutocomplete(catalog) {
+		let dropdown = null;
+		let activeInput = null;
+		let items = [];
+		let highlight = -1;
+		let hideTimer = null;
+
+		function isSensorInput(el) {
+			return !!el && el.tagName === 'INPUT' &&
+				typeof el.getAttribute === 'function' && el.getAttribute('placeholder') === 'Sensor';
+		}
+
+		function ensureDropdown() {
+			if (dropdown) { return dropdown; }
+			dropdown = document.createElement('div');
+			dropdown.style.position = 'absolute';
+			dropdown.style.zIndex = '1100';
+			dropdown.style.maxHeight = '240px';
+			dropdown.style.overflowY = 'auto';
+			dropdown.style.background = '#fff';
+			dropdown.style.border = '1px solid #888';
+			dropdown.style.boxShadow = '0 2px 6px rgba(0,0,0,0.25)';
+			dropdown.style.fontFamily = 'inherit';
+			dropdown.style.display = 'none';
+			document.body.appendChild(dropdown);
+			return dropdown;
+		}
+
+		function paint() {
+			for (let i = 0; i < dropdown.children.length; i++) {
+				dropdown.children[i].style.background = (i === highlight) ? '#cfe3ff' : '#fff';
+			}
+		}
+
+		function positionUnder(input) {
+			const rect = input.getBoundingClientRect();
+			dropdown.style.top = (rect.bottom + window.scrollY) + 'px';
+			dropdown.style.left = (rect.left + window.scrollX) + 'px';
+			dropdown.style.width = Math.max(rect.width, 160) + 'px';
+		}
+
+		function scrollHighlight() {
+			const el = dropdown.children[highlight];
+			if (el && typeof el.scrollIntoView === 'function') { el.scrollIntoView({ block: 'nearest' }); }
+		}
+
+		function hide() {
+			if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+			if (dropdown) { dropdown.style.display = 'none'; }
+			activeInput = null;
+			highlight = -1;
+		}
+
+		function selectItem(idx) {
+			const input = activeInput;
+			const s = items[idx];
+			if (!input || !s) { return; }
+			input.value = s.name;
+			hide();
+			applyOperatorForInput(catalog, input);
+			// A programmatic value set does not fire the input event the
+			// document submit-state listener waits for, so dispatch one.
+			if (typeof input.dispatchEvent === 'function') {
+				input.dispatchEvent(new Event('change', { bubbles: true }));
+			}
+		}
+
+		function show(input) {
+			const text = String(input.value === null || input.value === undefined ? '' : input.value).trim();
+			if (text === '') { hide(); return; }
+			items = filterSensors(catalog, text);
+			if (items.length === 0) { hide(); return; }
+			const dd = ensureDropdown();
+			while (dd.children.length) { dd.children[0].remove(); }
+			for (let i = 0; i < items.length; i++) {
+				const it = document.createElement('div');
+				it.textContent = items[i].name;
+				it.style.padding = '6px 8px';
+				it.style.cursor = 'pointer';
+				it.style.fontSize = '14px';
+				it.style.whiteSpace = 'nowrap';
+				it.style.overflow = 'hidden';
+				it.style.textOverflow = 'ellipsis';
+				(function (idx) {
+					it.addEventListener('mousedown', function (e) {
+						e.preventDefault(); // keep focus on the input
+						selectItem(idx);
+					});
+					it.addEventListener('mouseover', function () {
+						if (highlight !== idx) { highlight = idx; paint(); }
+					});
+				})(i);
+				dd.appendChild(it);
+			}
+			highlight = 0;
+			paint();
+			positionUnder(input);
+			dd.style.display = 'block';
+		}
+
+		function onInput(e) {
+			if (!isSensorInput(e.target)) { return; }
+			activeInput = e.target;
+			applyOperatorForInput(catalog, e.target);
+			show(e.target);
+		}
+
+		function onFocusIn(e) {
+			if (!isSensorInput(e.target)) { return; }
+			activeInput = e.target;
+			show(e.target);
+		}
+
+		function onFocusOut(e) {
+			if (!isSensorInput(e.target)) { return; }
+			hideTimer = setTimeout(hide, 150);
+		}
+
+		function onKeyDown(e) {
+			if (!isSensorInput(e.target) || !dropdown || dropdown.style.display === 'none') { return; }
+			if (e.key === 'ArrowDown') {
+				if (items.length) { highlight = (highlight + 1) % items.length; paint(); scrollHighlight(); e.preventDefault(); }
+			} else if (e.key === 'ArrowUp') {
+				if (items.length) { highlight = (highlight - 1 + items.length) % items.length; paint(); scrollHighlight(); e.preventDefault(); }
+			} else if (e.key === 'Enter') {
+				if (highlight >= 0 && items[highlight]) { selectItem(highlight); e.preventDefault(); }
+			} else if (e.key === 'Escape') {
+				hide(); e.preventDefault();
+			}
+		}
+
+		function onDocMouseDown(e) {
+			if (dropdown && dropdown.style.display === 'block' &&
+				!dropdown.contains(e.target) && !isSensorInput(e.target)) {
+				hide();
+			}
+		}
+
+		document.addEventListener('input', onInput);
+		document.addEventListener('focusin', onFocusIn);
+		document.addEventListener('focusout', onFocusOut);
+		document.addEventListener('keydown', onKeyDown);
+		document.addEventListener('mousedown', onDocMouseDown);
+
+		// A freshly added condition row is a clone of an existing one, so its
+		// operator <select> carries the source row's options; re-point every
+		// row at the set for the sensor its field holds. Every row addition
+		// (the add button, the group button, Reset) is a click, so normalizing
+		// on the document click covers them all - and it re-reads the live
+		// from-list each time, so it survives the page's Sortable init
+		// replacing the container with a clone. Clicks that open a native
+		// <select> are skipped so a select's options are never rewritten
+		// mid-choice.
+		function normalizeRows() {
+			const fl = document.getElementById('from-list');
+			if (!fl || !fl.querySelectorAll) { return; }
+			for (const r of Array.from(fl.querySelectorAll('.list-item'))) {
+				const inp = r.querySelector('input');
+				if (inp) { applyOperatorForInput(catalog, inp); }
+			}
+		}
+		function onDocClick(e) {
+			if (e.target && e.target.closest && e.target.closest('select')) { return; }
+			normalizeRows();
+		}
+		document.addEventListener('click', onDocClick);
+	}
+
 	// Wire the Submit button and the live enable/disable state. The page's
 	// Sortable init replaces the list containers with clones and rows are
 	// added/removed at runtime, so the state is recomputed on document-level
@@ -199,6 +468,7 @@
 	function init(catalog) {
 		const btn = document.getElementById('querygo');
 		if (!btn) { return; }
+		initAutocomplete(catalog);
 
 		function updateSubmitState() {
 			const getContainer = document.getElementById('get-list');
@@ -252,7 +522,15 @@
 
 	return {
 		COND_OPS: COND_OPS,
+		DEFAULT_OPS: DEFAULT_OPS,
+		TEXT_OPS: TEXT_OPS,
+		NUMERIC_OPS: NUMERIC_OPS,
+		opsForType: opsForType,
+		findSensor: findSensor,
 		resolveSensorId: resolveSensorId,
+		filterSensors: filterSensors,
+		applyOpsToSelect: applyOpsToSelect,
+		applyOperatorForInput: applyOperatorForInput,
 		condBlocksToTree: condBlocksToTree,
 		collectCondBlocks: collectCondBlocks,
 		findUnresolved: findUnresolved,

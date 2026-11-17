@@ -369,6 +369,132 @@ ok("page: group followed by group - the collapse button sits as a sibling after 
 	fl3.children[3].src === "/icons/collapsegroup.png" &&
 	fl3.children[4] === gB);
 
+// --- sensor autocomplete + type-driven operators ---------------------------
+// A catalog carrying each sensor's result type (CONTENT.SENSORS.RTYPE).
+const catalogR = [
+	{ id: 1, name: "Hostname", rtype: "text" },
+	{ id: 2, name: "Deploy Test Sensor", rtype: "text" },
+	{ id: 3, name: "CPU Load", rtype: "number" },
+	{ id: 4, name: "Uptime", rtype: "number" },
+	{ id: 5, name: "Last Login", rtype: "datetime" },
+	{ id: 6, name: "Default Gateway", rtype: "ipaddress" }
+];
+
+// findSensor (returns the sensor object, not just the ID)
+ok("findSensor: name match returns the sensor object",
+	Q.findSensor(catalogR, "CPU Load") && Q.findSensor(catalogR, "CPU Load").id === 3);
+ok("findSensor: case-insensitive name", Q.findSensor(catalogR, "cpu load").id === 3);
+ok("findSensor: numeric ID match", Q.findSensor(catalogR, "5").id === 5);
+ok("findSensor: numeric text that is not an ID falls back to the name",
+	Q.findSensor([{ id: 5, name: "7", rtype: "text" }], "7").id === 5);
+ok("findSensor: unknown -> null", Q.findSensor(catalogR, "Nope") === null);
+ok("findSensor: empty -> null", Q.findSensor(catalogR, "  ") === null);
+
+// filterSensors (the autocomplete's case-insensitive prefix match)
+ok("filter: empty text matches every sensor", Q.filterSensors(catalogR, "").length === catalogR.length);
+ok("filter: prefix 'C' matches only the C sensor",
+	eq(Q.filterSensors(catalogR, "C").map((s) => s.id), [3]));
+ok("filter: prefix 'c' is case-insensitive",
+	eq(Q.filterSensors(catalogR, "c").map((s) => s.id), [3]));
+ok("filter: prefix 'Dep' narrows to Deploy Test Sensor",
+	eq(Q.filterSensors(catalogR, "Dep").map((s) => s.id), [2]));
+ok("filter: prefix 'De' matches both D-e sensors",
+	eq(Q.filterSensors(catalogR, "De").map((s) => s.id), [2, 6]));
+ok("filter: prefix 'Last' matches Last Login",
+	eq(Q.filterSensors(catalogR, "Last").map((s) => s.id), [5]));
+ok("filter: a non-prefix substring does not match",
+	Q.filterSensors(catalogR, "ateway").length === 0);
+ok("filter: surrounding whitespace trimmed",
+	eq(Q.filterSensors(catalogR, "  Host  ").map((s) => s.id), [1]));
+ok("filter: no match -> empty", Q.filterSensors(catalogR, "ZZZ").length === 0);
+
+// opsForType (the condition operator options by result type)
+ok("ops: text -> the four word operators",
+	eq(Q.opsForType("text").map((o) => o.value), ["equals", "notequals", "contains", "notcontains"]) &&
+	Q.opsForType("text")[0].label === "matches" &&
+	Q.opsForType("text")[3].label === "does not contain");
+ok("ops: ipaddress -> the text (word) operators",
+	eq(Q.opsForType("ipaddress").map((o) => o.value), ["equals", "notequals", "contains", "notcontains"]));
+ok("ops: number -> the six numeric operators",
+	eq(Q.opsForType("number").map((o) => o.value),
+		["equals", "notequals", "greaterthan", "greaterorequal", "lessthan", "lessorequal"]));
+ok("ops: datetime -> the numeric operators",
+	eq(Q.opsForType("datetime").map((o) => o.value),
+		["equals", "notequals", "greaterthan", "greaterorequal", "lessthan", "lessorequal"]));
+ok("ops: unknown type -> the full default set",
+	eq(Q.opsForType("bogus").map((o) => o.value), Q.DEFAULT_OPS.map((o) => o.value)));
+ok("ops: null type -> the full default set",
+	eq(Q.opsForType(null).map((o) => o.value), Q.DEFAULT_OPS.map((o) => o.value)));
+
+// applyOpsToSelect (rebuilds a <select>'s options, keeps a still-valid value)
+function freshSelect() {
+	const sel = new El("select");
+	sel.setAttribute("name", "fromop");
+	return sel;
+}
+ok("applyOps: text options replace the select's children", (function () {
+	const sel = freshSelect();
+	Q.applyOpsToSelect(sel, Q.TEXT_OPS);
+	return sel.children.length === 4 &&
+		sel.children[0].value === "equals" && sel.children[0].text === "matches" &&
+		sel.children[3].value === "notcontains" && sel.children[3].text === "does not contain";
+})());
+ok("applyOps: a still-offered selection is kept", (function () {
+	const sel = freshSelect();
+	Q.applyOpsToSelect(sel, Q.DEFAULT_OPS);
+	sel.value = "contains";
+	Q.applyOpsToSelect(sel, Q.TEXT_OPS); // 'contains' is in the text set
+	return sel.value === "contains";
+})());
+ok("applyOps: a dropped selection falls back to the first option", (function () {
+	const sel = freshSelect();
+	Q.applyOpsToSelect(sel, Q.DEFAULT_OPS);
+	sel.value = "greaterthan";
+	Q.applyOpsToSelect(sel, Q.TEXT_OPS); // 'greaterthan' is not in the text set
+	return sel.value === "equals";
+})());
+
+// applyOperatorForInput (a row's operator follows its sensor's result type)
+function condRowR(sensorText) {
+	const el = new El("div", ["list-item"]);
+	const s = new El("input"); s.value = sensorText; el.appendChild(s);
+	const opSel = new El("select"); opSel.setAttribute("name", "fromop"); el.appendChild(opSel);
+	const v = new El("input"); el.appendChild(v);
+	return { row: el, sensor: s, op: opSel };
+}
+ok("applyOpForInput: a number sensor -> numeric operators", (function () {
+	const r = condRowR("CPU Load");
+	Q.applyOperatorForInput(catalogR, r.sensor);
+	return r.op.children.length === 6 && r.op.children[2].value === "greaterthan";
+})());
+ok("applyOpForInput: a text sensor -> word operators", (function () {
+	const r = condRowR("Hostname");
+	Q.applyOperatorForInput(catalogR, r.sensor);
+	return r.op.children.length === 4 && r.op.children[0].text === "matches";
+})());
+ok("applyOpForInput: an ipaddress sensor -> word operators", (function () {
+	const r = condRowR("Default Gateway");
+	Q.applyOperatorForInput(catalogR, r.sensor);
+	return r.op.children.length === 4 && r.op.children[0].text === "matches";
+})());
+ok("applyOpForInput: an empty field -> the full default set", (function () {
+	const r = condRowR("");
+	Q.applyOperatorForInput(catalogR, r.sensor);
+	return r.op.children.length === Q.DEFAULT_OPS.length;
+})());
+ok("applyOpForInput: an unknown sensor -> the full default set", (function () {
+	const r = condRowR("Nope");
+	Q.applyOperatorForInput(catalogR, r.sensor);
+	return r.op.children.length === Q.DEFAULT_OPS.length;
+})());
+ok("applyOpForInput: a retrieve row (no operator select) is a no-op", (function () {
+	const el = new El("div", ["list-item"]);
+	const s = new El("input"); s.value = "CPU Load"; el.appendChild(s);
+	let threw = false;
+	try { Q.applyOperatorForInput(catalogR, s); } catch (e) { threw = true; }
+	return !threw;
+})());
+
 console.log("-".repeat(60));
 if (failures) {
 	console.log("FAILED: " + failures + " check(s) failed");
