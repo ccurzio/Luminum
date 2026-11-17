@@ -881,7 +881,8 @@ fn ensure_sensors_table(debug: bool) {
 	conn.close().unwrap();
 }
 
-// The sensors currently on file: SID -> (lstype, lscript).
+// The sensors currently on file: SID -> (script type, script) for this
+// platform (the SENSORS table stores this client's own pair).
 fn sensor_definitions(debug: bool) -> HashMap<i64, (String, String)> {
 	let mut defs: HashMap<i64, (String, String)> = HashMap::new();
 	let conn = match Connection::open(cfg_path()) {
@@ -915,11 +916,33 @@ fn sensor_definitions(debug: bool) -> HashMap<i64, (String, String)> {
 	defs
 }
 
+// This client's script pair for one config entry (protocol §7.3): the
+// Windows client runs the Windows pair (wstype/wscript) and nothing else.
+// Ok(Some(pair)) is a sensor defined for this OS; Ok(None) is a sensor the
+// server did not define for this OS (a broadcast config carries the query's
+// sensors for every platform, so this is normal and the entry is skipped);
+// Err is a pair that is present but malformed (INVALID_DATA).
+fn sensor_pair_for_this_os(entry: &serde_json::Value) -> Result<Option<(String, String)>, ()> {
+	let wstype = entry.get("wstype").and_then(|v| v.as_str());
+	let wscript = entry.get("wscript").and_then(|v| v.as_str());
+	match (wstype, wscript) {
+		(None, _) | (_, None) => Ok(None),
+		(Some(t), Some(s)) => {
+			if (t == "powershell" || t == "vbscript" || t == "batch" || t == "python") && !s.is_empty() {
+				Ok(Some((t.to_string(), s.to_string())))
+			} else {
+				Err(())
+			}
+		}
+	}
+}
+
 // core/config (protocol §6.1, §7.3): the server pushes the sensor
 // definitions this endpoint will be asked to run. data.sensors is an array
-// of {sid, name, lstype, lscript} (plus per-OS fields this client ignores);
-// every entry is validated first, then upserted into the SENSORS table.
-// Returns an error string for the response envelope, or None when applied.
+// of {sid, name, lstype, lscript, mstype, mscript, wstype, wscript}; this
+// client stores only the pair for its own OS and skips sensors the server
+// did not define for it. Returns an error string for the response envelope,
+// or None when applied.
 fn apply_sensor_config(env: &Envelope, debug: bool) -> Option<String> {
 	let list = match env.data.as_ref().and_then(|d| d.get("sensors")).and_then(|v| v.as_array()) {
 		Some(list) => list,
@@ -935,15 +958,12 @@ fn apply_sensor_config(env: &Envelope, debug: bool) -> Option<String> {
 			Some(n) if !n.is_empty() => n.to_string(),
 			_ => return Some(String::from("INVALID_DATA")),
 		};
-		let lstype = match entry.get("lstype").and_then(|v| v.as_str()) {
-			Some(t) if t == "shell" || t == "perl" || t == "python" => t.to_string(),
-			_ => return Some(String::from("INVALID_DATA")),
+		let (wstype, wscript) = match sensor_pair_for_this_os(entry) {
+			Ok(Some(pair)) => pair,
+			Ok(None) => continue,
+			Err(()) => return Some(String::from("INVALID_DATA")),
 		};
-		let lscript = match entry.get("lscript").and_then(|v| v.as_str()) {
-			Some(s) if !s.is_empty() => s.to_string(),
-			_ => return Some(String::from("INVALID_DATA")),
-		};
-		defs.push((sid, name, lstype, lscript));
+		defs.push((sid, name, wstype, wscript));
 	}
 	let conn = match Connection::open(cfg_path()) {
 		Ok(conn) => conn,
@@ -989,33 +1009,51 @@ fn is_uuid4(s: &str) -> bool {
 		&& b[24..36].iter().all(|c| c.is_ascii_hexdigit())
 }
 
-// The interpreter for a stored sensor LSTYPE on this platform.
-fn sensor_prog(lstype: &str) -> Option<&'static str> {
-	match lstype {
-		"shell" => {
-			#[cfg(target_os = "windows")]
-			{ Some("cmd.exe") }
-			#[cfg(not(target_os = "windows"))]
-			{ Some("/bin/sh") }
-		}
-		"perl" => Some("perl"),
-		"python" => {
-			#[cfg(target_os = "windows")]
-			{ Some("python") }
-			#[cfg(not(target_os = "windows"))]
-			{ Some("python3") }
-		}
+// The interpreter for a stored sensor WSTYPE. The server's Windows type set
+// (admin/sensormap.php): powershell, vbscript, batch, python.
+fn sensor_prog(wstype: &str) -> Option<&'static str> {
+	match wstype {
+		"powershell" => Some("powershell.exe"),
+		"vbscript" => Some("cscript.exe"),
+		"batch" => Some("cmd.exe"),
+		"python" => Some("python"),
 		_ => None,
 	}
 }
 
-// Run one sensor script to completion: $prog is the interpreter for the
-// stored LSTYPE, and the script rides on stdin (shell, perl, and python all
-// read a script from stdin).
-async fn run_sensor_script(prog: &str, script: &str) -> Result<String, Box<dyn Error>> {
+// Run one sensor script to completion. powershell, batch, and python all
+// read a script from stdin; vbscript cannot, so it is written to a temp
+// file that cscript runs and is deleted afterwards.
+async fn run_sensor_script(wstype: &str, script: &str) -> Result<String, Box<dyn Error>> {
 	use tokio::io::AsyncWriteExt;
 	use tokio::process::Command;
+	let prog = sensor_prog(wstype).ok_or_else(|| Box::from("unknown sensor type") as Box<dyn Error>)?;
+	if wstype == "vbscript" {
+		let path = std::env::temp_dir().join(format!("luminum-{}.vbs", uuid4()));
+		std::fs::write(&path, script)?;
+		let out = Command::new(prog)
+			.arg("//nologo")
+			.arg(&path)
+			.stdout(Stdio::piped())
+			.stderr(Stdio::piped())
+			.kill_on_drop(true)
+			.spawn()?
+			.wait_with_output()
+			.await?;
+		let _ = std::fs::remove_file(&path);
+		if !out.status.success() {
+			return Err(Box::from(format!("exit status: {}", out.status)));
+		}
+		return Ok(String::from_utf8_lossy(&out.stdout).into_owned());
+	}
+	let mut args: Vec<&str> = Vec::new();
+	if wstype == "powershell" {
+		// -NoProfile/-NonInteractive keep the run deterministic; -Command -
+		// reads the script from stdin.
+		args.extend(["-NoProfile", "-NonInteractive", "-Command", "-"]);
+	}
 	let mut child = Command::new(prog)
+		.args(args)
 		.stdin(Stdio::piped())
 		.stdout(Stdio::piped())
 		.stderr(Stdio::piped())
@@ -1036,19 +1074,18 @@ async fn run_sensor_script(prog: &str, script: &str) -> Result<String, Box<dyn E
 // (§7.3): the server resolved the final values (defaults merged); the client
 // substitutes each ${name} point in the script.
 async fn run_sensor(sid: i64, params: &HashMap<String, String>, defs: &HashMap<i64, (String, String)>, debug: bool) -> serde_json::Value {
-	let (lstype, lscript) = match defs.get(&sid) {
+	let (wstype, wscript) = match defs.get(&sid) {
 		Some(def) => def,
 		None => return serde_json::json!({ "sid": sid, "err": "UNKNOWN_SENSOR" }),
 	};
-	let prog = match sensor_prog(lstype) {
-		Some(p) => p,
-		None => return serde_json::json!({ "sid": sid, "err": "UNKNOWN_SENSOR" }),
-	};
-	let mut script = lscript.clone();
+	if sensor_prog(wstype).is_none() {
+		return serde_json::json!({ "sid": sid, "err": "UNKNOWN_SENSOR" });
+	}
+	let mut script = wscript.clone();
 	for (k, v) in params {
 		script = script.replace(&format!("${{{}}}", k), v);
 	}
-	match tokio::time::timeout(Duration::from_secs(SENSOR_TIMEOUT_SECS), run_sensor_script(prog, &script)).await {
+	match tokio::time::timeout(Duration::from_secs(SENSOR_TIMEOUT_SECS), run_sensor_script(wstype, &script)).await {
 		Ok(Ok(output)) => serde_json::json!({ "sid": sid, "output": output }),
 		Ok(Err(err)) => {
 			dbout(debug, 1, &format!("sensor {} failed to run: {}", sid, err));
@@ -2434,5 +2471,54 @@ mod tests {
 		// (and it is not self-signed), so the anchor is rejected.
 		let wrong_root = read(&dir, "other-root.crt");
 		assert!(validate_signing_anchor(&signing, Some(&wrong_root)).is_none());
+	}
+}
+
+#[cfg(test)]
+mod sensorpair_tests {
+	use super::*;
+
+	fn entry(wstype: Option<&str>, wscript: Option<&str>) -> serde_json::Value {
+		let mut v = serde_json::json!({ "sid": 1, "name": "Test" });
+		if let Some(t) = wstype { v["wstype"] = serde_json::json!(t); }
+		if let Some(s) = wscript { v["wscript"] = serde_json::json!(s); }
+		v
+	}
+
+	#[test]
+	fn pair_defined_for_windows() {
+		for t in ["powershell", "vbscript", "batch", "python"] {
+			assert_eq!(
+				sensor_pair_for_this_os(&entry(Some(t), Some("echo hi"))),
+				Ok(Some((t.to_string(), "echo hi".to_string())))
+			);
+		}
+	}
+
+	#[test]
+	fn pair_missing_for_windows_is_skipped() {
+		// A sensor defined only for other platforms (the server stores NULL
+		// for disabled platforms) is skipped, not an error.
+		assert_eq!(sensor_pair_for_this_os(&entry(None, None)), Ok(None));
+		assert_eq!(sensor_pair_for_this_os(&entry(Some("batch"), None)), Ok(None));
+		assert_eq!(sensor_pair_for_this_os(&entry(None, Some("echo hi"))), Ok(None));
+	}
+
+	#[test]
+	fn pair_present_but_malformed_is_invalid() {
+		// The Linux/macOS type set is not a Windows type set.
+		assert_eq!(sensor_pair_for_this_os(&entry(Some("shell"), Some("x"))), Err(()));
+		assert_eq!(sensor_pair_for_this_os(&entry(Some("perl"), Some("x"))), Err(()));
+		assert_eq!(sensor_pair_for_this_os(&entry(Some("powershell"), Some(""))), Err(()));
+	}
+
+	#[test]
+	fn prog_map_covers_the_windows_type_set() {
+		assert!(sensor_prog("powershell").is_some());
+		assert!(sensor_prog("vbscript").is_some());
+		assert!(sensor_prog("batch").is_some());
+		assert!(sensor_prog("python").is_some());
+		assert!(sensor_prog("shell").is_none());
+		assert!(sensor_prog("perl").is_none());
 	}
 }

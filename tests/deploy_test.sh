@@ -572,6 +572,70 @@ sleep 5
 check "non-matching query got no answer (client stayed silent)" \
     $([ "$(dbq "select count(*) from CLIENTS.QUERYRESULTS where QID='$QID_N';")" = "0" ]; echo $?)
 
+# --- per-OS sensor pairs (protocol 7.3): a client runs only its own pair ---
+# The config command carries all six type/script fields per sensor; the
+# client stores only the pair for its own OS and skips sensors the server
+# did not define for it. A Mac-only sensor must not break the Linux
+# client's config, must come back UNKNOWN_SENSOR when retrieved, and must
+# evaluate false when used as a condition.
+code=$(curl -k -s -D "$RUN/sensor-mac-post.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "pkgname=Deploy Test Mac Sensor" \
+    --data-urlencode "pkgdesc=Mac-only sensor created by the deploy test" \
+    --data-urlencode "timeout=30" \
+    --data-urlencode "tint=sec" \
+    --data-urlencode "rtype=text" \
+    --data-urlencode "contentset=$CSET_ID" \
+    --data-urlencode "category=none" \
+    --data-urlencode "meselect=on" \
+    --data-urlencode "mstype=shell" \
+    --data-urlencode "mscript=echo mac-only-output-43" \
+    "https://127.0.0.1:$WPORT/admin/sensors.php")
+check "console: Mac-only sensor POST redirects (302)" $([ "$code" = "302" ]; echo $?) "got: $code"
+SENSOR_M=$(dbq "select ID from CONTENT.SENSORS where NAME='Deploy Test Mac Sensor';")
+check "Mac-only sensor stored with a NULL Linux pair" \
+    $([ "$(dbq "select if(LSTYPE is null and MSTYPE='shell' and MSCRIPT='echo mac-only-output-43','yes','no') from CONTENT.SENSORS where ID='$SENSOR_M';")" = "yes" ]; echo $?)
+
+# A broadcast query retrieving both sensors: the Linux client applies its
+# own definition, skips the Mac-only one, and answers OK for its own sensor
+# and UNKNOWN_SENSOR for the other.
+body=$(python3 -c 'import json,sys;print(json.dumps({"target":"all","action":"query","sensors":[{"sid":int(sys.argv[1])},{"sid":int(sys.argv[2])}],"conditions":{"sid":int(sys.argv[1]),"op":"==","value":"probe-output-42"}}))' "$SENSOR_Q" "$SENSOR_M")
+code=$(curl -k -s -o "$RUN/query-mixed.json" -w '%{http_code}' -b "$RUN/cookies" \
+    -H 'Content-Type: application/json' -d "$body" \
+    "https://127.0.0.1:$WPORT/api/commands.php")
+check "api: mixed-platform broadcast query accepted (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+QID_M=$(python3 -c "import json;print(json.load(open('$RUN/query-mixed.json'))['qid'])")
+res_ok=1
+for i in $(seq 1 60); do
+    n=$(dbq "select count(*) from CLIENTS.QUERYRESULTS where QID='$QID_M';")
+    [ "$n" = "2" ] && { res_ok=0; break; }
+    sleep 0.5
+done
+check "mixed query answered with both per-sensor rows" "$res_ok" "rows: $(dbq "select count(*) from CLIENTS.QUERYRESULTS where QID='$QID_M';")"
+check "Linux sensor row is OK with its output" \
+    $([ "$(dbq "select concat(STATUS,'|',if(OUTPUT like '%probe-output-42%','yes','no')) from CLIENTS.QUERYRESULTS where QID='$QID_M' and SENSORID='$SENSOR_Q';")" = "OK|yes" ]; echo $?)
+check "Mac-only sensor row is ERR UNKNOWN_SENSOR (skipped by the Linux client)" \
+    $([ "$(dbq "select concat(STATUS,'|',ifnull(ERR,'NULL')) from CLIENTS.QUERYRESULTS where QID='$QID_M' and SENSORID='$SENSOR_M';")" = "ERR|UNKNOWN_SENSOR" ]; echo $?)
+
+# A condition on a sensor that is not defined for this OS evaluates false:
+# the Linux client cannot run the Mac-only condition sensor, so it stays
+# silent even though the value would match on a Mac.
+body=$(python3 -c 'import json,sys;print(json.dumps({"target":"all","action":"query","sensors":[{"sid":int(sys.argv[1])}],"conditions":{"sid":int(sys.argv[2]),"op":"==","value":"mac-only-output-43"}}))' "$SENSOR_Q" "$SENSOR_M")
+code=$(curl -k -s -o "$RUN/query-maccond.json" -w '%{http_code}' -b "$RUN/cookies" \
+    -H 'Content-Type: application/json' -d "$body" \
+    "https://127.0.0.1:$WPORT/api/commands.php")
+check "api: Mac-condition broadcast query accepted (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+QID_C=$(python3 -c "import json;print(json.load(open('$RUN/query-maccond.json'))['qid'])")
+sent_ok=1
+for i in $(seq 1 60); do
+    st=$(dbq "select STATUS from CLIENTS.COMMANDS where QID='$QID_C';")
+    [ "$st" = "SENT" ] && { sent_ok=0; break; }
+    sleep 0.5
+done
+check "Mac-condition query reached the client (SENT)" "$sent_ok" "final status: $(dbq "select STATUS from CLIENTS.COMMANDS where QID='$QID_C';")"
+sleep 5
+check "Mac-condition query got no answer (condition sensor unknown on Linux)" \
+    $([ "$(dbq "select count(*) from CLIENTS.QUERYRESULTS where QID='$QID_C';")" = "0" ]; echo $?)
+
 code=$(curl -k -s -o "$RUN/queryresults.json" -w '%{http_code}' -b "$RUN/cookies" \
     "https://127.0.0.1:$WPORT/api/queryresults.php")
 check "api: queryresults renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"

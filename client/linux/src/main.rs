@@ -562,7 +562,8 @@ fn ensure_sensors_table(debug: bool) {
 	conn.close().unwrap();
 }
 
-// The sensors currently on file: SID -> (lstype, lscript).
+// The sensors currently on file: SID -> (script type, script) for this
+// platform (the SENSORS table stores this client's own pair).
 fn sensor_definitions(debug: bool) -> HashMap<i64, (String, String)> {
 	let mut defs: HashMap<i64, (String, String)> = HashMap::new();
 	let conn = match Connection::open(cfg_path()) {
@@ -596,11 +597,33 @@ fn sensor_definitions(debug: bool) -> HashMap<i64, (String, String)> {
 	defs
 }
 
+// This client's script pair for one config entry (protocol §7.3): the Linux
+// client runs the Linux pair (lstype/lscript) and nothing else.
+// Ok(Some(pair)) is a sensor defined for this OS; Ok(None) is a sensor the
+// server did not define for this OS (a broadcast config carries the query's
+// sensors for every platform, so this is normal and the entry is skipped);
+// Err is a pair that is present but malformed (INVALID_DATA).
+fn sensor_pair_for_this_os(entry: &serde_json::Value) -> Result<Option<(String, String)>, ()> {
+	let lstype = entry.get("lstype").and_then(|v| v.as_str());
+	let lscript = entry.get("lscript").and_then(|v| v.as_str());
+	match (lstype, lscript) {
+		(None, _) | (_, None) => Ok(None),
+		(Some(t), Some(s)) => {
+			if (t == "shell" || t == "perl" || t == "python") && !s.is_empty() {
+				Ok(Some((t.to_string(), s.to_string())))
+			} else {
+				Err(())
+			}
+		}
+	}
+}
+
 // core/config (protocol §6.1, §7.3): the server pushes the sensor
 // definitions this endpoint will be asked to run. data.sensors is an array
-// of {sid, name, lstype, lscript} (plus per-OS fields this client ignores);
-// every entry is validated first, then upserted into the SENSORS table.
-// Returns an error string for the response envelope, or None when applied.
+// of {sid, name, lstype, lscript, mstype, mscript, wstype, wscript}; this
+// client stores only the pair for its own OS and skips sensors the server
+// did not define for it. Returns an error string for the response envelope,
+// or None when applied.
 fn apply_sensor_config(env: &Envelope, debug: bool) -> Option<String> {
 	let list = match env.data.as_ref().and_then(|d| d.get("sensors")).and_then(|v| v.as_array()) {
 		Some(list) => list,
@@ -616,13 +639,10 @@ fn apply_sensor_config(env: &Envelope, debug: bool) -> Option<String> {
 			Some(n) if !n.is_empty() => n.to_string(),
 			_ => return Some(String::from("INVALID_DATA")),
 		};
-		let lstype = match entry.get("lstype").and_then(|v| v.as_str()) {
-			Some(t) if t == "shell" || t == "perl" || t == "python" => t.to_string(),
-			_ => return Some(String::from("INVALID_DATA")),
-		};
-		let lscript = match entry.get("lscript").and_then(|v| v.as_str()) {
-			Some(s) if !s.is_empty() => s.to_string(),
-			_ => return Some(String::from("INVALID_DATA")),
+		let (lstype, lscript) = match sensor_pair_for_this_os(entry) {
+			Ok(Some(pair)) => pair,
+			Ok(None) => continue,
+			Err(()) => return Some(String::from("INVALID_DATA")),
 		};
 		defs.push((sid, name, lstype, lscript));
 	}
@@ -1837,4 +1857,41 @@ async fn main() {
 
 	// Keep the client process (and runtime) alive.
 	time::sleep(std::time::Duration::MAX).await;
+}
+
+#[cfg(test)]
+mod sensorpair_tests {
+	use super::*;
+
+	fn entry(lstype: Option<&str>, lscript: Option<&str>) -> serde_json::Value {
+		let mut v = serde_json::json!({ "sid": 1, "name": "Test" });
+		if let Some(t) = lstype { v["lstype"] = serde_json::json!(t); }
+		if let Some(s) = lscript { v["lscript"] = serde_json::json!(s); }
+		v
+	}
+
+	#[test]
+	fn pair_defined_for_linux() {
+		for t in ["shell", "perl", "python"] {
+			assert_eq!(
+				sensor_pair_for_this_os(&entry(Some(t), Some("echo hi"))),
+				Ok(Some((t.to_string(), "echo hi".to_string())))
+			);
+		}
+	}
+
+	#[test]
+	fn pair_missing_for_linux_is_skipped() {
+		// A sensor defined only for other platforms (the server stores NULL
+		// for disabled platforms) is skipped, not an error.
+		assert_eq!(sensor_pair_for_this_os(&entry(None, None)), Ok(None));
+		assert_eq!(sensor_pair_for_this_os(&entry(Some("shell"), None)), Ok(None));
+		assert_eq!(sensor_pair_for_this_os(&entry(None, Some("echo hi"))), Ok(None));
+	}
+
+	#[test]
+	fn pair_present_but_malformed_is_invalid() {
+		assert_eq!(sensor_pair_for_this_os(&entry(Some("powershell"), Some("x"))), Err(()));
+		assert_eq!(sensor_pair_for_this_os(&entry(Some("shell"), Some(""))), Err(()));
+	}
 }
