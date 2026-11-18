@@ -19,6 +19,17 @@ while ($srow = mysqli_fetch_assoc($sq)) {
 // IDs, and each sensor's result type (RTYPE) drives the condition operator
 // options and the sensor autocomplete.
 $sensorjson = json_encode($sensorlist, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+
+// The query ID (the query command's COMMANDS.ID - the "command" value
+// /api/commands.php returns when the query is submitted): when the page is
+// passed one, the Results tab opens selected and shows that query's results,
+// polled live from /api/queryresults.php?id=... (the old standalone Query
+// Results page is consolidated into this one).
+$queryid = 0;
+if (isset($_GET['id']) && ctype_digit($_GET['id'])) {
+	$queryid = (int)$_GET['id'];
+}
+$showresults = $queryid > 0;
 ?>
 <div class="content">
 	<h1>Luminum Query</h1>
@@ -27,11 +38,12 @@ $sensorjson = json_encode($sensorlist, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_AP
 	<!-- <div class="module-content" style="display: flex; justify-content: space-between; align-items: flex-start;"> -->
 	<div class="module-content" style="padding: 0;">
 		<div class="tabbar tabbarback">
-			<button type="button" class="tabbaritem tabbutton tablink tabbarsel" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Builder')">Query Builder</button>
+			<button type="button" class="tabbaritem tabbutton tablink<?php print $showresults ? '' : ' tabbarsel'; ?>" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Builder')">Query Builder</button>
 			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Saved')">Saved Queries</button>
+			<button type="button" class="tabbaritem tabbutton tablink<?php print $showresults ? ' tabbarsel' : ''; ?>" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Results')">Results</button>
 		</div>
 		<!-- <div class="main-content"> -->
-		<div id="Builder" class="configtab">
+		<div id="Builder" class="configtab" style="<?php print $showresults ? 'display: none;' : ''; ?>">
 			<div style="margin: 20px;">
 				<p>
 				<span style="font-size: 20px; font-weight: bold; color: #444;">I want to retrieve:</span>
@@ -51,9 +63,26 @@ $sensorjson = json_encode($sensorlist, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_AP
 		<div id="Saved" class="configtab" style="display: none;">
 			<div style="margin: 20px; text-align: center; font-style: italic; color: #777;">No saved queries yet.</div>
 		</div>
+		<div id="Results" class="configtab" style="<?php print $showresults ? '' : 'display: none;'; ?>">
+			<?php if ($showresults) { ?>
+			<div class="module-content">
+				<div style="display: block; width: 100%; text-align: right;">
+					<table id="qrtable" style="margin-top: 10px; text-align: left;">
+					<tr><td id="qrtopcell" colspan="2"><div style="position: absolute; padding-top: 5px; padding-left: 5px;"><span id="qrcount">0</span> <span id="qrtotal">of 0</span> items</span> <img id="qrrefresh" src="icons/refresh.png" style="cursor: pointer; margin-left: 5px; width: 15px; height: 15px; vertical-align: top;" onclick="qrRefresh()"></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="qrfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" maxlength="64"></div></td></tr>
+					<tr id="qrqueryrow" style="display: none;"><td id="qrquerycell" colspan="2" style="background-color: #34354f; font-weight: bold; padding-top: 8px;"></td></tr>
+					<tbody id="qrtable-head"></tbody>
+					<tbody data-luminum-body id="qrtable-body"></tbody>
+					<tr style="height: 35px;"><td id="qrfootcell" colspan="2"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;"><i>Query Completed in <span id="queryms">0.00</span> Seconds</i></div></td></tr>
+					</table>
+				</div>
+			</div>
+			<?php } else { ?>
+			<div style="margin: 20px; text-align: center; font-style: italic; color: #777;">No query selected.</div>
+			<?php } ?>
+		</div>
 	</div>
-	<div style="width: 100%; text-align: right; padding-top: 10px;">
-		<button id="resetform" class="formgo" style="margin-right: 0;">Reset Form</button> <button id="querygo" class="formgo" style="margin-left: 0;" disabled="disabled">Submit Query</button> 
+	<div id="formbuttons" style="width: 100%; text-align: right; padding-top: 10px;<?php print $showresults ? ' display: none;' : ''; ?>">
+		<button id="resetform" class="formgo" style="margin-right: 0;">Reset Form</button> <button id="querygo" class="formgo" style="margin-left: 0;" disabled="disabled">Submit Query</button>
 	</div>
 
 </div>
@@ -458,6 +487,10 @@ function switchTab(evt, configSect) {
 
 	document.getElementById(configSect).style.display = "block";
 	evt.currentTarget.className += " tabbarsel";
+
+	// The builder's Reset/Submit buttons only apply to the Query Builder tab
+	var formbtns = document.getElementById('formbuttons');
+	if (formbtns) { formbtns.style.display = (configSect === 'Results') ? 'none' : 'block'; }
 	}
 </script>
 
@@ -468,3 +501,23 @@ window.addEventListener('DOMContentLoaded', () => {
 	LuminumQueryBuilder.init(<?php print $sensorjson; ?>);
 	});
 </script>
+
+<?php if ($showresults) { ?>
+<script src="/layout/table.js"></script>
+<script src="/layout/queryresults.js"></script>
+<script>
+'use strict';
+
+var qrHandle = LuminumQueryResults.init(<?php print $queryid; ?>);
+
+function qrRefresh() {
+	var btn = document.getElementById('qrrefresh');
+	if (btn.className === 'refresh') { return; }
+	btn.className = 'refresh';
+	btn.style.cursor = 'progress';
+	var done = function () { btn.className = ''; btn.style.cursor = 'pointer'; };
+	var p = qrHandle ? qrHandle.refresh() : null;
+	if (p && p.then) { p.then(done, done); } else { done(); }
+}
+</script>
+<?php } ?>

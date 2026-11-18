@@ -551,7 +551,10 @@
 				});
 			})
 			.then(function (r) {
-				if (r.ok) { window.location.href = '/modules.php?view=queryresults'; }
+				// The results live on the query page itself: pass the query
+				// command's ID (the "command" value in the response) so the
+				// page opens on the Results tab for this query.
+				if (r.ok) { window.location.href = '/modules.php?view=query&id=' + r.data.command; }
 				else {
 					LuminumOverlay.show({ title: 'Query Error', message: r.data.error || 'The query could not be submitted.' });
 				}

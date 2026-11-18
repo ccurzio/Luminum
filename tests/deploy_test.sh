@@ -643,11 +643,28 @@ check "api: queryresults carries the answered query and its output" \
     $(grep -q "$QID_Q" "$RUN/queryresults.json" 2>/dev/null \
         && grep -q "probe-output-42" "$RUN/queryresults.json" 2>/dev/null; echo $?)
 
-code=$(curl -k -s -o "$RUN/queryresults.html" -w '%{http_code}' -b "$RUN/cookies" \
-    "https://127.0.0.1:$WPORT/modules.php?view=queryresults")
-check "console: query results page renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
-check "console: results page polls the results API" \
-    $(grep -q "/api/queryresults.php" "$RUN/queryresults.html" 2>/dev/null; echo $?)
+# The results are consolidated into the query page: the ?id= filter narrows
+# the API to a single query (the query command's COMMANDS.ID), and the page
+# passed that ID opens on the Results tab polling for it.
+code=$(curl -k -s -o "$RUN/queryresults-id.json" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/api/queryresults.php?id=$CMD_Q")
+check "api: queryresults?id renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+check "api: queryresults?id carries only the named query and its output" \
+    $(grep -q '"count":1' "$RUN/queryresults-id.json" 2>/dev/null \
+        && grep -q "$QID_Q" "$RUN/queryresults-id.json" 2>/dev/null \
+        && grep -q "probe-output-42" "$RUN/queryresults-id.json" 2>/dev/null; echo $?)
+
+code=$(curl -k -s -o "$RUN/query-results.html" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/modules.php?view=query&id=$CMD_Q")
+check "console: query page with a query ID renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+# The page boots the results wiring (layout/queryresults.js) with the query
+# ID; the module polls /api/queryresults.php?id=<that ID>.
+check "console: query page with a query ID boots the results wiring for that query" \
+    $(grep -q "LuminumQueryResults.init($CMD_Q)" "$RUN/query-results.html" 2>/dev/null; echo $?)
+check "console: results table shell (count/filter row) present" \
+    $(grep -q 'id="qrcount"' "$RUN/query-results.html" 2>/dev/null \
+        && grep -q 'id="qrfilter"' "$RUN/query-results.html" 2>/dev/null \
+        && grep -q 'id="qrtable-body"' "$RUN/query-results.html" 2>/dev/null; echo $?)
 
 # --- inactivity session timeout ----------------------------------------------
 # Login must stamp the deadline from the UTIMEOUT server option (seeded 15M),

@@ -3,9 +3,14 @@
 // Query results endpoint. Returns the most recent query commands (latest 50,
 // newest first) with their per-sensor results - QUERYRESULTS, filled by the
 // broker's MQTT worker when a client answers (protocol 7.3) - for the
-// console's Query Results page. A query with no answers yet carries an empty
-// results list; endpoints on which the condition tree evaluated false never
-// appear at all.
+// console's query page. A query with no answers yet carries an empty results
+// list; endpoints on which the condition tree evaluated false never appear
+// at all.
+//
+// With an optional ?id= parameter (the query command's COMMANDS.ID - the
+// "command" value /api/commands.php returns when the query is submitted) the
+// response carries only that query, which is how the query page shows the
+// results for a single submitted query.
 //
 require_once __DIR__ . '/_init.php';
 require_once __DIR__ . '/queryresultmap.php';
@@ -14,8 +19,16 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 	json_error('Method not allowed', 405);
 }
 
+$onlyid = 0;
+if (isset($_GET['id']) && ctype_digit($_GET['id']) && (int)$_GET['id'] > 0) {
+	$onlyid = (int)$_GET['id'];
+}
+
 $start = microtime(true);
-$result = api_query($db, "select ID,QID,TARGET,CREATED,STATUS,DATA from COMMANDS where ACTION = 'query' order by ID desc limit 50", 'CLIENTS');
+$sql = "select ID,QID,TARGET,CREATED,STATUS,DATA from COMMANDS where ACTION = 'query'";
+if ($onlyid > 0) { $sql .= " and ID = $onlyid"; }
+$sql .= " order by ID desc limit 50";
+$result = api_query($db, $sql, 'CLIENTS');
 $queries = [];
 $allsids = [];
 while ($row = mysqli_fetch_assoc($result)) {
@@ -45,9 +58,12 @@ foreach ($queries as $q) {
 	while ($rrow = mysqli_fetch_assoc($result)) {
 		$results[] = luminum_result_row($rrow);
 	}
-	$sensor_names = [];
+	// The retrieve sensors as {sid, name} pairs (the query's order): the
+	// results page builds one table column per entry and matches each
+	// result row to its column by sid.
+	$sensor_list = [];
 	foreach ($q['sids'] as $sid) {
-		$sensor_names[] = isset($names[$sid]) ? $names[$sid] : ('Sensor ' . $sid);
+		$sensor_list[] = ['sid' => $sid, 'name' => isset($names[$sid]) ? $names[$sid] : ('Sensor ' . $sid)];
 	}
 	$dd = json_decode(is_string($row['DATA']) ? $row['DATA'] : '', true);
 	$out[] = [
@@ -56,7 +72,7 @@ foreach ($queries as $q) {
 		'target' => $row['TARGET'],
 		'created' => $row['CREATED'],
 		'status' => $row['STATUS'],
-		'sensors' => $sensor_names,
+		'sensors' => $sensor_list,
 		'conditions' => is_array($dd) && isset($dd['conditions']),
 		'results' => $results,
 	];
