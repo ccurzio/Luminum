@@ -361,10 +361,14 @@ sub _on_resp {
 	}
 }
 
-# Handle a query answer (protocol 6.1, 7.3): mark the command ACKED and store
-# each per-sensor results entry in QUERYRESULTS. A duplicate or late answer
-# (command already ACKED/TIMEDOUT, e.g. a QoS 1 redelivery) is logged and
-# dropped, so results are stored exactly once.
+# Handle a query answer (protocol 6.1, 7.3): store each per-sensor results
+# entry in QUERYRESULTS and mark the command ACKED on the first answer. A
+# broadcast query is answered by every matching endpoint, so the duplicate
+# check is per (QID, UID), not per QID: a redelivered answer from the same
+# endpoint (QoS 1) is logged and dropped, while the other endpoints' answers
+# are stored. An answer past the command's deadline is dropped - the answer
+# window is closed whether the command was TIMEDOUT (no answer by the
+# deadline) or ACKed by a first answer and the deadline has since passed.
 sub _on_answer {
 	my ($db, $uid, $data, $log) = @_;
 	my $qid = $data->{qid};
@@ -373,18 +377,28 @@ sub _on_answer {
 		return;
 	}
 	my $dbh = _dbh($db);
-	my $sth = $dbh->prepare("select ID, STATUS from COMMANDS where QID = ?");
+	my $sth = $dbh->prepare("select ID, STATUS, (DEADLINE is not null and DEADLINE < now()) from COMMANDS where QID = ?");
 	$sth->execute($qid);
-	my ($id, $status) = $sth->fetchrow_array();
+	my ($id, $status, $late) = $sth->fetchrow_array();
 	if (!defined $id) {
 		$log->("answer: UID $uid answer for unknown qid $qid (no matching outbox command)");
 		return;
 	}
-	if ($status eq "ACKED" || $status eq "TIMEDOUT") {
-		$log->("answer: duplicate/late answer for command $id (already $status); ignored");
+	if ($status eq "TIMEDOUT" || $late) {
+		$log->("answer: late answer from UID $uid for command $id (answer window closed); ignored");
 		return;
 	}
-	$dbh->do("update COMMANDS set STATUS = 'ACKED', ACKED = now() where ID = ?", undef, $id);
+	my $dup = $dbh->prepare("select 1 from QUERYRESULTS where QID = ? and UID = ? limit 1");
+	$dup->execute($qid, $uid);
+	if ($dup->fetchrow_array()) {
+		$log->("answer: duplicate answer from UID $uid for command $id; ignored");
+		return;
+	}
+	# The first answer ACKs the command; the remaining endpoints of a
+	# broadcast query keep answering (their UIDs are not in QUERYRESULTS yet).
+	if ($status ne "ACKED") {
+		$dbh->do("update COMMANDS set STATUS = 'ACKED', ACKED = now() where ID = ?", undef, $id);
+	}
 	my $results = (ref($data->{results}) eq "ARRAY") ? $data->{results} : [];
 	my $ins = $dbh->prepare("insert into QUERYRESULTS (CMDID,QID,UID,SENSORID,STATUS,OUTPUT,ERR,TS) values (?,?,?,?,?,?,?,now())");
 	my $stored = 0;

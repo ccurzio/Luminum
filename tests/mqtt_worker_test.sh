@@ -32,6 +32,7 @@ CLIENT_BIN="$REPO/client/linux/target/debug/LuminumClient"
 [ -x "$(command -v openssl)" ]        || { echo "SKIP - openssl not available"; exit 0; }
 [ -x "$(command -v mosquitto)" ]      || { echo "SKIP - mosquitto not available"; exit 0; }
 [ -x "$(command -v mosquitto_passwd)" ] || { echo "SKIP - mosquitto_passwd not available"; exit 0; }
+[ -x "$(command -v mosquitto_pub)" ]  || { echo "SKIP - mosquitto_pub not available"; exit 0; }
 [ -x "$(command -v mysql)" ]          || { echo "SKIP - mysql client not available"; exit 0; }
 [ -S /tmp/mysqld.sock ]               || { echo "SKIP - MariaDB not running at /tmp/mysqld.sock"; exit 0; }
 # Luminum::MQTT + Luminum::Protocol live in the repo; the broker's non-core
@@ -410,6 +411,59 @@ check "query command was ACKED via the answer's data.qid" "$ACKQ" "final status:
 # of the sensor output is stripped in SQL before comparing.
 qout=$(dbq "select concat(STATUS,'|',ifnull(replace(OUTPUT,char(10),''),''),'|',ifnull(ERR,'')) from QUERYRESULTS where QID='$QQRY';")
 check "answer result stored in QUERYRESULTS (sensor 7 output)" $([ "$qout" = "OK|probe-7|" ]; echo $?) "got: $qout"
+
+# --- broadcast query: every answering endpoint is stored (protocol 7.3) ------
+# A broadcast (TARGET='all') query is answered by every matching endpoint.
+# The worker's answer dedup is per (QID, UID), not per QID: the first answer
+# ACKs the command, and the other endpoints' answers must still be stored
+# (a dedup keyed on QID alone dropped every answer after the first, so a
+# broadcast query only ever showed the first responder's result). The live
+# client (UID 42) answers its own sensor; a second endpoint (UID 43) is
+# simulated with a mosquitto_pub answer published as the server user
+# (readwrite over the topic tree).
+QCFG2=$(python3 -c 'import uuid;print(uuid.uuid4())')
+QQRY2=$(python3 -c 'import uuid;print(uuid.uuid4())')
+CFGDATA2='{"sensors":[{"sid":7,"name":"probe","lstype":"shell","lscript":"echo probe-7"}]}'
+QRYDATA2="{\"qid\":\"$QQRY2\",\"sensors\":[{\"sid\":7}]}"
+dbq "insert into COMMANDS (SID,TARGET,LUMY,ACTION,DATA,QID,STATUS,CREATED) values ($SID,'all','core','config','$CFGDATA2','$QCFG2','PENDING',now());"
+dbq "insert into COMMANDS (SID,TARGET,LUMY,ACTION,DATA,QID,STATUS,CREATED) values ($SID,'all','core','query','$QRYDATA2','$QQRY2','PENDING',now());"
+# Wait for the worker to publish the query before the second endpoint
+# answers, so the answer lands on a published command inside the answer
+# window (cmd_timeout is 5s in this test). The live client (UID 42) answers
+# within a couple of seconds, so by the time we observe the command it is
+# often already ACKED - both SENT and ACKED mean "published".
+S1=1
+for i in $(seq 1 40); do
+    st=$(dbq "select STATUS from COMMANDS where QID='$QQRY2';")
+    case "$st" in
+        SENT|ACKED) S1=0; break ;;
+    esac
+    sleep 0.5
+done
+check "broadcast query: the query command was published (SENT or ACKED)" "$S1" "final status: $(dbq "select STATUS from COMMANDS where QID='$QQRY2';")"
+mosquitto_pub -h 127.0.0.1 -p "$PORT" --cafile "$CERTDIR/ca.pem" \
+    -u "$SERVER_USER" -P "$SERVER_SECRET" \
+    -t "luminum/$SID/43/resp" \
+    -m "{\"lumy\":\"core\",\"action\":\"answer\",\"data\":{\"qid\":\"$QQRY2\",\"results\":[{\"sid\":7,\"output\":\"probe-43\"}]}}"
+B1=1
+for i in $(seq 1 60); do
+    n=$(dbq "select count(*) from QUERYRESULTS where QID='$QQRY2';")
+    [ "$n" = "2" ] && { B1=0; break; }
+    sleep 0.5
+done
+check "broadcast query: both endpoints' answers were stored" "$B1" "rows: $(dbq "select count(*) from QUERYRESULTS where QID='$QQRY2';")"
+check "broadcast query: each answer carries its own endpoint's output" \
+    $([ "$(dbq "select count(distinct ifnull(replace(OUTPUT,char(10),''),'')) from QUERYRESULTS where QID='$QQRY2';")" = "2" ]; echo $?)
+check "broadcast query: the command was ACKED" \
+    $([ "$(dbq "select STATUS from COMMANDS where QID='$QQRY2';")" = "ACKED" ]; echo $?)
+# A redelivered answer from the same endpoint (QoS 1) is dropped.
+mosquitto_pub -h 127.0.0.1 -p "$PORT" --cafile "$CERTDIR/ca.pem" \
+    -u "$SERVER_USER" -P "$SERVER_SECRET" \
+    -t "luminum/$SID/43/resp" \
+    -m "{\"lumy\":\"core\",\"action\":\"answer\",\"data\":{\"qid\":\"$QQRY2\",\"results\":[{\"sid\":7,\"output\":\"probe-43\"}]}}"
+sleep 2
+check "broadcast query: a redelivered answer from the same endpoint is dropped" \
+    $([ "$(dbq "select count(*) from QUERYRESULTS where QID='$QQRY2';")" = "2" ]; echo $?)
 
 # --- query deadline: no answer by the deadline => TIMEDOUT (protocol 7.3) -----
 # The worker runs with cmd_timeout=5s. Target 99 has no client, so the query
