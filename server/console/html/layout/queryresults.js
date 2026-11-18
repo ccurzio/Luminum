@@ -8,10 +8,11 @@
 // as the other pages - "N of M items" and the filter field - and the
 // "Query Completed in X Seconds" footer). The table's header row reflects
 // the sensors the query requested: one column per sensor, titled with the
-// sensor's name, and one row per answering endpoint. When two or more
-// endpoints return the same answer (the same values in every sensor
-// column) a Count column is added at the end; each row shows how many
-// endpoints returned that answer.
+// sensor's name. The rows are the query's unique answers - one row per
+// combination of sensor values, with endpoints that answered identically in
+// every sensor column sharing a row - and the Count column shows how many
+// endpoints returned that answer (15 endpoints all answering TRUE -> a
+// single row TRUE/15).
 //
 // The pure functions (cellValue, pivotResults, buildConfig) are DOM-free so
 // they can be unit-tested under Node. The DOM helper (init) only runs in the
@@ -33,66 +34,63 @@
 		return r.err !== null ? r.err : r.status;
 	}
 
-	// Pivot one query's flat per-sensor results into one row per answering
-	// endpoint: { id, hostname, s<sid>: <cell>, count? }. The sensor cells
-	// follow the query's requested sensor order (q.sensors: [{sid, name}]);
-	// an endpoint that never answered a requested sensor gets an empty cell.
-	//
-	// Count is added only when two or more endpoints share an answer - the
-	// same values in every sensor column - and shows, per row, how many
-	// endpoints returned that answer.
+	// Collapse one query's flat per-sensor results into one row per unique
+	// answer: { id, s<sid>: <cell>, count }. The sensor cells follow the
+	// query's requested sensor order (q.sensors: [{sid, name}]); an endpoint
+	// that never answered a requested sensor gets an empty cell. An answer
+	// is the endpoint's values across every sensor column, so endpoints
+	// share a row only when they answered identically in all of them. Rows
+	// keep the order in which each answer first appeared.
 	function pivotResults(q) {
 		var sensors = q.sensors || [];
 		var byUid = {};
-		var order = [];
+		var uidOrder = [];
 		(q.results || []).forEach(function (r) {
 			if (!byUid[r.uid]) {
-				byUid[r.uid] = { hostname: r.hostname, cells: {} };
-				order.push(r.uid);
+				byUid[r.uid] = { cells: {} };
+				uidOrder.push(r.uid);
 			}
 			byUid[r.uid].cells[r.sensor] = cellValue(r);
 		});
 		// The answer signature joins the cell values with a NUL separator so
 		// ("TR","UE") and ("T","RUE") cannot collide.
-		var sigCount = {};
-		order.forEach(function (uid) {
-			var sig = sensors.map(function (s) {
+		var SEP = String.fromCharCode(0);
+		var groups = {};
+		var sigOrder = [];
+		uidOrder.forEach(function (uid) {
+			var cells = sensors.map(function (s) {
 				var v = byUid[uid].cells[s.sid];
 				return v === undefined ? '' : v;
-			}).join('\u0000');
-			sigCount[sig] = (sigCount[sig] || 0) + 1;
-		});
-		var hasDup = false;
-		Object.keys(sigCount).forEach(function (sig) {
-			if (sigCount[sig] > 1) { hasDup = true; }
-		});
-		var rows = order.map(function (uid) {
-			var e = byUid[uid];
-			var row = { id: uid, hostname: e.hostname };
-			var sig = [];
-			sensors.forEach(function (s) {
-				var v = e.cells[s.sid];
-				row['s' + s.sid] = v === undefined ? '' : v;
-				sig.push(v === undefined ? '' : v);
 			});
-			if (hasDup) { row.count = sigCount[sig.join('\u0000')]; }
+			var sig = cells.join(SEP);
+			if (!groups[sig]) {
+				groups[sig] = { cells: cells, count: 0 };
+				sigOrder.push(sig);
+			}
+			groups[sig].count++;
+		});
+		return sigOrder.map(function (sig, i) {
+			var g = groups[sig];
+			var row = { id: i, count: g.count };
+			sensors.forEach(function (s, j) {
+				row['s' + s.sid] = g.cells[j];
+			});
 			return row;
 		});
-		return { rows: rows, hasDup: hasDup };
 	}
 
-	// The LuminumTable column config for a pivoted query: Computer Name, one
-	// column per requested sensor (titled with the sensor's name), and -
-	// when answers are shared - the Count column at the end. The filter
-	// searches the hostname and the sensor cells (not the count).
-	function buildConfig(q, hasDup, rowCount) {
-		var cols = [{ key: 'hostname', label: 'Computer Name' }];
-		var keys = ['hostname'];
+	// The LuminumTable column config for a collapsed query: one column per
+	// requested sensor (titled with the sensor's name) and the Count column
+	// at the end (how many endpoints returned the row's answer). The filter
+	// searches the sensor cells (not the count).
+	function buildConfig(q, rowCount) {
+		var cols = [];
+		var keys = [];
 		(q.sensors || []).forEach(function (s) {
 			cols.push({ key: 's' + s.sid, label: s.name });
 			keys.push('s' + s.sid);
 		});
-		if (hasDup) { cols.push({ key: 'count', label: 'Count', width: '60px', align: 'center' }); }
+		cols.push({ key: 'count', label: 'Count', width: '60px', align: 'center' });
 		return {
 			emptyMessage: rowCount === 0 ? 'No results yet' : 'No Results',
 			searchKeys: keys,
@@ -102,23 +100,15 @@
 
 	// Wire the Results tab's table shell (the page's #qrtable with its top
 	// and footer rows) to the results API for the given query ID: poll every
-	// 5 seconds, render the query's status row, the sensor column header and
-	// the endpoint rows, and keep the "N of M items" count and the filter
-	// live. Returns { refresh } (the manual refresh button's promise source).
+	// 5 seconds, render the sensor column header and the answer rows, and
+	// keep the "N of M items" count and the filter live. Returns { refresh }
+	// (the manual refresh button's promise source).
 	function init(queryId) {
 		var table = document.getElementById('qrtable');
 		if (!table) { return null; }
-		var esc = LuminumTable.escapeHTML;
 		var config = null;
 		var rows = [];
 		var state = { text: '' };
-
-		// PENDING/SENT: in flight; ACKED: answered; TIMEDOUT/EXPIRED: no answer.
-		function statusIcon(status) {
-			if (status === 'ACKED') { return 'sysgreen.png'; }
-			if (status === 'TIMEDOUT' || status === 'EXPIRED') { return 'sysred.png'; }
-			return 'sysyellow.png';
-		}
 
 		function applyRows() {
 			if (!config) { return; }
@@ -132,8 +122,6 @@
 			document.getElementById('queryms').textContent = data.query_ms;
 			var topcell = document.getElementById('qrtopcell');
 			var footcell = document.getElementById('qrfootcell');
-			var qrow = document.getElementById('qrqueryrow');
-			var qcell = document.getElementById('qrquerycell');
 			var q = data.count > 0 ? data.queries[0] : null;
 
 			if (!q) {
@@ -141,7 +129,6 @@
 				rows = [];
 				topcell.colSpan = 2;
 				footcell.colSpan = 2;
-				qrow.style.display = 'none';
 				document.getElementById('qrtable-head').innerHTML = '';
 				document.getElementById('qrtable-body').innerHTML = '<tr><td colspan="2" style="text-align: center; background-color: #494a69; font-weight: normal; font-style: italic;">No such query</td></tr>';
 				document.getElementById('qrcount').textContent = '0';
@@ -149,19 +136,11 @@
 				return;
 			}
 
-			qrow.style.display = '';
-			qcell.innerHTML = '<img src="/icons/' + statusIcon(q.status) + '" title="' + esc(q.status) + '" style="vertical-align: middle; margin-right: 6px;">'
-				+ esc(q.created)
-				+ ' &nbsp;&middot;&nbsp; ' + (q.target === 'all' ? 'all endpoints' : 'client ' + esc(q.target))
-				+ (q.conditions ? ' &nbsp;&middot;&nbsp; condition-filtered' : '');
-
-			var piv = pivotResults(q);
-			rows = piv.rows;
-			config = buildConfig(q, piv.hasDup, rows.length);
+			rows = pivotResults(q);
+			config = buildConfig(q, rows.length);
 			var ncol = config.columns.length;
 			topcell.colSpan = ncol;
 			footcell.colSpan = ncol;
-			qcell.colSpan = ncol;
 			document.getElementById('qrtable-head').innerHTML = LuminumTable.headerHTML(config);
 			applyRows();
 		}

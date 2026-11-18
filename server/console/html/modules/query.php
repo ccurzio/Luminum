@@ -69,7 +69,6 @@ $showresults = $queryid > 0;
 				<div style="display: block; width: 100%; text-align: right;">
 					<table id="qrtable" style="margin-top: 10px; text-align: left;">
 					<tr><td id="qrtopcell" colspan="2"><div style="position: absolute; padding-top: 5px; padding-left: 5px;"><span id="qrcount">0</span> <span id="qrtotal">of 0</span> items</span> <img id="qrrefresh" src="icons/refresh.png" style="cursor: pointer; margin-left: 5px; width: 15px; height: 15px; vertical-align: top;" onclick="qrRefresh()"></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="qrfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" maxlength="64"></div></td></tr>
-					<tr id="qrqueryrow" style="display: none;"><td id="qrquerycell" colspan="2" style="background-color: #34354f; font-weight: bold; padding-top: 8px;"></td></tr>
 					<tbody id="qrtable-head"></tbody>
 					<tbody data-luminum-body id="qrtable-body"></tbody>
 					<tr style="height: 35px;"><td id="qrfootcell" colspan="2"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;"><i>Query Completed in <span id="queryms">0.00</span> Seconds</i></div></td></tr>

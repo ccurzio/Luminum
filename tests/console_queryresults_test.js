@@ -37,31 +37,40 @@ function res(uid, sensor, status, output, err) {
 	return { uid: uid, hostname: "host-" + uid, sensor: sensor, status: status, output: output, err: err };
 }
 
-// The motivating case: one sensor, 15 endpoints all answering TRUE - every
-// row carries count 15.
+// The motivating case: one sensor, 15 endpoints all answering TRUE -> a
+// single row TRUE/15.
 (function () {
 	var results = [];
 	for (var uid = 1; uid <= 15; uid++) { results.push(res(uid, 7, "OK", "TRUE", null)); }
-	var piv = Q.pivotResults({ sensors: [{ sid: 7, name: "Is Windows" }], results: results });
-	ok("pivot: 15 identical answers -> 15 rows", piv.rows.length === 15);
-	ok("pivot: identical answers set hasDup", piv.hasDup === true);
-	ok("pivot: every row shows the shared count", piv.rows.every(function (r) { return r.count === 15; }));
-	ok("pivot: the cell is the sensor's answer", piv.rows.every(function (r) { return r.s7 === "TRUE"; }));
+	var rows = Q.pivotResults({ sensors: [{ sid: 7, name: "Is Windows" }], results: results });
+	ok("pivot: 15 identical answers -> a single row", rows.length === 1);
+	ok("pivot: the row carries the answer and the count", rows[0].s7 === "TRUE" && rows[0].count === 15);
 })();
 
-// All answers unique -> no Count column at all.
+// 13 TRUE + 2 FALSE -> two rows: TRUE/13 and FALSE/2.
 (function () {
-	var piv = Q.pivotResults({
+	var results = [];
+	for (var uid = 1; uid <= 13; uid++) { results.push(res(uid, 7, "OK", "TRUE", null)); }
+	results.push(res(14, 7, "OK", "FALSE", null), res(15, 7, "OK", "FALSE", null));
+	var rows = Q.pivotResults({ sensors: [{ sid: 7, name: "Is Windows" }], results: results });
+	ok("pivot: 13 TRUE + 2 FALSE -> two rows", rows.length === 2);
+	ok("pivot: the rows are TRUE/13 then FALSE/2 (first-appearance order)",
+		rows[0].s7 === "TRUE" && rows[0].count === 13 && rows[1].s7 === "FALSE" && rows[1].count === 2);
+})();
+
+// All answers unique -> one row per answer, each counted 1.
+(function () {
+	var rows = Q.pivotResults({
 		sensors: [{ sid: 7, name: "Is Windows" }],
 		results: [res(1, 7, "OK", "TRUE", null), res(2, 7, "OK", "FALSE", null), res(3, 7, "OK", "MAYBE", null)]
 	});
-	ok("pivot: unique answers -> hasDup false", piv.hasDup === false);
-	ok("pivot: unique answers -> no count field", piv.rows.every(function (r) { return !("count" in r); }));
+	ok("pivot: unique answers -> one row each, count 1",
+		rows.length === 3 && rows.every(function (r) { return r.count === 1; }));
 })();
 
-// Two sensors: the answer is the whole row (every sensor column).
+// Two sensors: an answer is the whole row (every sensor column).
 (function () {
-	var piv = Q.pivotResults({
+	var rows = Q.pivotResults({
 		sensors: [{ sid: 7, name: "Is Windows" }, { sid: 9, name: "CPU Load" }],
 		results: [
 			res(1, 7, "OK", "TRUE", null), res(1, 9, "OK", "1", null),
@@ -69,27 +78,30 @@ function res(uid, sensor, status, output, err) {
 			res(3, 7, "OK", "FALSE", null), res(3, 9, "OK", "2", null)
 		]
 	});
-	ok("pivot: two sensors -> one row per endpoint", piv.rows.length === 3);
-	ok("pivot: same full answer -> count 2", piv.rows[0].count === 2 && piv.rows[1].count === 2);
-	ok("pivot: different full answer -> count 1", piv.rows[2].count === 1);
+	ok("pivot: two sensors -> one row per unique full answer", rows.length === 2);
+	ok("pivot: the shared full answer is TRUE/1 counted 2",
+		rows[0].s7 === "TRUE" && rows[0].s9 === "1" && rows[0].count === 2);
+	ok("pivot: the other full answer is FALSE/2 counted 1",
+		rows[1].s7 === "FALSE" && rows[1].s9 === "2" && rows[1].count === 1);
 })();
 
-// Equal in one sensor column but not the other is NOT the same answer.
+// Equal in one sensor column but not the other is a different answer.
 (function () {
-	var piv = Q.pivotResults({
+	var rows = Q.pivotResults({
 		sensors: [{ sid: 7, name: "Is Windows" }, { sid: 9, name: "CPU Load" }],
 		results: [
 			res(1, 7, "OK", "TRUE", null), res(1, 9, "OK", "1", null),
 			res(2, 7, "OK", "TRUE", null), res(2, 9, "OK", "2", null)
 		]
 	});
-	ok("pivot: one column equal, the other not -> not the same answer", piv.hasDup === false);
+	ok("pivot: one column equal, the other not -> two rows",
+		rows.length === 2 && rows.every(function (r) { return r.count === 1; }));
 })();
 
 // An endpoint that never answered a requested sensor gets an empty cell,
-// which still takes part in the answer signature.
+// which still takes part in the answer.
 (function () {
-	var piv = Q.pivotResults({
+	var rows = Q.pivotResults({
 		sensors: [{ sid: 7, name: "Is Windows" }, { sid: 9, name: "CPU Load" }],
 		results: [
 			res(1, 7, "OK", "TRUE", null),
@@ -97,33 +109,34 @@ function res(uid, sensor, status, output, err) {
 			res(3, 7, "OK", "TRUE", null)
 		]
 	});
-	ok("pivot: a missing sensor answer is an empty cell", piv.rows[0].s9 === "");
-	ok("pivot: the empty cell still takes part in the answer", piv.rows[0].count === 2 && piv.rows[1].count === 1);
+	ok("pivot: a missing sensor answer is an empty cell", rows[0].s9 === "");
+	ok("pivot: the empty cell still takes part in the answer",
+		rows.length === 2 && rows[0].count === 2 && rows[1].count === 1);
 })();
 
-// Error answers render the error message and count like any other answer.
+// Error answers render the error message and group like any other answer.
 (function () {
-	var piv = Q.pivotResults({
+	var rows = Q.pivotResults({
 		sensors: [{ sid: 7, name: "Is Windows" }, { sid: 9, name: "Mac Sensor" }],
 		results: [
 			res(1, 7, "OK", "TRUE", null), res(1, 9, "ERR", null, "UNKNOWN_SENSOR"),
 			res(2, 7, "OK", "TRUE", null), res(2, 9, "ERR", null, "UNKNOWN_SENSOR")
 		]
 	});
-	ok("pivot: an ERR answer renders the error in the cell", piv.rows[0].s9 === "UNKNOWN_SENSOR");
-	ok("pivot: two identical error answers share a count", piv.rows[0].count === 2);
+	ok("pivot: an ERR answer renders the error in the cell", rows[0].s9 === "UNKNOWN_SENSOR");
+	ok("pivot: two identical error answers share one row", rows.length === 1 && rows[0].count === 2);
 })();
 
 // No answers yet (the query is still in flight) -> no rows.
 (function () {
-	var piv = Q.pivotResults({ sensors: [{ sid: 7, name: "Is Windows" }], results: [] });
-	ok("pivot: no answers -> no rows", piv.rows.length === 0 && piv.hasDup === false);
+	var rows = Q.pivotResults({ sensors: [{ sid: 7, name: "Is Windows" }], results: [] });
+	ok("pivot: no answers -> no rows", rows.length === 0);
 })();
 
 // Answers that concatenate to the same string but differ per column must not
 // collide (the signature's NUL separator).
 (function () {
-	var piv = Q.pivotResults({
+	var rows = Q.pivotResults({
 		sensors: [{ sid: 7, name: "A" }, { sid: 9, name: "B" }],
 		results: [
 			res(1, 7, "OK", "TR", null), res(1, 9, "OK", "UE", null),
@@ -132,12 +145,12 @@ function res(uid, sensor, status, output, err) {
 		]
 	});
 	ok("pivot: concatenated-equal answers do not collide",
-		piv.rows[0].count === 2 && piv.rows[1].count === 1 && piv.rows[2].count === 2);
+		rows.length === 2 && rows[0].count === 2 && rows[1].count === 1);
 })();
 
-// Rows keep the order in which the endpoints first answered.
+// Rows keep the order in which each answer first appeared.
 (function () {
-	var piv = Q.pivotResults({
+	var rows = Q.pivotResults({
 		sensors: [{ sid: 7, name: "Is Windows" }, { sid: 9, name: "CPU Load" }],
 		results: [
 			res(2, 7, "OK", "A", null),
@@ -145,28 +158,28 @@ function res(uid, sensor, status, output, err) {
 			res(2, 9, "OK", "2", null)
 		]
 	});
-	ok("pivot: rows keep the endpoints' first-answer order", piv.rows[0].id === 2 && piv.rows[1].id === 1);
+	ok("pivot: rows keep first-appearance order", rows[0].s7 === "A" && rows[1].s7 === "B");
 })();
 
 // --- buildConfig ----------------------------------------------------------------
 
 (function () {
 	var q = { sensors: [{ sid: 7, name: "Is Windows" }, { sid: 9, name: "CPU Load" }] };
-	var cfg = Q.buildConfig(q, true, 3);
-	ok("config: Computer Name first, then the sensors in query order, Count last",
-		eq(cfg.columns.map(function (c) { return c.label; }), ["Computer Name", "Is Windows", "CPU Load", "Count"]));
+	var cfg = Q.buildConfig(q, 3);
+	ok("config: the sensors in query order, Count last",
+		eq(cfg.columns.map(function (c) { return c.label; }), ["Is Windows", "CPU Load", "Count"]));
 	ok("config: the Count column is centered",
-		cfg.columns[3].key === "count" && cfg.columns[3].align === "center");
-	ok("config: the filter searches hostname and sensor cells, not the count",
-		eq(cfg.searchKeys, ["hostname", "s7", "s9"]));
+		cfg.columns[2].key === "count" && cfg.columns[2].align === "center");
+	ok("config: the filter searches the sensor cells, not the count",
+		eq(cfg.searchKeys, ["s7", "s9"]));
 	ok("config: rows present -> 'No Results' empty message", cfg.emptyMessage === "No Results");
 })();
 
 (function () {
 	var q = { sensors: [{ sid: 7, name: "Is Windows" }] };
-	var cfg = Q.buildConfig(q, false, 0);
-	ok("config: unique answers -> no Count column",
-		eq(cfg.columns.map(function (c) { return c.label; }), ["Computer Name", "Is Windows"]));
+	var cfg = Q.buildConfig(q, 0);
+	ok("config: a single sensor -> one column plus Count",
+		eq(cfg.columns.map(function (c) { return c.label; }), ["Is Windows", "Count"]));
 	ok("config: no rows yet -> 'No results yet' empty message", cfg.emptyMessage === "No results yet");
 })();
 
@@ -176,7 +189,7 @@ const pageSrc = fs.readFileSync(path.join(__dirname, "..", "server", "console", 
 ok("page: the results tab loads the module", pageSrc.indexOf('/layout/queryresults.js') >= 0);
 ok("page: the results tab boots the module with the query ID",
 	/LuminumQueryResults\.init\(\s*<\?php print \$queryid; \?>\s*\)/.test(pageSrc));
-["qrtable", "qrtopcell", "qrcount", "qrtotal", "qrrefresh", "qrfilter", "qrqueryrow", "qrtable-head", "qrtable-body", "qrfootcell"].forEach(function (id) {
+["qrtable", "qrtopcell", "qrcount", "qrtotal", "qrrefresh", "qrfilter", "qrtable-head", "qrtable-body", "qrfootcell"].forEach(function (id) {
 	ok("page: the table shell carries #" + id, pageSrc.indexOf('id="' + id + '"') >= 0);
 });
 
