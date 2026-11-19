@@ -167,6 +167,24 @@ $p = base_post(); unset($p['lscript']);
 $v = luminum_validate_sensor_create($p);
 ok("enabled platform without script field rejected", $v['ok'] === false && $v['err'] === 'os');
 
+// --- line-ending normalization -----------------------------------------------
+// A script pasted from a Windows editor carries \r\n; the client runs it on
+// the interpreter's stdin, where a stray \r breaks shell scripts.
+$p = base_post(); $p['lscript'] = "#!/bin/sh\r\nif true; then\r\necho hi\r\nfi\r\n";
+$v = luminum_validate_sensor_create($p);
+ok("CRLF script accepted", $v['ok'] === true, json_encode($v));
+ok("CRLF script stored with LF endings", ($v['sensor']['LSCRIPT'] ?? '') === "#!/bin/sh\nif true; then\necho hi\nfi\n", var_export($v['sensor']['LSCRIPT'] ?? null, true));
+
+$p = base_post(); $p['lscript'] = "echo a\recho b\r";
+$v = luminum_validate_sensor_create($p);
+ok("lone CR script normalized to LF", $v['ok'] && $v['sensor']['LSCRIPT'] === "echo a\necho b\n");
+
+$p = base_post();
+$p['meselect'] = 'on'; $p['mstype'] = 'shell'; $p['mscript'] = "echo mac\r\n";
+$p['weselect'] = 'on'; $p['wstype'] = 'powershell'; $p['wscript'] = "Get-Date\r\n";
+$v = luminum_validate_sensor_create($p);
+ok("macos and windows scripts normalized too", $v['ok'] && $v['sensor']['MSCRIPT'] === "echo mac\n" && $v['sensor']['WSCRIPT'] === "Get-Date\n");
+
 // --- malformed input shapes --------------------------------------------------
 $v = luminum_validate_sensor_create(null);
 ok("null POST rejected", $v['ok'] === false);

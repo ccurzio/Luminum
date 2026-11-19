@@ -102,6 +102,11 @@ function luminum_validate_sensor_create($post) {
 			return ['ok' => false, 'err' => 'os'];
 		}
 		$script = is_string($spec['script']) ? $spec['script'] : '';
+		// Normalize line endings before storing: the client runs the script
+		// on the interpreter's stdin, and a stray \r (a script pasted from a
+		// Windows editor) breaks shell scripts - "then\r" and "fi\r" are
+		// syntax errors and a bare "\r" line is "command not found".
+		$script = str_replace(["\r\n", "\r"], "\n", $script);
 		if (trim($script) === '' || strlen($script) > LUMINUM_SENSOR_SCRIPT_MAX) {
 			return ['ok' => false, 'err' => 'os'];
 		}

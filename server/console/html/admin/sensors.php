@@ -228,6 +228,10 @@ $sensorcount = mysqli_num_rows($sensorquery);
 					var leditor = ace.edit("leditor");
 					leditor.setShowPrintMargin(false);
 					leditor.getSession().setMode("ace/mode/sh");
+					// Scripts run on the client's interpreter stdin, where a
+					// stray \r breaks shell scripts; lock the editor to LF so
+					// pasted Windows (CRLF) text is not re-CRLF'd on submit.
+					leditor.getSession().setNewLineMode("unix");
 					leditor.getSession().on('change', function() {
 						document.getElementById('lsize').innerHTML = formatBytes(leditor.session.getValue().length,1);
 						formCheck();
@@ -244,6 +248,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 					var meditor = ace.edit("meditor");
 					meditor.setShowPrintMargin(false);
 					meditor.getSession().setMode("ace/mode/sh");
+					meditor.getSession().setNewLineMode("unix");
 					meditor.getSession().on('change', function() {
 						document.getElementById('msize').innerHTML = formatBytes(meditor.session.getValue().length,1);
 						formCheck();
@@ -260,6 +265,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 					var weditor = ace.edit("weditor");
 					weditor.setShowPrintMargin(false);
 					weditor.getSession().setMode("ace/mode/powershell");
+					weditor.getSession().setNewLineMode("unix");
 					weditor.getSession().on('change', function() {
 						document.getElementById('wsize').innerHTML = formatBytes(weditor.session.getValue().length,1);
 						formCheck();
