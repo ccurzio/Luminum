@@ -166,10 +166,12 @@ function res(uid, sensor, status, output, err) {
 (function () {
 	var q = { sensors: [{ sid: 7, name: "Is Windows" }, { sid: 9, name: "CPU Load" }] };
 	var cfg = Q.buildConfig(q, 3);
+	ok("config: the first column is the select checkbox",
+		cfg.columns[0].type === "checkbox" && cfg.columns[0].header.indexOf('id="qrselectall"') >= 0);
 	ok("config: the sensors in query order, Count last",
-		eq(cfg.columns.map(function (c) { return c.label; }), ["Is Windows", "CPU Load", "Count"]));
+		eq(cfg.columns.slice(1).map(function (c) { return c.label; }), ["Is Windows", "CPU Load", "Count"]));
 	ok("config: the Count column is centered",
-		cfg.columns[2].key === "count" && cfg.columns[2].align === "center");
+		cfg.columns[3].key === "count" && cfg.columns[3].align === "center");
 	ok("config: the filter searches the sensor cells, not the count",
 		eq(cfg.searchKeys, ["s7", "s9"]));
 	ok("config: rows present -> 'No Results' empty message", cfg.emptyMessage === "No Results");
@@ -178,8 +180,8 @@ function res(uid, sensor, status, output, err) {
 (function () {
 	var q = { sensors: [{ sid: 7, name: "Is Windows" }] };
 	var cfg = Q.buildConfig(q, 0);
-	ok("config: a single sensor -> one column plus Count",
-		eq(cfg.columns.map(function (c) { return c.label; }), ["Is Windows", "Count"]));
+	ok("config: a single sensor -> checkbox, one column plus Count",
+		eq(cfg.columns.slice(1).map(function (c) { return c.label; }), ["Is Windows", "Count"]));
 	ok("config: no rows yet -> 'No results yet' empty message", cfg.emptyMessage === "No results yet");
 })();
 
@@ -192,6 +194,18 @@ ok("page: the results tab boots the module with the query ID",
 ["qrtable", "qrtopcell", "qrcount", "qrtotal", "qrrefresh", "qrfilter", "qrtable-head", "qrtable-body", "qrfootcell"].forEach(function (id) {
 	ok("page: the table shell carries #" + id, pageSrc.indexOf('id="' + id + '"') >= 0);
 });
+
+// The checkbox column's selection wiring lives in the module (the header is
+// re-rendered on every poll, so both listeners are delegated to the stable
+// tbody elements).
+const qrSrc = fs.readFileSync(path.join(__dirname, "..", "server", "console", "html", "layout", "queryresults.js"), "utf8");
+ok("module: row checkboxes carry the qrrow class", qrSrc.indexOf("'qrrow'") >= 0);
+ok("module: row selection is delegated on the body tbody",
+	qrSrc.indexOf("table.querySelector('tbody[data-luminum-body]')") >= 0 && qrSrc.indexOf("state.selected[e.target.dataset.id]") >= 0);
+ok("module: select-all is delegated on the header tbody",
+	qrSrc.indexOf("e.target.id !== 'qrselectall'") >= 0);
+ok("module: the select-all state survives the per-poll header re-render",
+	qrSrc.indexOf("document.getElementById('qrselectall')") >= 0);
 
 if (failures > 0) {
 	console.log("----------------------------------------");
