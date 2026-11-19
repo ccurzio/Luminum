@@ -400,12 +400,17 @@ body h1 {
 	width: 200px;
 	}
 
-.submenu-link {
+/* Qualified with .dropdown-content so this rule wins the specificity
+   contest against .dropdown-content a (0,1,1), whose display: block would
+   otherwise collapse the flex row and leave the arrow glued to the label.
+   color stays white: .dropdown-content a's white was what rendered before
+   (the old unqualified rule's black never won). */
+.dropdown-content .submenu-link {
 	display: flex;
 	align-items: center;
 	padding: 12px 16px;
 	text-decoration: none;
-	color: black;
+	color: white;
 	width: 100%;
 	box-sizing: border-box;
 	}
@@ -526,6 +531,17 @@ th, td {
 	color: #bbb;
 	font-weight: bold;
 	border: 1px solid #101017;
+	}
+
+/* Data rows render their text slightly smaller than the header, summary
+   and filter rows. A data row is exactly a row carrying a row checkbox
+   (input[id^="ID"] - the console's data-row convention, also used by
+   LuminumTable.attachTextFilter); the header's select-all box
+   (selectall/qrselectall), the summary/filter row and the footer carry no
+   ID-prefixed checkbox, and the Client Status right-side filter tables'
+   boxes (filter*/verchk) don't match either. */
+tr:has(input[id^="ID"]) {
+	font-size: 14px;
 	}
 
 /* A table's border-radius rounds only the table's own border - the corner

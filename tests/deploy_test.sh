@@ -417,8 +417,18 @@ check "console: submenu arrows carry no inline margin hacks" \
         && ! grep -q 'arrow" style="margin-left' "$RUN/cstatus.html" 2>/dev/null; echo $?)
 code=$(curl -k -s -o "$RUN/default.css" -w '%{http_code}' -b "$RUN/cookies" \
     "https://127.0.0.1:$WPORT/layout/default.css")
-check "console: default.css pins the submenu arrow with margin-left: auto" \
-    $([ "$code" = "200" ] && grep -q 'margin-left: auto' "$RUN/default.css" 2>/dev/null; echo $?)
+# The flex rule must be qualified (.dropdown-content .submenu-link) - the
+# unqualified selector loses to .dropdown-content a's display: block and
+# the arrow collapses back onto the label.
+check "console: default.css flex-lays-out the submenu link and pins the arrow" \
+    $([ "$code" = "200" ] \
+        && grep -q '.dropdown-content .submenu-link' "$RUN/default.css" 2>/dev/null \
+        && grep -q 'margin-left: auto' "$RUN/default.css" 2>/dev/null; echo $?)
+# Data rows (rows carrying an input[id^="ID"] row checkbox) render their
+# text smaller than the header/summary/filter rows.
+check "console: default.css shrinks the table data row text" \
+    $(grep -qF 'tr:has(input[id^="ID"])' "$RUN/default.css" 2>/dev/null \
+        && grep -q 'font-size: 14px' "$RUN/default.css" 2>/dev/null; echo $?)
 # The top row is the standard format: refresh button, displayed of
 # total Items, and the (N Selected) suffix span.
 check "console: Client Status top row is refresh + displayed of total Items" \
