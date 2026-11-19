@@ -119,8 +119,13 @@
 			if (!config) { return; }
 			LuminumTable.render(table, config, { rows: rows }, state);
 			var visible = LuminumTable.filterRows(rows, config, state);
+			// The row IDs are positional and change between polls, so count
+			// only the selections that exist in the current rows.
+			var sel = 0;
+			rows.forEach(function (r) { if (state.selected[r.id]) { sel++; } });
 			document.getElementById('qrcount').textContent = visible.length;
-			document.getElementById('qrtotal').textContent = 'of ' + rows.length;
+			document.getElementById('qrtotal').textContent = rows.length;
+			document.getElementById('qrselcount').textContent = sel > 0 ? '(' + sel + ' Selected)' : '';
 			// The header is re-rendered on every poll, recreating the
 			// select-all box - restore its checked state from the visible
 			// rows.
@@ -144,7 +149,8 @@
 				document.getElementById('qrtable-head').innerHTML = '';
 				document.getElementById('qrtable-body').innerHTML = '<tr><td colspan="3" style="text-align: center; background-color: #494a69; font-weight: normal; font-style: italic;">No such query</td></tr>';
 				document.getElementById('qrcount').textContent = '0';
-				document.getElementById('qrtotal').textContent = 'of 0';
+				document.getElementById('qrtotal').textContent = '0';
+				document.getElementById('qrselcount').textContent = '';
 				return;
 			}
 

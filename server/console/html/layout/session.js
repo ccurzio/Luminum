@@ -82,9 +82,9 @@ var LuminumSession = {
 
 	onActivity: function () {
 		if (this.warnShown) {
-			// The user is back: dismiss the warning and renew the session.
-			this.hideWarning();
-			this.touch(true);
+			// The warning is only dismissed by an explicit button click
+			// (Extend / Log Out). A mousemove from the cursor re-entering
+			// the window must not dismiss it or renew the session.
 			return;
 		}
 		// Keep the server deadline in step while the user is active: once the

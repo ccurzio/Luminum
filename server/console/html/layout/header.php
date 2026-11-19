@@ -94,8 +94,16 @@ $ienabled = $invinfo["CVAL"];
 					print "<a href=\"/modules.php\">Lumy Management</a>\n";
 					print "<div class=\"dropdown-divider\" style=\"width: 200px;\"></div>\n";
 					}
-				print "<a href=\"/modules.php?view=query\">Query</a>\n";
-				print "<a href=\"/modules.php?view=trajectory\">Trajectory</a>\n";
+				//print "<a href=\"/modules.php?view=query\">Query</a>\n";
+				print "<div class=\"submenu\">\n";
+				print "<a href=\"#\" class=\"submenu-link\" style=\"cursor: default;\">Query <span class=\"arrow\">▸</span></a>\n";
+				print "<div class=\"submenu-content\">\n";
+				print "\t<a href=\"/modules.php?view=query\">Query Builder</a>\n";
+				print "\t<a href=\"/modules.php?view=query&tab=saved\">Saved Queries</a>\n";
+				print "\t<a href=\"/index.php?view=queryhistory\">Query History</a>\n";
+				print "</div>\n";
+				print "</div>\n";
+				print "<a href=\"/modules.php?view=convey\">Convey</a>\n";
 				mysqli_select_db($db, "SYSTEM") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
 				$lumyquery = mysqli_query($db, "select CVAL from CONFIG where CKEY = 'ENLUMYS'");
 				$lumyinfo = $lumyquery ? $lumyquery->fetch_assoc() : null;
@@ -126,29 +134,28 @@ $ienabled = $invinfo["CVAL"];
 			</button>
 			<div class="dropdown-content">
 				<div class="submenu">
-					<a href="#" class="submenu-link" style="cursor: default;">Endpoints <span class="arrow" style="margin-left: 57%;">▸</span></a>
+					<a href="#" class="submenu-link" style="cursor: default;">Endpoints <span class="arrow">▸</span></a>
 					<div class="submenu-content">
 						<a href="/index.php?view=clientstatus">Client Status</a>
 						<a href="/index.php?view=missing">Missing Clients</a>
+						<a href="/index.php?view=egroups">Endpoint Groups</a>
 					</div>
 				</div>
 				<div class="submenu">
-					<a href="#" class="submenu-link" style="cursor: default;">Actions <span class="arrow" style="margin-left: 66%;">▸</span></a>
+					<a href="#" class="submenu-link" style="cursor: default;">Actions <span class="arrow">▸</span></a>
 					<div class="submenu-content">
 						<a href="/index.php?view=actions">Scheduled Actions</a>
 						<a href="/index.php?view=actionhistory">Action History</a>
 					</div>
 				</div>
 				<div class="submenu">
-					<a href="#" class="submenu-link" style="cursor: default;">Content <span class="arrow" style="margin-left: 65%;">▸</span></a>
+					<a href="#" class="submenu-link" style="cursor: default;">Content <span class="arrow">▸</span></a>
 					<div class="submenu-content">
 						<a href="/index.php?view=sensors">Sensors</a>
 						<a href="/index.php?view=packages">Packages</a>
 						<a href="/index.php?view=csets">Content Sets</a>
 					</div>
 				</div>
-				<a href="/index.php?view=savedqueries">Saved Queries</a>
-				<a href="/index.php?view=cgroups">Computer Groups</a>
 			</div>
 		</div>
 
@@ -165,8 +172,8 @@ $ienabled = $invinfo["CVAL"];
 					}
 
 				if (isset($acctrole) && $acctrole == "1") {
-					print "<div class=\"submenu\" style=\"justify-content: space-between;\">\n";
-					print "<a href=\"#\" class=\"submenu-link\" style=\"cursor: default;\">Configuration<span class=\"arrow\" style=\"margin-left: 48%;\">▸</span></a>\n";
+					print "<div class=\"submenu\">\n";
+					print "<a href=\"#\" class=\"submenu-link\" style=\"cursor: default;\">Configuration<span class=\"arrow\">▸</span></a>\n";
 					print "<div class=\"submenu-content\">\n";
 					print "<a href=\"/config.php?view=options\">Server Options</a>\n";
 					print "<a href=\"/config.php?view=network\">Network</a>\n";
@@ -175,7 +182,14 @@ $ienabled = $invinfo["CVAL"];
 					print "</div>\n";
 					print "</div>\n";
 					print "<div class=\"submenu\">\n";
-					print "<a href=\"#\" class=\"submenu-link\" style=\"cursor: default;\">Maintenance <span class=\"arrow\" style=\"margin-left: 48%;\">▸</span></a>\n";
+					print "<a href=\"#\" class=\"submenu-link\" style=\"cursor: default;\">Users<span class=\"arrow\">▸</span></a>\n";
+					print "<div class=\"submenu-content\">\n";
+					print "<a href=\"/index.php?view=users\">User Accounts</a>\n";
+					print "<a href=\"/index.php?view=ugroups\">User Groups</a>\n";
+					print "</div>\n";
+					print "</div>\n";
+					print "<div class=\"submenu\">\n";
+					print "<a href=\"#\" class=\"submenu-link\" style=\"cursor: default;\">Maintenance <span class=\"arrow\">▸</span></a>\n";
 					print "<div class=\"submenu-content\">\n";
 					print "<a href=\"/maintenance.php?view=diagnostics\">Diagnostics</a>\n";
 					print "<a href=\"/maintenance.php?view=update\">Luminum Update</a>\n";
@@ -186,8 +200,6 @@ $ienabled = $invinfo["CVAL"];
 					print "</div>\n";
 					print "</div>\n";
 					print "<a href=\"/config.php?view=clients\">Client Management</a>\n";
-					print "<a href=\"/index.php?view=users\">User Accounts</a>\n";
-					print "<a href=\"/index.php?view=ugroups\">User Groups</a>\n";
 					}
 				?>
 			</div>

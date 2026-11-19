@@ -90,17 +90,51 @@
 		return rows.map(function (row) { return rowHTML(config, row, state); }).join('\n');
 	}
 
-	// Client-side filtering. state: { text, platforms: {linux,macos,windows} }.
-	// A platform filter only applies when at least one platform box is checked.
+	// Map a client CSTATE to its status bucket (the Client Status page's
+	// green/yellow/red/gray filter rows and icon column): OK is green, WARN
+	// yellow, OFFLINE gray, and every other state (CRIT, DEACT, ...) red.
+	function stateBucket(state) {
+		if (state === 'OK') { return 'green'; }
+		if (state === 'WARN') { return 'yellow'; }
+		if (state === 'OFFLINE') { return 'offline'; }
+		return 'red';
+	}
+
+	// Client-side filtering. state: { text, platforms: {linux,macos,windows},
+	// states: {green,yellow,red,offline}, checkin: {cutoff},
+	// subset: {field, checked: {value: true}} }.
+	// A platform or state filter only applies when at least one of its boxes
+	// is checked. checkin.cutoff is an epoch-seconds instant: rows whose
+	// lastseen_ts is missing or earlier than it are dropped (the check-in
+	// time filter). A subset filter (e.g. client version) only applies when
+	// at least one value is checked: rows whose row[field] is not a checked
+	// value are dropped.
 	function filterRows(rows, config, state) {
 		state = state || {};
 		var text = (state.text || '').toLowerCase();
 		var pf = state.platforms || {};
 		var anyPlatform = pf.linux || pf.macos || pf.windows;
+		var sf = state.states || {};
+		var anyState = sf.green || sf.yellow || sf.red || sf.offline;
+		var cutoff = (state.checkin && state.checkin.cutoff) || null;
+		var sub = state.subset || null;
+		var anySub = false;
+		if (sub) {
+			for (var v in sub.checked) { if (sub.checked[v]) { anySub = true; break; } }
+		}
 		var keys = config.searchKeys;
 		return rows.filter(function (row) {
 			if (anyPlatform) {
 				if (!pf[String(row.platform).toLowerCase()]) { return false; }
+			}
+			if (anyState) {
+				if (!sf[stateBucket(row.state)]) { return false; }
+			}
+			if (anySub) {
+				if (!sub.checked[String(row[sub.field])]) { return false; }
+			}
+			if (cutoff !== null) {
+				if (row.lastseen_ts === null || row.lastseen_ts === undefined || row.lastseen_ts < cutoff) { return false; }
 			}
 			if (text) {
 				var hay = keys
@@ -215,6 +249,7 @@
 		headerHTML: headerHTML,
 		rowHTML: rowHTML,
 		rowsHTML: rowsHTML,
+		stateBucket: stateBucket,
 		filterRows: filterRows,
 		render: render,
 		poll: poll,

@@ -396,7 +396,10 @@ row = next((r for r in data["rows"] if r["id"] == uid), None)
 assert row is not None, "client row missing from API response"
 assert row["hostname"] == host, "hostname mismatch: %r != %r" % (row["hostname"], host)
 assert row["state"] == "OK", "state: %r" % row["state"]
-assert data["platforms"]["linux"] >= 1, "linux platform tally missing"
+assert isinstance(data["checkinint"], int) and data["checkinint"] > 0, "checkinint: %r" % data["checkinint"]
+assert isinstance(data["server_ts"], int) and data["server_ts"] > 0, "server_ts: %r" % data["server_ts"]
+assert isinstance(row["lastseen_ts"], int) and row["lastseen_ts"] > 0, "lastseen_ts: %r" % row["lastseen_ts"]
+assert row["lastseen_ts"] <= data["server_ts"], "lastseen_ts after server clock"
 EOF
 check "api: registered client listed with hostname and OK state" $? "see $RUN/api-clients.json"
 
@@ -406,6 +409,43 @@ code=$(curl -k -s -o "$RUN/cstatus.html" -w '%{http_code}' -b "$RUN/cookies" \
 check "console: Client Status page renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
 check "console: Client Status table markup present" \
     $(grep -q 'id="cstable"' "$RUN/cstatus.html" 2>/dev/null; echo $?)
+# The submenu parent links lay out label + arrow with flex: the arrow is
+# pinned to the right edge by margin-left: auto in default.css, so no
+# per-label inline margin hacks may remain on the arrow spans.
+check "console: submenu arrows carry no inline margin hacks" \
+    $(grep -q 'class="arrow"' "$RUN/cstatus.html" 2>/dev/null \
+        && ! grep -q 'arrow" style="margin-left' "$RUN/cstatus.html" 2>/dev/null; echo $?)
+code=$(curl -k -s -o "$RUN/default.css" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/layout/default.css")
+check "console: default.css pins the submenu arrow with margin-left: auto" \
+    $([ "$code" = "200" ] && grep -q 'margin-left: auto' "$RUN/default.css" 2>/dev/null; echo $?)
+# The top row is the standard format: refresh button, displayed of
+# total Items, and the (N Selected) suffix span.
+check "console: Client Status top row is refresh + displayed of total Items" \
+    $(grep -q 'id="refresh"' "$RUN/cstatus.html" 2>/dev/null \
+        && grep -q 'id="viscount"' "$RUN/cstatus.html" 2>/dev/null \
+        && grep -q 'id="totcount"' "$RUN/cstatus.html" 2>/dev/null \
+        && grep -q 'id="selcount"' "$RUN/cstatus.html" 2>/dev/null; echo $?)
+check "console: check-in filter offers Check-in Interval(s)" \
+    $(grep -q 'Check-in Interval(s)' "$RUN/cstatus.html" 2>/dev/null; echo $?)
+check "console: status filter checkboxes present" \
+    $(grep -q 'id="filtergreen"' "$RUN/cstatus.html" 2>/dev/null \
+        && grep -q 'id="filteryellow"' "$RUN/cstatus.html" 2>/dev/null \
+        && grep -q 'id="filterred"' "$RUN/cstatus.html" 2>/dev/null \
+        && grep -q 'id="filteroffline"' "$RUN/cstatus.html" 2>/dev/null; echo $?)
+# The breakdown JS must reference the count spans by their exact markup ids
+# (single-quoted here so only the JS string literals match, not id="..."):
+# a mismatch leaves the count stuck at 0 while the percentage updates.
+check "console: status breakdown wiring references the count spans" \
+    $(grep -q "'greencount'" "$RUN/cstatus.html" 2>/dev/null \
+        && grep -q "'yellowcount'" "$RUN/cstatus.html" 2>/dev/null \
+        && grep -q "'redcount'" "$RUN/cstatus.html" 2>/dev/null \
+        && grep -q "'offcount'" "$RUN/cstatus.html" 2>/dev/null; echo $?)
+check "console: client version filter table present" \
+    $(grep -q 'id="vertable"' "$RUN/cstatus.html" 2>/dev/null \
+        && grep -q 'id="verrows"' "$RUN/cstatus.html" 2>/dev/null; echo $?)
+check "console: version breakdown wiring references the row container" \
+    $(grep -q "'verrows'" "$RUN/cstatus.html" 2>/dev/null; echo $?)
 # The inactivity client must be initialized on the page (footer.php injects
 # the deadline/timeout/warn config from the live session): timeout is the
 # seeded UTIMEOUT in seconds and the 2-minute warning is seeded Enabled.
@@ -522,6 +562,19 @@ check "console: query page renders (200)" $([ "$code" = "200" ]; echo $?) "got: 
 check "console: query page offers the sensor fields and catalog" \
     $(grep -q 'placeholder="Sensor"' "$RUN/query.html" 2>/dev/null \
         && grep -q "Deploy Test Sensor" "$RUN/query.html" 2>/dev/null; echo $?)
+# The header menu's "Saved Queries" link opens the query page on its Saved
+# Queries tab (?tab=saved) - the old standalone Saved Queries page is gone.
+code=$(curl -k -s -o "$RUN/query-saved.html" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/modules.php?view=query&tab=saved")
+check "console: query page with tab=saved renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+check "console: tab=saved opens the page on the Saved Queries tab" \
+    $(grep -q 'tablink tabbarsel" style="border-right: 1px solid #07f;" onclick="switchTab(event, .Saved.)"' "$RUN/query-saved.html" 2>/dev/null; echo $?)
+code=$(curl -k -s -o "$RUN/savedqueries.html" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/index.php?view=savedqueries")
+# (the header menu still carries the "Saved Queries" nav link, so match the
+# old page's <h1> specifically)
+check "console: the standalone savedqueries view no longer renders" \
+    $([ "$code" = "200" ] && ! grep -q '<h1>Saved Queries</h1>' "$RUN/savedqueries.html" 2>/dev/null; echo $?)
 
 SENSOR_Q=$(dbq "select ID from CONTENT.SENSORS where NAME='Deploy Test Sensor';")
 body=$(python3 -c 'import json,sys;print(json.dumps({"target":"all","action":"query","sensors":[{"sid":int(sys.argv[1])}],"conditions":{"sid":int(sys.argv[1]),"op":"==","value":"probe-output-42"}}))' "$SENSOR_Q")
@@ -665,6 +718,11 @@ check "console: results table shell (count/filter row) present" \
     $(grep -q 'id="qrcount"' "$RUN/query-results.html" 2>/dev/null \
         && grep -q 'id="qrfilter"' "$RUN/query-results.html" 2>/dev/null \
         && grep -q 'id="qrtable-body"' "$RUN/query-results.html" 2>/dev/null; echo $?)
+# The top row is the standard format: refresh button, displayed of
+# total Items, and the (N Selected) suffix span.
+check "console: results top row is refresh + displayed of total Items" \
+    $(grep -q 'id="qrrefresh"' "$RUN/query-results.html" 2>/dev/null \
+        && grep -q 'id="qrselcount"' "$RUN/query-results.html" 2>/dev/null; echo $?)
 
 # --- inactivity session timeout ----------------------------------------------
 # Login must stamp the deadline from the UTIMEOUT server option (seeded 15M),

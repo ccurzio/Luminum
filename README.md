@@ -16,13 +16,14 @@ Keep in mind that Luminum is still in early development, so its current function
 
 #### The current planned Lumy modules include:
 - **Query\*:** The core module of the system which allows administrators and users to retrieve data from endpoints
-- **Trajectory\*:** Automatically report query result data in specified intervals to various logging, reporting, and communication systems
+- **Convey\*:** Automatically publish query result data in specified intervals to various logging, reporting, and communication systems
+- **Security:** Endpoint security management including firewall configuration, IDS/IPS, etc.
 - **Delivery:** Deploys applications to endpoints and provides application installation management
 - **Discovery:** Performs network scanning from the server as well as endpoints to discover devices and services
 - **Efficiency:** Analyzes and logs various aspects of endpoint performance
 - **Integrity:** Provides file integrity monitoring on endpoints
 - **Inventory:** Allows administrators to compile a full inventory of both network-connected devices as well as software installed on those devices
-- **Policy:** Enforcement of endpoint security and system management policies including firewall configuration, IDS/IPS, and IoCs
+- **Policy:** Enforcement of endpoint security and system management policies.
 - **Notify:** Provides pop-up alerts to users with customizable notifications
 
 <sub>* Indicates a core module that is always installed</sub>
@@ -30,7 +31,7 @@ Keep in mind that Luminum is still in early development, so its current function
  
 <br>
 
-The server package is supported primarily under Debian Linux, however I am exploring support for additional distributions as well. I am also strongly considering creating a Docker container for the server-side application. The endpoint clients will run on a range of operating systems and platforms including Linux (Debian, CentOS/Red Hat, Slackware, etc.), macOS, and Windows. I'm tentatively looking at supporting OpenBSD and FreeBSD as well, though I have far less BSD experience (limited to FreeBSD) than Linux/Mac/Windows. AIX support is also planned (eventually probably possibly maybe hopefully) because AIX is getting left behind when it comes to security. 
+The server package is supported primarily under Debian Linux, however I am exploring support for additional distributions as well. I am also strongly considering creating a Docker container for the server-side application. The endpoint clients will run on a range of operating systems and platforms including Linux (Debian, CentOS/Red Hat, Slackware, etc.), macOS, and Windows. I'm tentatively looking at supporting OpenBSD and FreeBSD as well, though I have far less BSD experience (limited to FreeBSD) than Linux/Mac/Windows. Solaris support is planned for the longer term. AIX support is also being considered  (eventually probably possibly maybe hopefully) depending on the availability of a development environment, because AIX is getting left behind when it comes to security. 
 
 ## Development
 Right now I'm working on this thing by myself, but I certainly welcome community support from anyone who wants to chip in. (Feel free to review the [To-Do List](https://github.com/ccurzio/Luminum/blob/main/ToDo.md) if you're wondering about the project's current development status.) There's no real timeline or roadmap beyond what's included here, however the goal is to provide a secure, complete, lightweight, and robust endpoint security and management solution that can scale from the smallest home networks up to the largest enterprise networks. 

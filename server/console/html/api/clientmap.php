@@ -5,6 +5,8 @@
 //
 
 // Map a CLIENTS.STATUS row (mysqli assoc) to the JSON shape the console uses.
+// LASTSEEN_TS is UNIX_TIMESTAMP(LASTSEEN) from the endpoint's query; it is the
+// epoch-seconds form the console's check-in time filter compares against.
 function luminum_client_row($row) {
 	return [
 		'id' => (int)$row['ID'],
@@ -15,12 +17,6 @@ function luminum_client_row($row) {
 		'clientver' => $row['CLIENTVER'],
 		'state' => $row['CSTATE'],
 		'lastseen' => $row['LASTSEEN'],
+		'lastseen_ts' => $row['LASTSEEN_TS'] !== null ? (int)$row['LASTSEEN_TS'] : null,
 	];
-}
-
-// Increment the OS breakdown counter for a platform; unknown platforms are
-// ignored so the three known buckets always sum to the reported count.
-function luminum_platform_tally(&$platforms, $platform) {
-	$key = strtolower($platform);
-	if (isset($platforms[$key])) { $platforms[$key]++; }
 }

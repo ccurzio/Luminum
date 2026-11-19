@@ -402,7 +402,6 @@ body h1 {
 
 .submenu-link {
 	display: flex;
-	justify-content: space-between;
 	align-items: center;
 	padding: 12px 16px;
 	text-decoration: none;
@@ -411,8 +410,12 @@ body h1 {
 	box-sizing: border-box;
 	}
 
+/* The arrow is pinned to the right edge of the link regardless of the
+   label's length: the auto margin absorbs the free space, and the padding
+   keeps a minimum gap between label and arrow. */
 .submenu-link .arrow {
-	margin-left: 8px;
+	margin-left: auto;
+	padding-left: 8px;
 	}
 
 .dropdown a:hover, .submenu:hover .submenu-link {
@@ -523,6 +526,29 @@ th, td {
 	color: #bbb;
 	font-weight: bold;
 	border: 1px solid #101017;
+	}
+
+/* A table's border-radius rounds only the table's own border - the corner
+   cells keep square borders/backgrounds and poke a right angle into the
+   rounded corner. Round the four corner cells to match: 7px is the table's
+   8px minus its 1px border, so the cell arcs nest inside the table arc.
+   (Rows always sit in a tbody in the rendered DOM - the parser wraps bare
+   <tr> in an implicit one - so address the first/last tbody.) */
+table > tbody:first-child > tr:first-child > td:first-child,
+table > tbody:first-child > tr:first-child > th:first-child {
+	border-top-left-radius: 7px;
+	}
+table > tbody:first-child > tr:first-child > td:last-child,
+table > tbody:first-child > tr:first-child > th:last-child {
+	border-top-right-radius: 7px;
+	}
+table > tbody:last-child > tr:last-child > td:first-child,
+table > tbody:last-child > tr:last-child > th:first-child {
+	border-bottom-left-radius: 7px;
+	}
+table > tbody:last-child > tr:last-child > td:last-child,
+table > tbody:last-child > tr:last-child > th:last-child {
+	border-bottom-right-radius: 7px;
 	}
 
 h2 {

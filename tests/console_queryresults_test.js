@@ -188,12 +188,40 @@ function res(uid, sensor, status, output, err) {
 // --- the page wiring (static) -----------------------------------------------------
 
 const pageSrc = fs.readFileSync(path.join(__dirname, "..", "server", "console", "html", "modules", "query.php"), "utf8");
-ok("page: the results tab loads the module", pageSrc.indexOf('/layout/queryresults.js') >= 0);
-ok("page: the results tab boots the module with the query ID",
+ok("page: the results view loads the module", pageSrc.indexOf('/layout/queryresults.js') >= 0);
+ok("page: the results view boots the module with the query ID",
 	/LuminumQueryResults\.init\(\s*<\?php print \$queryid; \?>\s*\)/.test(pageSrc));
-["qrtable", "qrtopcell", "qrcount", "qrtotal", "qrrefresh", "qrfilter", "qrtable-head", "qrtable-body", "qrfootcell"].forEach(function (id) {
+["qrtable", "qrtopcell", "qrcount", "qrtotal", "qrselcount", "qrrefresh", "qrfilter", "qrtable-head", "qrtable-body", "qrfootcell"].forEach(function (id) {
 	ok("page: the table shell carries #" + id, pageSrc.indexOf('id="' + id + '"') >= 0);
 });
+// The top row is the console's standard format: the refresh button first,
+// then "displayed of total Items" and the (N Selected) suffix span.
+ok("page: the top row leads with the refresh button, then the count",
+	pageSrc.indexOf('id="qrrefresh"') >= 0 && pageSrc.indexOf('id="qrrefresh"') < pageSrc.indexOf('id="qrcount"'));
+ok("page: the top row shows displayed of total Items",
+	pageSrc.indexOf('<span id="qrcount">0</span> of <span id="qrtotal">0</span> Items') >= 0);
+
+// The results view has no tabs at all: the Results tab button is gone from
+// the query page, and the tab bar itself only renders in the builder branch.
+ok("page: the Results tab button is gone", pageSrc.indexOf("switchTab(event, 'Results')") < 0);
+ok("page: the tab bar renders only in the builder branch",
+	pageSrc.indexOf('<?php } else { ?>') >= 0 && pageSrc.indexOf('tabbarback') > pageSrc.indexOf('<?php } else { ?>'));
+ok("page: the results table renders in the results branch",
+	pageSrc.indexOf('<?php if ($showresults) { ?>') >= 0 && pageSrc.indexOf('id="qrtable"') < pageSrc.indexOf('<?php } else { ?>'));
+
+// The Saved Queries tab is reachable from the header menu via ?tab=saved -
+// the old standalone Saved Queries page (admin/savedqueries.php) is gone.
+ok("page: ?tab=saved selects the Saved tab button",
+	/tablink<\?php print \$showsaved \? ' tabbarsel' : ''; \?>/.test(pageSrc));
+ok("page: ?tab=saved hides the Builder tab",
+	pageSrc.indexOf("<div id=\"Builder\" class=\"configtab\" style=\"<?php print $showsaved ? 'display: none;' : ''; ?>\">") >= 0);
+ok("page: ?tab=saved shows the Saved tab",
+	pageSrc.indexOf("<div id=\"Saved\" class=\"configtab\" style=\"<?php print $showsaved ? '' : 'display: none;'; ?>\">") >= 0);
+const headerSrc = fs.readFileSync(path.join(__dirname, "..", "server", "console", "html", "layout", "header.php"), "utf8");
+ok("header: the Saved Queries link opens the query page's Saved tab",
+	headerSrc.indexOf('href=\\"/modules.php?view=query&tab=saved\\"') >= 0);
+const indexSrc = fs.readFileSync(path.join(__dirname, "..", "server", "console", "html", "index.php"), "utf8");
+ok("index: the standalone savedqueries view is gone", indexSrc.indexOf("savedqueries") < 0);
 
 // The checkbox column's selection wiring lives in the module (the header is
 // re-rendered on every poll, so both listeners are delegated to the stable
@@ -206,6 +234,8 @@ ok("module: select-all is delegated on the header tbody",
 	qrSrc.indexOf("e.target.id !== 'qrselectall'") >= 0);
 ok("module: the select-all state survives the per-poll header re-render",
 	qrSrc.indexOf("document.getElementById('qrselectall')") >= 0);
+ok("module: the top row carries the (N Selected) suffix",
+	qrSrc.indexOf("document.getElementById('qrselcount')") >= 0 && qrSrc.indexOf("'(' + sel + ' Selected)'") >= 0);
 
 if (failures > 0) {
 	console.log("----------------------------------------");

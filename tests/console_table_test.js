@@ -113,6 +113,91 @@ ok("filterRows: text + platform keep match",
 ok("filterRows: falls back to JSON.stringify without searchKeys",
 	LT.filterRows(rows, { columns: plain }, { text: "debian" }).map((r) => r.id).join(",") === "1");
 
+// --- stateBucket ------------------------------------------------------------
+ok("stateBucket: OK -> green", LT.stateBucket("OK") === "green");
+ok("stateBucket: WARN -> yellow", LT.stateBucket("WARN") === "yellow");
+ok("stateBucket: OFFLINE -> offline", LT.stateBucket("OFFLINE") === "offline");
+ok("stateBucket: CRIT -> red", LT.stateBucket("CRIT") === "red");
+ok("stateBucket: DEACT -> red", LT.stateBucket("DEACT") === "red");
+ok("stateBucket: unknown/null -> red",
+	LT.stateBucket("nope") === "red" && LT.stateBucket(null) === "red");
+
+// --- filterRows: status filter ----------------------------------------------
+const srows = [
+	{ id: 1, state: "OK" },
+	{ id: 2, state: "WARN" },
+	{ id: 3, state: "CRIT" },
+	{ id: 4, state: "OFFLINE" },
+];
+const noStates = { green: false, yellow: false, red: false, offline: false };
+ok("filterRows: no status checked keeps all",
+	LT.filterRows(srows, cfg, { states: { ...noStates } }).length === 4);
+ok("filterRows: single status (green)",
+	LT.filterRows(srows, cfg, { states: { ...noStates, green: true } }).map((r) => r.id).join(",") === "1");
+ok("filterRows: red catches the non-OK/WARN/OFFLINE states",
+	LT.filterRows(srows, cfg, { states: { ...noStates, red: true } }).map((r) => r.id).join(",") === "3");
+ok("filterRows: multiple statuses",
+	LT.filterRows(srows, cfg, { states: { ...noStates, green: true, offline: true } })
+		.map((r) => r.id).join(",") === "1,4");
+ok("filterRows: status + platform intersect",
+	LT.filterRows(rows, cfg, { states: { ...noStates, green: true }, platforms: { linux: false, macos: true, windows: false } }).length === 0);
+
+// --- filterRows: check-in cutoff --------------------------------------------
+const trows = [
+	{ id: 1, lastseen_ts: 1000 },
+	{ id: 2, lastseen_ts: 2000 },
+	{ id: 3, lastseen_ts: 3000 },
+	{ id: 4, lastseen_ts: null },
+];
+ok("filterRows: no cutoff keeps all (incl. null lastseen_ts)",
+	LT.filterRows(trows, cfg, {}).length === 4);
+ok("filterRows: cutoff drops rows checked in before it",
+	LT.filterRows(trows, cfg, { checkin: { cutoff: 2500 } }).map((r) => r.id).join(",") === "3");
+ok("filterRows: cutoff keeps rows checked in exactly at it",
+	LT.filterRows(trows, cfg, { checkin: { cutoff: 2000 } }).map((r) => r.id).join(",") === "2,3");
+ok("filterRows: cutoff drops rows with no lastseen_ts",
+	LT.filterRows(trows, cfg, { checkin: { cutoff: 1 } }).map((r) => r.id).join(",") === "1,2,3");
+ok("filterRows: cutoff + status + text combine",
+	LT.filterRows(
+		[{ id: 1, state: "OK", hostname: "a", lastseen_ts: 3000 }, { id: 2, state: "WARN", hostname: "b", lastseen_ts: 3000 }],
+		cfg,
+		{ checkin: { cutoff: 2500 }, states: { ...noStates, green: true }, text: "a" }
+	).map((r) => r.id).join(",") === "1");
+
+// --- filterRows: subset filter (client version) ------------------------------
+const vrows = [
+	{ id: 1, clientver: "0.0.1" },
+	{ id: 2, clientver: "0.0.1" },
+	{ id: 3, clientver: "0.0.2" },
+	{ id: 4, clientver: "0.1.0" },
+];
+const noVers = {};
+ok("filterRows: no subset keeps all",
+	LT.filterRows(vrows, cfg, { subset: { field: "clientver", checked: noVers } }).length === 4);
+ok("filterRows: subset with no value checked keeps all",
+	LT.filterRows(vrows, cfg, { subset: { field: "clientver", checked: { "0.0.1": false } } }).length === 4);
+ok("filterRows: single version checked",
+	LT.filterRows(vrows, cfg, { subset: { field: "clientver", checked: { "0.0.2": true } } })
+		.map((r) => r.id).join(",") === "3");
+ok("filterRows: multiple versions checked",
+	LT.filterRows(vrows, cfg, { subset: { field: "clientver", checked: { "0.0.1": true, "0.1.0": true } } })
+		.map((r) => r.id).join(",") === "1,2,4");
+ok("filterRows: unchecked values do not match",
+	LT.filterRows(vrows, cfg, { subset: { field: "clientver", checked: { "0.0.1": true, "0.0.2": false } } })
+		.map((r) => r.id).join(",") === "1,2");
+ok("filterRows: subset + platform intersect",
+	LT.filterRows(rows, cfg, { subset: { field: "platform", checked: { linux: true } }, platforms: { linux: false, macos: true, windows: false } }).length === 0);
+ok("filterRows: subset + text + cutoff combine",
+	LT.filterRows(
+		[
+			{ id: 1, clientver: "1.0", hostname: "aa", lastseen_ts: 3000 },
+			{ id: 2, clientver: "1.0", hostname: "bb", lastseen_ts: 3000 },
+			{ id: 3, clientver: "2.0", hostname: "aa", lastseen_ts: 3000 },
+		],
+		cfg,
+		{ subset: { field: "clientver", checked: { "1.0": true } }, text: "aa", checkin: { cutoff: 2500 } }
+	).map((r) => r.id).join(",") === "1");
+
 console.log("-".repeat(60));
 if (failures) {
 	console.log("FAILED: " + failures + " check(s) failed");
