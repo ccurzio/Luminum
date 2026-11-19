@@ -424,10 +424,10 @@ check "console: default.css flex-lays-out the submenu link and pins the arrow" \
     $([ "$code" = "200" ] \
         && grep -q '.dropdown-content .submenu-link' "$RUN/default.css" 2>/dev/null \
         && grep -q 'margin-left: auto' "$RUN/default.css" 2>/dev/null; echo $?)
-# Data rows (rows carrying an input[id^="ID"] row checkbox) render their
-# text smaller than the header/summary/filter rows.
+# Data rows (marked with the luminum-row class) render their text smaller
+# than the header/summary/filter rows.
 check "console: default.css shrinks the table data row text" \
-    $(grep -qF 'tr:has(input[id^="ID"])' "$RUN/default.css" 2>/dev/null \
+    $(grep -qF 'tr.luminum-row' "$RUN/default.css" 2>/dev/null \
         && grep -q 'font-size: 14px' "$RUN/default.css" 2>/dev/null; echo $?)
 # The top row is the standard format: refresh button, displayed of
 # total Items, and the (N Selected) suffix span.
@@ -505,6 +505,10 @@ check "console: created sensor appears in the list" \
     $(grep -q "Deploy Test Sensor" "$RUN/sensors.html" 2>/dev/null; echo $?)
 check "console: no success message on the list" \
     $(! grep -q "Sensor created." "$RUN/sensors.html" 2>/dev/null; echo $?)
+# The rendered data row carries the luminum-row class so the smaller data-row
+# font-size rule applies (the :has()-only rule was dropped by some browsers).
+check "console: sensor data row is marked luminum-row" \
+    $(grep -qF '<tr class="luminum-row">' "$RUN/sensors.html" 2>/dev/null; echo $?)
 
 # A duplicate name is rejected (case-insensitive collation) and adds no row.
 code=$(curl -k -s -D "$RUN/sensor-dup.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \

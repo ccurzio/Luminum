@@ -50,7 +50,8 @@ ok("headerHTML: custom header used raw",
 
 // --- rowHTML ----------------------------------------------------------------
 const baseRow = LT.rowHTML(cfg, rows[0], {});
-ok("rowHTML: tr carries data-id", baseRow.startsWith('<tr data-id="1">'), baseRow);
+ok("rowHTML: tr carries luminum-row class + data-id",
+	baseRow.startsWith('<tr class="luminum-row" data-id="1">'), baseRow);
 ok("rowHTML: base background", baseRow.includes("background-color: #494a69"));
 ok("rowHTML: values present", baseRow.includes("web-01") && baseRow.includes("172.16.0.10"));
 ok("rowHTML: width/align applied",

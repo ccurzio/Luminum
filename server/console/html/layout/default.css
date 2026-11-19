@@ -539,8 +539,11 @@ th, td {
    LuminumTable.attachTextFilter); the header's select-all box
    (selectall/qrselectall), the summary/filter row and the footer carry no
    ID-prefixed checkbox, and the Client Status right-side filter tables'
-   boxes (filter*/verchk) don't match either. */
-tr:has(input[id^="ID"]) {
+   boxes (the filter checkboxes and verchk) don't match either. The rows
+   are marked with the luminum-row class (LuminumTable.rowHTML and the
+   static PHP tables) rather than selected with a :has() selector, so the
+   rule also applies in browsers without :has() support. */
+tr.luminum-row {
 	font-size: 14px;
 	}
 

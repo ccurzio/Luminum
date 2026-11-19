@@ -76,7 +76,7 @@
 			}
 			return cellHTML(col, row, bg);
 		}).join('');
-		return '<tr data-id="' + row.id + '">' + cells + '</tr>';
+		return '<tr class="luminum-row" data-id="' + row.id + '">' + cells + '</tr>';
 	}
 
 	// Render the data rows for a set of rows, or the empty-state row.
