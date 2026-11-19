@@ -92,7 +92,10 @@
 		cols.push({ type: 'checkbox', width: '15px', inputClass: 'qrrow', idPrefix: 'ID',
 			header: '<input id="qrselectall" type="checkbox">' });
 		(q.sensors || []).forEach(function (s) {
-			cols.push({ key: 's' + s.sid, label: s.name });
+			// pre-wrap: a sensor's output is often multi-line formatted
+			// text, and the cell must render its newlines instead of
+			// collapsing them into spaces.
+			cols.push({ key: 's' + s.sid, label: s.name, whiteSpace: 'pre-wrap' });
 			keys.push('s' + s.sid);
 		});
 		cols.push({ key: 'count', label: 'Count', width: '60px', align: 'center' });

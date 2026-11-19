@@ -1021,6 +1021,14 @@ fn sensor_prog(wstype: &str) -> Option<&'static str> {
 	}
 }
 
+// Normalize the script's line endings to CRLF before running it. The
+// console stores scripts with LF endings, which powershell, python, and
+// cscript all accept, but cmd.exe only parses LF-terminated batch lines on
+// Windows 10 1809 and later - CRLF works on every version.
+fn normalize_newlines(script: &str) -> String {
+	script.replace("\r\n", "\n").replace('\r', "\n").replace('\n', "\r\n")
+}
+
 // Run one sensor script to completion. powershell, batch, and python all
 // read a script from stdin; vbscript cannot, so it is written to a temp
 // file that cscript runs and is deleted afterwards.
@@ -1085,6 +1093,7 @@ async fn run_sensor(sid: i64, params: &HashMap<String, String>, defs: &HashMap<i
 	for (k, v) in params {
 		script = script.replace(&format!("${{{}}}", k), v);
 	}
+	script = normalize_newlines(&script);
 	match tokio::time::timeout(Duration::from_secs(SENSOR_TIMEOUT_SECS), run_sensor_script(wstype, &script)).await {
 		Ok(Ok(output)) => serde_json::json!({ "sid": sid, "output": output }),
 		Ok(Err(err)) => {
@@ -2520,5 +2529,12 @@ mod sensorpair_tests {
 		assert!(sensor_prog("python").is_some());
 		assert!(sensor_prog("shell").is_none());
 		assert!(sensor_prog("perl").is_none());
+	}
+
+	#[test]
+	fn newlines_normalized_to_crlf() {
+		assert_eq!(normalize_newlines("echo hi\r\necho there"), "echo hi\r\necho there");
+		assert_eq!(normalize_newlines("echo hi\necho there"), "echo hi\r\necho there");
+		assert_eq!(normalize_newlines("a\rb\nc"), "a\r\nb\r\nc");
 	}
 }

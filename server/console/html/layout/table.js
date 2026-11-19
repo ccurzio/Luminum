@@ -37,6 +37,7 @@
 		var s = 'background-color: ' + bg + '; font-weight: normal;';
 		if (col.width) { s += 'width: ' + col.width + ';'; }
 		if (col.align) { s += 'text-align: ' + col.align + ';'; }
+		if (col.whiteSpace) { s += 'white-space: ' + col.whiteSpace + ';'; }
 		if (col.padTop) { s += 'padding-top: ' + col.padTop + ';'; }
 		return s;
 	}

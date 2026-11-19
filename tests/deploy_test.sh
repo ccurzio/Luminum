@@ -737,6 +737,15 @@ check "console: results table shell (count/filter row) present" \
 check "console: results top row is refresh + displayed of total Items" \
     $(grep -q 'id="qrrefresh"' "$RUN/query-results.html" 2>/dev/null \
         && grep -q 'id="qrselcount"' "$RUN/query-results.html" 2>/dev/null; echo $?)
+# Sensor output is often multi-line formatted text: the results table's
+# sensor cells must render their newlines (white-space: pre-wrap), which
+# needs the cellStyle support in table.js plus the flag in queryresults.js.
+code=$(curl -k -s -o "$RUN/queryresults.js" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/layout/queryresults.js")
+curl -k -s -o "$RUN/table.js" -b "$RUN/cookies" "https://127.0.0.1:$WPORT/layout/table.js"
+check "console: query results pre-wrap the multi-line sensor output" \
+    $([ "$code" = "200" ] && grep -q "whiteSpace: 'pre-wrap'" "$RUN/queryresults.js" 2>/dev/null \
+        && grep -q 'col.whiteSpace' "$RUN/table.js" 2>/dev/null; echo $?)
 
 # --- inactivity session timeout ----------------------------------------------
 # Login must stamp the deadline from the UTIMEOUT server option (seeded 15M),

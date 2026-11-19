@@ -77,6 +77,13 @@ ok("rowHTML: render() output used raw",
 	rawRow.includes('<td style="background-color: #494a69; font-weight: normal;"><b>x</b></td>'),
 	rawRow);
 
+const wsCfg = { columns: [{ label: "Output", key: "out", whiteSpace: "pre-wrap" }] };
+const wsRow = LT.rowHTML(wsCfg, { id: 3, out: "a\nb" }, {});
+ok("rowHTML: whiteSpace flag lands in the cell style",
+	wsRow.includes('white-space: pre-wrap'), wsRow);
+ok("rowHTML: a column without whiteSpace gets none",
+	!baseRow.includes("white-space"));
+
 // --- rowsHTML ---------------------------------------------------------------
 const empty = LT.rowsHTML(cfg, [], {});
 ok("rowsHTML: empty state colspan", empty.includes('colspan="2"'), empty);

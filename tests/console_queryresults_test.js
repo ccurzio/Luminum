@@ -172,6 +172,10 @@ function res(uid, sensor, status, output, err) {
 		eq(cfg.columns.slice(1).map(function (c) { return c.label; }), ["Is Windows", "CPU Load", "Count"]));
 	ok("config: the Count column is centered",
 		cfg.columns[3].key === "count" && cfg.columns[3].align === "center");
+	ok("config: the sensor columns pre-wrap multi-line output",
+		cfg.columns[1].whiteSpace === "pre-wrap" && cfg.columns[2].whiteSpace === "pre-wrap");
+	ok("config: the checkbox and Count columns are not pre-wrapped",
+		!cfg.columns[0].whiteSpace && !cfg.columns[3].whiteSpace);
 	ok("config: the filter searches the sensor cells, not the count",
 		eq(cfg.searchKeys, ["s7", "s9"]));
 	ok("config: rows present -> 'No Results' empty message", cfg.emptyMessage === "No Results");

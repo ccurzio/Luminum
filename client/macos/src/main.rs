@@ -936,6 +936,14 @@ fn is_uuid4(s: &str) -> bool {
 		&& b[24..36].iter().all(|c| c.is_ascii_hexdigit())
 }
 
+// Normalize the script's line endings to LF before running it. The console
+// stores scripts with LF endings, but rows saved before that fix (or via
+// other input paths) may carry CRLF/CR, and a stray \r breaks a script read
+// on the interpreter's stdin ("then\r" and "fi\r" are syntax errors in sh).
+fn normalize_newlines(script: &str) -> String {
+	script.replace("\r\n", "\n").replace('\r', "\n")
+}
+
 // Run one sensor script to completion: $prog is the interpreter for the
 // stored script type, and the script rides on stdin (shell, perl, and
 // python all read a script from stdin).
@@ -977,6 +985,7 @@ async fn run_sensor(sid: i64, params: &HashMap<String, String>, defs: &HashMap<i
 	for (k, v) in params {
 		script = script.replace(&format!("${{{}}}", k), v);
 	}
+	script = normalize_newlines(&script);
 	match tokio::time::timeout(Duration::from_secs(SENSOR_TIMEOUT_SECS), run_sensor_script(prog, &script)).await {
 		Ok(Ok(output)) => serde_json::json!({ "sid": sid, "output": output }),
 		Ok(Err(err)) => {
@@ -2296,5 +2305,12 @@ mod sensorpair_tests {
 	fn pair_present_but_malformed_is_invalid() {
 		assert_eq!(sensor_pair_for_this_os(&entry(Some("powershell"), Some("x"))), Err(()));
 		assert_eq!(sensor_pair_for_this_os(&entry(Some("shell"), Some(""))), Err(()));
+	}
+
+	#[test]
+	fn newlines_normalized_to_lf() {
+		assert_eq!(normalize_newlines("if true\r\nthen echo hi\r\nfi"), "if true\nthen echo hi\nfi");
+		assert_eq!(normalize_newlines("a\rb\nc"), "a\nb\nc");
+		assert_eq!(normalize_newlines("a\nb\nc"), "a\nb\nc");
 	}
 }
