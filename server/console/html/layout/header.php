@@ -186,6 +186,8 @@ $ienabled = $invinfo["CVAL"];
 					print "<div class=\"submenu-content\">\n";
 					print "<a href=\"/index.php?view=users\">User Accounts</a>\n";
 					print "<a href=\"/index.php?view=ugroups\">User Groups</a>\n";
+					print "<a href=\"/index.php?view=roles\">Roles</a>\n";
+					print "<a href=\"/index.php?view=perms\">Permissions</a>\n";
 					print "</div>\n";
 					print "</div>\n";
 					print "<div class=\"submenu\">\n";
