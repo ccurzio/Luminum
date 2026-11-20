@@ -76,6 +76,14 @@ $p = base_post(); $p['tint'] = 'hour';
 $v = luminum_validate_sensor_create($p);
 ok("unknown timeout unit rejected", $v['ok'] === false && $v['err'] === 'timeout');
 
+// --- luminum_sensor_timeout_parts (edit form pre-fill) -----------------------
+ok("30S splits to 30/sec", luminum_sensor_timeout_parts('30S') === ['num' => '30', 'unit' => 'sec']);
+ok("2M splits to 2/min", luminum_sensor_timeout_parts('2M') === ['num' => '2', 'unit' => 'min']);
+ok("999M splits to 999/min", luminum_sensor_timeout_parts('999M') === ['num' => '999', 'unit' => 'min']);
+foreach (['', '0S', '0M', '1000S', '30X', '30', 'S', '30S ', ' 30S', '30s', null, 30] as $bad) {
+    ok("timeout " . var_export($bad, true) . " rejected", luminum_sensor_timeout_parts($bad) === null);
+}
+
 // --- name validation ---------------------------------------------------------
 foreach (['', '   ', 'bad/name', "-leading", '9'.str_repeat('x', 128)] as $bad) {
     $p = base_post(); $p['pkgname'] = $bad;

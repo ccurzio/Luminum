@@ -566,6 +566,150 @@ check "console: anonymous sensor POST rejected (302)" $([ "$code" = "302" ]; ech
 check "anonymous POST inserted nothing" \
     $([ "$(dbq "select count(*) from CONTENT.SENSORS where NAME='Anon Sensor';")" = "0" ]; echo $?)
 
+# --- sensor edit form (Modify Selected -> action=edit) -----------------------
+# The list's Modify Selected button opens the create form pre-filled with the
+# selected sensor's stored values; saving posts the same fields plus a hidden
+# sensorid, which switches the handler to an UPDATE (MODIFIED/EDITOR stamped).
+check "console: create form carries a null editor payload" \
+    $(grep -qF 'var editData = null;' "$RUN/sensor-new.html" 2>/dev/null; echo $?)
+SENSOR_E=$(dbq "select ID from CONTENT.SENSORS where NAME='Deploy Test Sensor';")
+code=$(curl -k -s -o "$RUN/sensor-edit.html" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/index.php?view=sensors&action=edit&id=$SENSOR_E")
+check "console: sensor edit form renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+check "console: edit form is titled Edit Sensor" \
+    $(grep -q "<h1>Edit Sensor</h1>" "$RUN/sensor-edit.html" 2>/dev/null; echo $?)
+check "console: edit form pre-fills the stored name and description" \
+    $(grep -qF 'value="Deploy Test Sensor"' "$RUN/sensor-edit.html" 2>/dev/null \
+        && grep -qF 'value="End-to-end sensor created by the deploy test"' "$RUN/sensor-edit.html" 2>/dev/null; echo $?)
+check "console: edit form carries the hidden sensor id and the stored script" \
+    $(grep -qF "name=\"sensorid\" value=\"$SENSOR_E\"" "$RUN/sensor-edit.html" 2>/dev/null \
+        && grep -q "echo probe-output-42" "$RUN/sensor-edit.html" 2>/dev/null; echo $?)
+check "console: list wires Modify Selected to the edit form" \
+    $(grep -q 'action=edit&id=' "$RUN/sensors.html" 2>/dev/null; echo $?)
+
+# An unknown id renders an in-view error (the console header is already
+# printed by index.php, so the view cannot redirect).
+code=$(curl -k -s -o "$RUN/sensor-edit-bad.html" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/index.php?view=sensors&action=edit&id=999999")
+check "console: edit form with unknown id renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+check "console: unknown id shows Sensor Not Found and no form" \
+    $(grep -q "<h1 style=\"color: red\">Sensor Not Found</h1>" "$RUN/sensor-edit-bad.html" 2>/dev/null \
+        && ! grep -q 'id="nsform"' "$RUN/sensor-edit-bad.html" 2>/dev/null; echo $?)
+
+# A dedicated sensor for the save-path checks (the query section below relies
+# on Deploy Test Sensor's script, so that one is only used for render checks).
+code=$(curl -k -s -D "$RUN/sensor-editc-post.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "pkgname=Deploy Edit Sensor" \
+    --data-urlencode "pkgdesc=Sensor created for the edit-form checks" \
+    --data-urlencode "timeout=2" \
+    --data-urlencode "tint=min" \
+    --data-urlencode "rtype=number" \
+    --data-urlencode "contentset=$CSET_ID" \
+    --data-urlencode "category=none" \
+    --data-urlencode "leselect=on" \
+    --data-urlencode "lstype=shell" \
+    --data-urlencode "lscript=echo edit-probe-42" \
+    "https://127.0.0.1:$WPORT/admin/sensors.php")
+check "console: edit-test sensor POST redirects (302)" $([ "$code" = "302" ]; echo $?) "got: $code"
+SENSOR_X=$(dbq "select ID from CONTENT.SENSORS where NAME='Deploy Edit Sensor';")
+check "edit-test sensor stored" $([ -n "$SENSOR_X" ]; echo $?)
+
+# The edit form pre-fills the minute timeout, the number result type, and the
+# stored script in the editor payload.
+code=$(curl -k -s -o "$RUN/sensor-edit-x.html" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/index.php?view=sensors&action=edit&id=$SENSOR_X")
+check "console: edit form for the edit-test sensor renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+check "console: edit form pre-fills the minute timeout and number rtype" \
+    $(grep -qF 'id="timeout" name="timeout" type="text" style="width: 30px;" value="2"' "$RUN/sensor-edit-x.html" 2>/dev/null \
+        && grep -q '<option value="min" selected="selected">' "$RUN/sensor-edit-x.html" 2>/dev/null \
+        && grep -q '<option value="number" selected="selected">' "$RUN/sensor-edit-x.html" 2>/dev/null; echo $?)
+check "console: edit form editor payload carries the stored script" \
+    $(grep -q "echo edit-probe-42" "$RUN/sensor-edit-x.html" 2>/dev/null; echo $?)
+
+# A valid edit updates the row and stamps MODIFIED/EDITOR.
+code=$(curl -k -s -D "$RUN/sensor-edit-post.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "sensorid=$SENSOR_X" \
+    --data-urlencode "pkgname=Deploy Edit Sensor" \
+    --data-urlencode "pkgdesc=Edited by the deploy test" \
+    --data-urlencode "timeout=45" \
+    --data-urlencode "tint=sec" \
+    --data-urlencode "rtype=text" \
+    --data-urlencode "contentset=$CSET_ID" \
+    --data-urlencode "category=none" \
+    --data-urlencode "leselect=on" \
+    --data-urlencode "lstype=shell" \
+    --data-urlencode "lscript=echo edit-probe-42" \
+    "https://127.0.0.1:$WPORT/admin/sensors.php")
+check "console: valid sensor edit POST redirects (302)" $([ "$code" = "302" ]; echo $?) "got: $code"
+check "console: edit POST redirected to the plain list" \
+    $(grep -qi "Location:.*view=sensors" "$RUN/sensor-edit-post.hdr" 2>/dev/null \
+        && ! grep -qi "action=edit" "$RUN/sensor-edit-post.hdr" 2>/dev/null; echo $?)
+erow=$(dbq "select concat(DESCRIPTION,'|',TIMEOUT,'|',RTYPE,'|',ifnull(MODIFIED,'NULL'),'|',ifnull(EDITOR,'NULL')) from CONTENT.SENSORS where ID='$SENSOR_X';")
+check "sensor row updated with the posted fields" \
+    $([ "$(dbq "select if(DESCRIPTION='Edited by the deploy test' and TIMEOUT='45S' and RTYPE='text' and MODIFIED is not null and EDITOR='$AUTHOR_ID','yes','no') from CONTENT.SENSORS where ID='$SENSOR_X';")" = "yes" ]; echo $?) \
+    "got: $erow"
+check "edit did not add a second row" \
+    $([ "$(dbq "select count(*) from CONTENT.SENSORS where NAME='Deploy Edit Sensor';")" = "1" ]; echo $?)
+
+# Renaming to another sensor's name is rejected; the failure redirect keeps
+# the edit form's id so the overlay popup shows on it.
+code=$(curl -k -s -D "$RUN/sensor-edit-dup.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "sensorid=$SENSOR_X" \
+    --data-urlencode "pkgname=Deploy Test Sensor" \
+    --data-urlencode "pkgdesc=Steal the other name" \
+    --data-urlencode "timeout=45" \
+    --data-urlencode "tint=sec" \
+    --data-urlencode "rtype=text" \
+    --data-urlencode "contentset=$CSET_ID" \
+    --data-urlencode "category=none" \
+    --data-urlencode "leselect=on" \
+    --data-urlencode "lstype=shell" \
+    --data-urlencode "lscript=echo edit-probe-42" \
+    "https://127.0.0.1:$WPORT/admin/sensors.php")
+check "console: rename to an existing name redirects (302)" $([ "$code" = "302" ]; echo $?) "got: $code"
+check "console: rename redirected with err=dupname on the edit form" \
+    $(grep -qi "Location:.*action=edit&id=$SENSOR_X&err=dupname" "$RUN/sensor-edit-dup.hdr" 2>/dev/null; echo $?)
+check "rename did not change the sensor name" \
+    $([ "$(dbq "select NAME from CONTENT.SENSORS where ID='$SENSOR_X';")" = "Deploy Edit Sensor" ]; echo $?)
+
+# An edit that disables every platform fails validation (err=os) and changes
+# nothing.
+code=$(curl -k -s -D "$RUN/sensor-edit-os.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "sensorid=$SENSOR_X" \
+    --data-urlencode "pkgname=Deploy Edit Sensor" \
+    --data-urlencode "pkgdesc=No platforms left" \
+    --data-urlencode "timeout=45" \
+    --data-urlencode "tint=sec" \
+    --data-urlencode "rtype=text" \
+    --data-urlencode "contentset=$CSET_ID" \
+    --data-urlencode "category=none" \
+    "https://127.0.0.1:$WPORT/admin/sensors.php")
+check "console: platform-less edit redirected with err=os" \
+    $(grep -qi "Location:.*action=edit&id=$SENSOR_X&err=os" "$RUN/sensor-edit-os.hdr" 2>/dev/null; echo $?)
+check "platform-less edit changed nothing" \
+    $([ "$(dbq "select if(DESCRIPTION='Edited by the deploy test' and LSCRIPT='echo edit-probe-42','yes','no') from CONTENT.SENSORS where ID='$SENSOR_X';")" = "yes" ]; echo $?)
+
+# An edit POST for a nonexistent sensor bounces to the list and inserts nothing.
+code=$(curl -k -s -D "$RUN/sensor-edit-ghost.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "sensorid=999999" \
+    --data-urlencode "pkgname=Ghost Edit Sensor" \
+    --data-urlencode "pkgdesc=Editing a sensor that does not exist" \
+    --data-urlencode "timeout=30" \
+    --data-urlencode "tint=sec" \
+    --data-urlencode "rtype=text" \
+    --data-urlencode "contentset=$CSET_ID" \
+    --data-urlencode "category=none" \
+    --data-urlencode "leselect=on" \
+    --data-urlencode "lstype=shell" \
+    --data-urlencode "lscript=echo ghost" \
+    "https://127.0.0.1:$WPORT/admin/sensors.php")
+check "console: edit POST for a missing sensor redirects (302)" $([ "$code" = "302" ]; echo $?) "got: $code"
+check "console: missing-sensor redirect goes to the plain list" \
+    $(grep -qi "Location:.*view=sensors" "$RUN/sensor-edit-ghost.hdr" 2>/dev/null \
+        && ! grep -qi "action=edit" "$RUN/sensor-edit-ghost.hdr" 2>/dev/null; echo $?)
+check "missing-sensor edit inserted nothing" \
+    $([ "$(dbq "select count(*) from CONTENT.SENSORS where NAME='Ghost Edit Sensor';")" = "0" ]; echo $?)
+
 # --- query builder + results (protocol 7.3 condition filtering) --------------
 # The query UI posts to /api/commands.php: a broadcast (target "all") query
 # whose condition tree the live client evaluates itself - it answers only

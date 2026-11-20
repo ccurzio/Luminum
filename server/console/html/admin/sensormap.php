@@ -23,6 +23,16 @@ function luminum_sensor_result_types() {
 	return ['text', 'number', 'bool', 'ipaddress', 'datetime'];
 }
 
+// Split a stored TIMEOUT value ("30S"/"2M") back into the form's timeout
+// number + unit select values (the validator joins them the same way).
+// Returns null for anything that does not match the stored format.
+function luminum_sensor_timeout_parts($timeout) {
+	if (!is_string($timeout) || !preg_match('/^([1-9][0-9]{0,2})([SM])$/', $timeout, $m)) {
+		return null;
+	}
+	return ['num' => $m[1], 'unit' => $m[2] === 'M' ? 'min' : 'sec'];
+}
+
 // Maximum sensor script size in bytes. A query delivers every sensor's full
 // per-OS script set in one core/config command that must fit the 64 KiB MQTT
 // payload cap, so a single script is capped at that size.

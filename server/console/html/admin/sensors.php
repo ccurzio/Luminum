@@ -28,32 +28,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 		header('Location: /index.php?view=sensors');
 		exit;
 	}
+	// Edit mode: the form posts a hidden sensorid when it was opened from
+	// the list's Modify Selected button. The same validator applies, and
+	// failure redirects go back to the edit form for that sensor.
+	$editid = (isset($_POST['sensorid']) && is_string($_POST['sensorid']) && preg_match('/^[1-9][0-9]*$/', $_POST['sensorid'])) ? (int)$_POST['sensorid'] : null;
+	$back = $editid !== null ? 'edit&id=' . $editid : 'new';
 	$v = luminum_validate_sensor_create($_POST);
 	if (!$v['ok']) {
-		header('Location: /index.php?view=sensors&action=new&err=' . $v['err']);
+		header('Location: /index.php?view=sensors&action=' . $back . '&err=' . $v['err']);
 		exit;
 	}
 	$s = $v['sensor'];
 	mysqli_select_db($db, "CONTENT") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
 	$eg = function ($x) use ($db) { return mysqli_real_escape_string($db, $x); };
+	if ($editid !== null) {
+		$xq = mysqli_query($db, "select ID from SENSORS where ID = $editid");
+		if (!$xq || mysqli_num_rows($xq) === 0) {
+			header('Location: /index.php?view=sensors');
+			exit;
+		}
+	}
 	// DB-backed checks the pure validator cannot do: the content set must
 	// exist, the category (when given) must belong to it, and the name must
-	// be unique (the utf8mb4 collation makes the comparison case-insensitive).
+	// be unique (the utf8mb4 collation makes the comparison case-insensitive;
+	// an edit is not a duplicate of its own current name).
 	$cq = mysqli_query($db, "select ID from SETS where ID = " . (int)$s['CSET']);
 	if (!$cq || mysqli_num_rows($cq) === 0) {
-		header('Location: /index.php?view=sensors&action=new&err=cset');
+		header('Location: /index.php?view=sensors&action=' . $back . '&err=cset');
 		exit;
 	}
 	if ($s['CATEGORY'] !== null) {
 		$qq = mysqli_query($db, "select ID from CATEGORIES where ID = " . (int)$s['CATEGORY'] . " and CSID = " . (int)$s['CSET']);
 		if (!$qq || mysqli_num_rows($qq) === 0) {
-			header('Location: /index.php?view=sensors&action=new&err=category');
+			header('Location: /index.php?view=sensors&action=' . $back . '&err=category');
 			exit;
 		}
 	}
-	$nq = mysqli_query($db, "select ID from SENSORS where NAME = '" . $eg($s['NAME']) . "'");
+	$nq = mysqli_query($db, "select ID from SENSORS where NAME = '" . $eg($s['NAME']) . "'" . ($editid !== null ? " and ID != $editid" : ""));
 	if ($nq && mysqli_num_rows($nq) > 0) {
-		header('Location: /index.php?view=sensors&action=new&err=dupname');
+		header('Location: /index.php?view=sensors&action=' . $back . '&err=dupname');
+		exit;
+	}
+	if ($editid !== null) {
+		$sv = function ($x) use ($eg) { return $x === null ? 'null' : "'" . $eg($x) . "'"; };
+		$upd = "update SENSORS set NAME = '" . $eg($s['NAME']) . "',DESCRIPTION = '" . $eg($s['DESCRIPTION']) . "',CSET = " . (int)$s['CSET'] . ",CATEGORY = "
+			. ($s['CATEGORY'] === null ? 'null' : (int)$s['CATEGORY']) . ",TIMEOUT = '" . $eg($s['TIMEOUT']) . "',MSTYPE = " . $sv($s['MSTYPE'])
+			. ",MSCRIPT = " . $sv($s['MSCRIPT']) . ",LSTYPE = " . $sv($s['LSTYPE']) . ",LSCRIPT = " . $sv($s['LSCRIPT'])
+			. ",WSTYPE = " . $sv($s['WSTYPE']) . ",WSCRIPT = " . $sv($s['WSCRIPT']) . ",RTYPE = '" . $eg($s['RTYPE']) . "',USECASE = " . (int)$s['USECASE']
+			. ",CSPLIT = " . (int)$s['CSPLIT'] . ",DELIMITER = " . $sv($s['DELIMITER']) . ",WITHPARAMS = " . (int)$s['WITHPARAMS']
+			. ",MODIFIED = now(),EDITOR = " . (int)$urow['ID'] . " where ID = $editid";
+		if (!mysqli_query($db, $upd)) {
+			header('Location: /index.php?view=sensors&action=' . $back . '&err=save');
+			exit;
+		}
+		header('Location: /index.php?view=sensors');
 		exit;
 	}
 	$ins = "insert into SENSORS (NAME,DESCRIPTION,CSET,CATEGORY,TIMEOUT,MSTYPE,MSCRIPT,LSTYPE,LSCRIPT,WSTYPE,WSCRIPT,RTYPE,USECASE,CSPLIT,DELIMITER,WITHPARAMS,AUTHOR,CREATED) values ("
@@ -139,11 +167,57 @@ $sensorcount = mysqli_num_rows($sensorquery);
 		</table>
 	</div>
 
-	<?php elseif ($_GET["action"] == "new"): ?>
+	<?php elseif ($_GET["action"] == "new" || $_GET["action"] == "edit"): ?>
 
 		<?php
-		if (isset($acctrole) && $acctrole <= 2): ?>
-		<h1>Create New Sensor</h1>
+		// Edit mode (the list's Modify Selected button) loads the selected
+		// sensor's stored values so the form renders exactly like the create
+		// form with the fields pre-filled. A missing/unknown id renders an
+		// error in place - the console header is already printed by
+		// index.php, so a header() redirect is no longer possible here.
+		$sensor = null;
+		if ($_GET["action"] == "edit") {
+			$sid = (isset($_GET["id"]) && preg_match('/^[1-9][0-9]*$/', $_GET["id"])) ? (int)$_GET["id"] : 0;
+			if ($sid !== 0) {
+				$sq = mysqli_query($db, "select ID,NAME,DESCRIPTION,CSET,CATEGORY,TIMEOUT,MSTYPE,MSCRIPT,LSTYPE,LSCRIPT,WSTYPE,WSCRIPT,RTYPE,USECASE,CSPLIT,DELIMITER,WITHPARAMS from SENSORS where ID = $sid");
+				$sensor = ($sq && mysqli_num_rows($sq) > 0) ? $sq->fetch_assoc() : null;
+			}
+		}
+		$tparts = ($sensor !== null) ? luminum_sensor_timeout_parts($sensor['TIMEOUT']) : null;
+		// The sensor's category/set names, for the pre-selected options (the
+		// set may be one the form's list does not offer, e.g. "Luminum Core").
+		$catname = null;
+		if ($sensor !== null && $sensor['CATEGORY'] !== null) {
+			$qc = mysqli_query($db, "select NAME from CATEGORIES where ID = " . (int)$sensor['CATEGORY']);
+			$cr = $qc ? $qc->fetch_assoc() : null;
+			if ($cr !== null) { $catname = $cr['NAME']; }
+		}
+		$csetname = null;
+		if ($sensor !== null) {
+			$qs = mysqli_query($db, "select NAME from SETS where ID = " . (int)$sensor['CSET']);
+			$sr = $qs ? $qs->fetch_assoc() : null;
+			if ($sr !== null) { $csetname = $sr['NAME']; }
+		}
+		// The stored per-OS type/script pairs for the ace editors (null on
+		// the create form); the init block at the bottom of the form loads
+		// them into the editors.
+		$editdata = null;
+		if ($sensor !== null) {
+			$editdata = [
+				'lstype' => $sensor['LSTYPE'], 'lscript' => $sensor['LSCRIPT'],
+				'mstype' => $sensor['MSTYPE'], 'mscript' => $sensor['MSCRIPT'],
+				'wstype' => $sensor['WSTYPE'], 'wscript' => $sensor['WSCRIPT'],
+				'csplit' => (int)$sensor['CSPLIT'],
+			];
+		}
+		?>
+		<?php
+		if ($_GET["action"] == "edit" && $sensor === null): ?>
+		<h1 style="color: red">Sensor Not Found</h1>
+
+		<?php
+		elseif (isset($acctrole) && $acctrole <= 2): ?>
+		<h1><?php print $sensor !== null ? 'Edit Sensor' : 'Create New Sensor'; ?></h1>
 
 		<?php if (isset($_GET["err"])): ?>
 		<script>
@@ -162,6 +236,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 		<form id="nsform" action="/admin/sensors.php" method="POST">
 		<!-- The ace editors are not form fields; their contents are copied
 		     into these hidden inputs by formCheck()/the submit handler. -->
+		<input type="hidden" name="sensorid" value="<?php print $sensor !== null ? (int)$sensor['ID'] : ''; ?>">
 		<input type="hidden" name="lscript" id="lhscript" value="">
 		<input type="hidden" name="mscript" id="mhscript" value="">
 		<input type="hidden" name="wscript" id="whscript" value="">
@@ -174,21 +249,32 @@ $sensorcount = mysqli_num_rows($sensorquery);
 			<div style="float: left; z-index: 10;">
 				<table style="margin-top: 10px; margin-bottom: 20px; border: 0;">
 				<tr><td style="background-color: transparent; border: 0; color: #444;">Name: <span style="color: red;">*</span></td><td style="background-color: transparent; border: 0; color: #444;">Timeout: <span style="color: red;">*</span> <div class="tooltip"><img src="/icons/tooltip.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Specifies how long the server should wait for the sensor to provide an answer<br><br>Default: 30 Seconds</span></div></td></tr>
-				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgname" style="width: 400px;" maxlength="128"></td><td style="background-color: transparent; border: 0; color: #444;"><input id="timeout" name="timeout" type="text" style="width: 30px;" value="30" maxlength="3"><select id="tint" name="tint" style="width: 100px; margin-left: 10px; height: 33px;"><option value="sec">Second(s)</option><option value="min">Minute(s)</option></select></td></tr>
+				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgname" style="width: 400px;" maxlength="128" value="<?php print $sensor !== null ? htmlspecialchars($sensor['NAME'], ENT_QUOTES) : ''; ?>"></td><td style="background-color: transparent; border: 0; color: #444;"><input id="timeout" name="timeout" type="text" style="width: 30px;" value="<?php print $tparts !== null ? $tparts['num'] : '30'; ?>" maxlength="3"><select id="tint" name="tint" style="width: 100px; margin-left: 10px; height: 33px;"><option value="sec"<?php print ($tparts !== null && $tparts['unit'] === 'sec') ? ' selected="selected"' : ''; ?>>Second(s)</option><option value="min"<?php print ($tparts !== null && $tparts['unit'] === 'min') ? ' selected="selected"' : ''; ?>>Minute(s)</option></select></td></tr>
 				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Description: <span style="color: red;">*</span></td><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Result Type: <div class="tooltip"><img src="/icons/tooltip.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Defines the format of the sensor output<br><br>Default: Text</span></div></td></tr>
-				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgdesc" style="width: 400px;" maxlength="128"></td><td style="background-color: transparent; border: 0; color: #444;"><select id="rtype" name="rtype" style="font-size: 15px; height: 33px; width: 300px; margin-left: 2px; margin-right: 30px;"><option value="text">Text</option><option value="number">Number</option><option value="bool">Boolean</option><option value="ipaddress">IP Address</option><option value="datetime">Date/Time Stamp</option></td></tr>
+				<tr><td style="background-color: transparent; border: 0; color: #444;"><input type="text" name="pkgdesc" style="width: 400px;" maxlength="128" value="<?php print $sensor !== null ? htmlspecialchars($sensor['DESCRIPTION'], ENT_QUOTES) : ''; ?>"></td><td style="background-color: transparent; border: 0; color: #444;"><select id="rtype" name="rtype" style="font-size: 15px; height: 33px; width: 300px; margin-left: 2px; margin-right: 30px;"><option value="text"<?php print ($sensor !== null && $sensor['RTYPE'] === 'text') ? ' selected="selected"' : ''; ?>>Text</option><option value="number"<?php print ($sensor !== null && $sensor['RTYPE'] === 'number') ? ' selected="selected"' : ''; ?>>Number</option><option value="bool"<?php print ($sensor !== null && $sensor['RTYPE'] === 'bool') ? ' selected="selected"' : ''; ?>>Boolean</option><option value="ipaddress"<?php print ($sensor !== null && $sensor['RTYPE'] === 'ipaddress') ? ' selected="selected"' : ''; ?>>IP Address</option><option value="datetime"<?php print ($sensor !== null && $sensor['RTYPE'] === 'datetime') ? ' selected="selected"' : ''; ?>>Date/Time Stamp</option></td></tr>
 				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Content Set: <span style="color: red;">*</span></td><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444;">Category:</td></tr>
 				<tr><td style="background-color: transparent; border: 0; color: #444;"><select id="contentset" name="contentset" style="font-size: 15px; height: 33px; width: 430px; margin-left: 2px; margin-right: 30px;">
 				<?php
+				$csetlisted = false;
 				while ($csrow = mysqli_fetch_assoc($csets)) {
-					print "<option value=\"" . $csrow["ID"] . "\">" . $csrow["NAME"] . "</option>\n";
+					$iscur = ($sensor !== null && (int)$csrow["ID"] === (int)$sensor['CSET']);
+					if ($iscur) { $csetlisted = true; }
+					print "<option value=\"" . $csrow["ID"] . "\"" . ($iscur ? ' selected="selected"' : '') . ">" . $csrow["NAME"] . "</option>\n";
+					}
+				if ($sensor !== null && !$csetlisted && $csetname !== null) {
+					print "<option value=\"" . (int)$sensor['CSET'] . "\" selected=\"selected\">" . htmlspecialchars($csetname, ENT_QUOTES) . "</option>\n";
 					}
 				?>
 				</select></td><td style="background-color: transparent; border: 0; color: #444;"><select id="category" name="category" style="font-size: 15px; height: 33px; width: 430px; margin-left: 2px; margin-right: 30px;">
 				<option value="none">(None)</option>
+				<?php
+				if ($sensor !== null && $sensor['CATEGORY'] !== null && $catname !== null) {
+					print "<option value=\"" . (int)$sensor['CATEGORY'] . "\" selected=\"selected\">" . htmlspecialchars($catname, ENT_QUOTES) . "</option>\n";
+					}
+				?>
 				</select></td></tr>
-				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444; font-weight: normal;" colspan="2"><input type="checkbox" id="case" name="case"><span style="cursor: normal; user-select: none;" onclick="caseToggle()"> Results are Case Sensitive</span> <div class="tooltip"><img src="/icons/tooltip.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Instructs the server to force case sensitive matching for the sensor output<br><br>Default: Disabled</span></div></td></tr>
-				<tr><td style="background-color: transparent; border: 0; color: #444; font-weight: normal;" colspan="2"><input type="checkbox" id="split" name="split" onclick="toggleSplit()"><span style="cursor: normal; user-select: none;" onclick="csToggle()"> Split Results into Columns </span><div class="tooltip"><img src="/icons/tooltip.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Allows the server to split the sensor output and display the split segments in separate columns within a query response<br><br>Default: Disabled</span></div><span class="delform" style="margin-left: 50px; opacity: 0;">Delimeter: </span><span class="delform" style="opacity: 0; color: red;">*</span><input class="delform" id="delimeter" name="delimeter" type="text" style="opacity: 0; margin-left: 15px; width: 5px;" maxlength="1" value="|"></td></tr>
+				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444; font-weight: normal;" colspan="2"><input type="checkbox" id="case" name="case"<?php print ($sensor !== null && (int)$sensor['USECASE'] === 1) ? ' checked="checked"' : ''; ?>><span style="cursor: normal; user-select: none;" onclick="caseToggle()"> Results are Case Sensitive</span> <div class="tooltip"><img src="/icons/tooltip.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Instructs the server to force case sensitive matching for the sensor output<br><br>Default: Disabled</span></div></td></tr>
+				<tr><td style="background-color: transparent; border: 0; color: #444; font-weight: normal;" colspan="2"><input type="checkbox" id="split" name="split" onclick="toggleSplit()"<?php print ($sensor !== null && (int)$sensor['CSPLIT'] === 1) ? ' checked="checked"' : ''; ?>><span style="cursor: normal; user-select: none;" onclick="csToggle()"> Split Results into Columns </span><div class="tooltip"><img src="/icons/tooltip.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Allows the server to split the sensor output and display the split segments in separate columns within a query response<br><br>Default: Disabled</span></div><span class="delform" style="margin-left: 50px; opacity: 0;">Delimeter: </span><span class="delform" style="opacity: 0; color: red;">*</span><input class="delform" id="delimeter" name="delimeter" type="text" style="opacity: 0; margin-left: 15px; width: 5px;" maxlength="1" value="<?php print ($sensor !== null && $sensor['DELIMITER'] !== null) ? htmlspecialchars($sensor['DELIMITER'], ENT_QUOTES) : '|'; ?>"></td></tr>
 				</table>
 
 			</div>
@@ -197,7 +283,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 		<hr style="width: 99%; margin-bottom: 20px;">
 
 		<table style="border: 0; margin-bottom: 20px;">
-		<tr><td style="background-color: transparent; border: 0; color: #444; font-weight: normal;"><input type="checkbox" id="useparams" name="useparams"><span style="cursor: normal; user-select: none;" onclick="paramToggle()"> Accepts Query Parameters</span> <div class="tooltip"><img src="/icons/tooltip.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Allows the sensor to accept variables when constructing a query and injects them at user-defined points in the sensor scripts<br><br>Default: Disabled</span></div></td></tr>
+		<tr><td style="background-color: transparent; border: 0; color: #444; font-weight: normal;"><input type="checkbox" id="useparams" name="useparams"<?php print ($sensor !== null && (int)$sensor['WITHPARAMS'] === 1) ? ' checked="checked"' : ''; ?>><span style="cursor: normal; user-select: none;" onclick="paramToggle()"> Accepts Query Parameters</span> <div class="tooltip"><img src="/icons/tooltip.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Allows the sensor to accept variables when constructing a query and injects them at user-defined points in the sensor scripts<br><br>Default: Disabled</span></div></td></tr>
 		</table>
 
 		<hr style="width: 99%;">
@@ -220,7 +306,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 
 			<div style="margin: 8px 0 0 0; width: 100%;" id="Linux" class="configtab">
 				<div style="text-align: left; color: #444;">
-					<input id="leselect" name="leselect" type="checkbox" style="margin-left: 8px;" onclick="editorToggle('Linux');"> <span style="cursor: normal; user-select: none;" onclick="labelToggle('Linux')">Enabled</span> &nbsp;&nbsp;&nbsp;&nbsp; <span id="lstlabel" style="color: #777; user-select: none;">Type: </span><select id="lstype" name="lstype" onchange="lsformat(document.getElementById('lstype').value);" disabled="disabled"><option value="shell">Shell Script</option><option value="perl">Perl</option><option value="python">Python</option></select>
+					<input id="leselect" name="leselect" type="checkbox" style="margin-left: 8px;" onclick="editorToggle('Linux');"<?php print ($sensor !== null && $sensor['LSCRIPT'] !== null) ? ' checked="checked"' : ''; ?>> <span style="cursor: normal; user-select: none;" onclick="labelToggle('Linux')">Enabled</span> &nbsp;&nbsp;&nbsp;&nbsp; <span id="lstlabel" style="color: #777; user-select: none;">Type: </span><select id="lstype" name="lstype" onchange="lsformat(document.getElementById('lstype').value);" disabled="disabled"><option value="shell">Shell Script</option><option value="perl">Perl</option><option value="python">Python</option></select>
 				</div>
 				<div id="leditor" style="margin-top: 7px; width: 100%;"></div>
 				<script src="/layout/src/ace.js" type="text/javascript" charset="utf-8"></script>
@@ -241,7 +327,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 
 			<div style="margin: 8px 0 0 0; width: 100%; display: none;" id="macOS" class="configtab">
 				<div style="text-align: left; color: #444;">
-					<input id="meselect" name="meselect" type="checkbox" style="margin-left: 8px;" onclick="editorToggle('Mac');"> <span style="cursor: normal; user-select: none;" onclick="labelToggle('Mac')">Enabled</span> &nbsp;&nbsp;&nbsp;&nbsp; <span id="mstlabel" style="color: #777; user-select: none;">Type: </span><select id="mstype" name="mstype" onchange="msformat(document.getElementById('mstype').value);" disabled="disabled"><option value="shell">Shell Script</option><option value="perl">Perl</option><option value="python">Python</option></select>
+					<input id="meselect" name="meselect" type="checkbox" style="margin-left: 8px;" onclick="editorToggle('Mac');"<?php print ($sensor !== null && $sensor['MSCRIPT'] !== null) ? ' checked="checked"' : ''; ?>> <span style="cursor: normal; user-select: none;" onclick="labelToggle('Mac')">Enabled</span> &nbsp;&nbsp;&nbsp;&nbsp; <span id="mstlabel" style="color: #777; user-select: none;">Type: </span><select id="mstype" name="mstype" onchange="msformat(document.getElementById('mstype').value);" disabled="disabled"><option value="shell">Shell Script</option><option value="perl">Perl</option><option value="python">Python</option></select>
 				</div>
 				<div id="meditor" style="margin-top: 7px; width: 100%;"></div>
 				<script>
@@ -258,7 +344,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 
 			<div style="margin: 8px 0 0 0; width: 100%; display: none;" id="Windows" class="configtab">
 				<div style="text-align: left; color: #444;">
-					<input id="weselect" name="weselect" type="checkbox" style="margin-left: 8px;" onclick="editorToggle('Windows');"> <span style="cursor: normal; user-select: none;" onclick="labelToggle('Windows');">Enabled</span> &nbsp;&nbsp;&nbsp;&nbsp; <span id="wstlabel" style="color: #777; user-select: none;">Type: </span><select id="wstype" name="wstype" onchange="wsformat(document.getElementById('wstype').value)" disabled="disabled"><option value="powershell">PowerShell</option><option value="vbscript">VBScript</option><option value="batch">Batch File</option><option value="python">Python</option></select>
+					<input id="weselect" name="weselect" type="checkbox" style="margin-left: 8px;" onclick="editorToggle('Windows');"<?php print ($sensor !== null && $sensor['WSCRIPT'] !== null) ? ' checked="checked"' : ''; ?>> <span style="cursor: normal; user-select: none;" onclick="labelToggle('Windows');">Enabled</span> &nbsp;&nbsp;&nbsp;&nbsp; <span id="wstlabel" style="color: #777; user-select: none;">Type: </span><select id="wstype" name="wstype" onchange="wsformat(document.getElementById('wstype').value)" disabled="disabled"><option value="powershell">PowerShell</option><option value="vbscript">VBScript</option><option value="batch">Batch File</option><option value="python">Python</option></select>
 				</div>
 				<div id="weditor" style="margin-top: 7px; width: 100%;"></div>
 				<script>
@@ -276,6 +362,11 @@ $sensorcount = mysqli_num_rows($sensorquery);
 	</div>
 
 <script>
+// The selected sensor's stored per-OS type/script pairs (null on the create
+// form); the init block at the bottom of this script loads them into the
+// ace editors.
+var editData = <?php print $editdata === null ? 'null' : json_encode($editdata, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+
 const tiElement = document.getElementById('timeout');
 
 tiElement.addEventListener('input', function(event) {
@@ -473,6 +564,67 @@ function enableEditor(edsel) {
 		}
 	}
 
+// Set an ace editor's syntax mode for a stored script type. The
+// lsformat/msformat/wsformat variants do the same but also replace the
+// script with the type's template, which must not happen when loading a
+// stored script.
+function setEditorMode(edsel, type) {
+	if (edsel == "Linux" || edsel == "Mac") {
+		const editor = (edsel == "Linux") ? leditor : meditor;
+		if (type == "shell") { editor.getSession().setMode("ace/mode/sh"); }
+		else if (type == "perl") { editor.getSession().setMode("ace/mode/perl"); }
+		else if (type == "python") { editor.getSession().setMode("ace/mode/python"); }
+		}
+	else if (edsel == "Windows") {
+		if (type == "powershell") { weditor.getSession().setMode("ace/mode/powershell"); }
+		else if (type == "vbscript") { weditor.getSession().setMode("ace/mode/vbscript"); }
+		else if (type == "batch") { weditor.getSession().setMode("ace/mode/batchfile"); }
+		else if (type == "python") { weditor.getSession().setMode("ace/mode/python"); }
+		}
+	}
+
+// Edit mode: enable a platform's editor with the stored type and load the
+// stored script (unlike enableEditor(), which resets the script to the
+// type's template).
+function initEditEditor(edsel, type, script) {
+	if (edsel == "Linux") {
+		leditor.container.style.opacity = 1;
+		leditor.container.style.pointerEvents="";
+		leditor.renderer.setStyle("disabled", false);
+		document.getElementById('lstlabel').style.color = "#444";
+		document.getElementById('lstype').disabled = false;
+		document.getElementById('lstype').value = type;
+		setEditorMode('Linux', type);
+		leditor.setValue(script, -1);
+		document.getElementById('len').innerHTML = '<span style=\"font-weight: bold; font-size: 16px; color: #0ec940;\">✓</span>';
+		document.getElementById('lsize').innerHTML = formatBytes(leditor.session.getValue().length,1);
+		}
+	else if (edsel == "Mac") {
+		meditor.container.style.opacity = 1;
+		meditor.container.style.pointerEvents="";
+		meditor.renderer.setStyle("disabled", false);
+		document.getElementById('mstlabel').style.color = "#444";
+		document.getElementById('mstype').disabled = false;
+		document.getElementById('mstype').value = type;
+		setEditorMode('Mac', type);
+		meditor.setValue(script, -1);
+		document.getElementById('men').innerHTML = '<span style=\"font-weight: bold; font-size: 16px; color: #0ec940;\">✓</span>';
+		document.getElementById('msize').innerHTML = formatBytes(meditor.session.getValue().length,1);
+		}
+	else if (edsel == "Windows") {
+		weditor.container.style.opacity = 1;
+		weditor.container.style.pointerEvents="";
+		weditor.renderer.setStyle("disabled", false);
+		document.getElementById('wstlabel').style.color = "#444";
+		document.getElementById('wstype').disabled = false;
+		document.getElementById('wstype').value = type;
+		setEditorMode('Windows', type);
+		weditor.setValue(script, -1);
+		document.getElementById('wen').innerHTML = '<span style=\"font-weight: bold; font-size: 16px; color: #0ec940;\">✓</span>';
+		document.getElementById('wsize').innerHTML = formatBytes(weditor.session.getValue().length,1);
+		}
+	}
+
 function formatBytes(bytes, decimals = 2) {
 	if (!+bytes) return '0'
 	const k = 1024
@@ -529,9 +681,23 @@ document.querySelector('#nsform input[name="pkgdesc"]').addEventListener('input'
 document.getElementById('delimeter').addEventListener('input', formCheck);
 document.getElementById('nsform').addEventListener('submit', formCheck);
 
-disableEditor('Linux');
-disableEditor('Mac');
-disableEditor('Windows');
+if (editData) {
+	// Edit mode: load each stored platform into its editor (the enable
+	// checkboxes are already checked in the markup); platforms the sensor
+	// does not define stay disabled.
+	if (editData.lscript !== null) { initEditEditor('Linux', editData.lstype, editData.lscript); }
+	else { disableEditor('Linux'); }
+	if (editData.mscript !== null) { initEditEditor('Mac', editData.mstype, editData.mscript); }
+	else { disableEditor('Mac'); }
+	if (editData.wscript !== null) { initEditEditor('Windows', editData.wstype, editData.wscript); }
+	else { disableEditor('Windows'); }
+	if (editData.csplit) { toggleSplit(); }
+	}
+else {
+	disableEditor('Linux');
+	disableEditor('Mac');
+	disableEditor('Windows');
+	}
 formCheck();
 </script>
 
@@ -626,4 +792,14 @@ function allCheck() {
 function removeLetters(str) {
 	return str.replace(/[a-zA-Z]/g, '');
 	}
+
+// Modify Selected opens the create form pre-filled with the selected
+// sensor's stored values (rowHighlight() only enables the button for a
+// single non-lumadmin selection).
+document.getElementById("modify").addEventListener('click', function () {
+	var checkboxes = document.querySelectorAll('input[class="sensorrow"]');
+	var sel = null;
+	checkboxes.forEach(cb => { if (cb.checked) { sel = removeLetters(cb.id); } });
+	if (sel !== null) { window.location.href = '/index.php?view=sensors&action=edit&id=' + sel; }
+	});
 </script>
