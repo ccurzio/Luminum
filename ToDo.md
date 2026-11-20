@@ -138,7 +138,6 @@ In order to be accountable to the community - but more importantly to myself - I
 |&#10003;|**Completed**  |USERLOGGING    |Disabled         |Account-specific server logging                                                         |
 |&#10003;|**Completed**  |SENREVS        |5                |Maximum revision history for sensors                                                    |
 |&#10003;|**Completed**  |PKGREVS        |5                |Maximum revision history for packages                                                   |
-|&#10003;|**Completed**  |INVESTIGATE    |Enabled          |Enable or Disable Luminum Investigate                                                   |
 | --     |Not Started    |UNSIGNEDLUMYS  |Disabled         |Allow Unsigned Lumys                                                                    |
 </li>
 

@@ -60,7 +60,7 @@
 	<p style="margin-top: 20px;">
 	<span id="verfilter" style="font-size: 15px; font-weight: bold;">Filter by Client Version:</span>
 	</p>
-	<table id="vertable" style="margin-bottom: 40px;">
+	<table id="vertable">
 	<tr><td style="width: 15px;"></td><td>Version</td><td style="text-align: center;">Percentage</td><td style="text-align: center;">Count</td></tr>
 	<tbody id="verrows"></tbody>
 	</table>
