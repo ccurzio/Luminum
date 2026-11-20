@@ -586,6 +586,12 @@ check "console: edit form carries the hidden sensor id and the stored script" \
         && grep -q "echo probe-output-42" "$RUN/sensor-edit.html" 2>/dev/null; echo $?)
 check "console: list wires Modify Selected to the edit form" \
     $(grep -q 'action=edit&id=' "$RUN/sensors.html" 2>/dev/null; echo $?)
+# Modify Selected enables on any single selection (the create form stamps the
+# logged-in user as AUTHOR, so the old lumadmin-author guard disabled the
+# button for every sensor a lumadmin session created); only the still-stub
+# Delete button keeps an author guard.
+check "console: Modify Selected is no longer gated on the lumadmin author" \
+    $([ "$(grep -c 'innerText != "lumadmin"' "$RUN/sensors.html" 2>/dev/null)" = "1" ]; echo $?)
 
 # An unknown id renders an in-view error (the console header is already
 # printed by index.php, so the view cannot redirect).

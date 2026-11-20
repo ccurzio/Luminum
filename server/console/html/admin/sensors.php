@@ -737,9 +737,7 @@ function rowHighlight(idnum) {
 		}
 	else {
 		document.getElementById("getinfo").disabled = buttontoggle;
-		if (document.getElementById(idnum + "E").innerText != "lumadmin") {
-			document.getElementById("modify").disabled = buttontoggle;
-			}
+		document.getElementById("modify").disabled = buttontoggle;
 		}
 
 	if (checkTrigger == checkboxes.length) {
@@ -795,7 +793,7 @@ function removeLetters(str) {
 
 // Modify Selected opens the create form pre-filled with the selected
 // sensor's stored values (rowHighlight() only enables the button for a
-// single non-lumadmin selection).
+// single selection).
 document.getElementById("modify").addEventListener('click', function () {
 	var checkboxes = document.querySelectorAll('input[class="sensorrow"]');
 	var sel = null;
