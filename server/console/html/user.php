@@ -34,8 +34,8 @@
 
 		<form id="userform" action="user.php" method="POST">
 		<div style="width: 80%; text-align: right; margin: -50px auto 10px auto;">
-			<button id="save" class="formgo" style="margin-right: 0;" disabled="disabled">Save Changes</button>
-			<input type="reset" id="reset" value="Reset Values" class="formgo" onclick="return resetForm();">
+			<input type="reset" id="reset" value="Reset Values" class="formgo" style="margin-right: 0;" onclick="return resetForm();">
+			<button id="save" class="formgo" disabled="disabled">Save Changes</button>
 		</div>
 
 
