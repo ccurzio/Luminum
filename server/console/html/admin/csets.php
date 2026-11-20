@@ -2,7 +2,7 @@
 mysqli_select_db($db, "CONTENT") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
 
 $starttime = microtime(true);
-$csquery = mysqli_query($db, "select cs.ID,cs.NAME,cs.DESCRIPTION,(select USERNAME from AUTH.USERS where ID = cs.OWNER) as OWNER,cs.CREATED,cs.MODIFIED,(select USERNAME from AUTH.USERS where ID = cs.EDITOR) as EDITOR,count(distinct p.ID) as PACKAGES, count(distinct s.ID) as SENSORS from SETS cs left join PACKAGES p on p.ID = cs.ID left join SENSORS s on s.ID = cs.ID group by cs.ID");
+$csquery = mysqli_query($db, "select cs.ID,cs.NAME,cs.DESCRIPTION,(select USERNAME from AUTH.USERS where ID = cs.OWNER) as OWNER,cs.CREATED,cs.MODIFIED,(select USERNAME from AUTH.USERS where ID = cs.EDITOR) as EDITOR,count(distinct p.ID) as PACKAGES, count(distinct s.ID) as SENSORS from SETS cs left join PACKAGES p on p.CSET = cs.ID left join SENSORS s on s.CSET = cs.ID group by cs.ID");
 $endtime = microtime(true);
 $duration = number_format((float)$endtime - $starttime, 2, '.', '');
 $cscount = mysqli_num_rows($csquery);
@@ -20,14 +20,14 @@ $cscount = mysqli_num_rows($csquery);
                 print "<div style=\"display: block; width: 100%; text-align: right;\">\n";
                 if (isset($acctrole) && $acctrole <= 2) {
                         print "<a href=\"/index.php?view=csets&action=new\"><button class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\">Create New</button></a>\n";
-                        print "<button id=\"modify\" class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\" disabled=\"disabled\">Modify Selected</button>\n";
+                        print "<button id=\"modify\" class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\" disabled=\"disabled\">Edit Selected</button>\n";
                         print "<button id=\"delete\" class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\" disabled=\"disabled\">Delete Selected</button>\n";
                         }
                 print "<button id=\"getinfo\" class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\" disabled=\"disabled\">Get Info</button>\n";
                 print "</div>\n";
                 ?>
 		<table style="margin-top: 10px;">
-		<tr><td colspan="10"><div style="position: absolute; padding-top: 7px; padding-left: 5px;"><span id="selcount">0</span> <span id="totcount">of <?php print $cscount; ?></span> items</div>
+		<tr><td colspan="10"><div style="position: absolute; padding-top: 7px; padding-left: 5px;"><span id="viscount"><?php print $cscount; ?></span> of <span id="totcount"><?php print $cscount; ?></span> items <span id="selcount"></span></div>
 		<div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="csetsfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($cscount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
 		<tr><td style="width: 15px;">
 		<?php
@@ -52,7 +52,9 @@ $cscount = mysqli_num_rows($csquery);
 
 <script src="layout/table.js"></script>
 <script>
-LuminumTable.attachTextFilter('csetsfilter');
+LuminumTable.attachTextFilter('csetsfilter', function (visible) {
+	document.getElementById('viscount').textContent = visible;
+	});
 
 function rowHighlight(idnum) {
 	var checkBox = document.getElementById("ID" + idnum);
@@ -133,7 +135,7 @@ function allCheck() {
 		if (checkbox.checked == true) { checkTrigger++; }
 		});
 
-	document.getElementById("selcount").textContent = checkTrigger;
+	document.getElementById("selcount").textContent = checkTrigger > 0 ? '(' + checkTrigger + ' Selected)' : '';
 
 	if (checkTrigger == checkboxes.length) {
 		document.getElementById("selectall").checked = "checked";

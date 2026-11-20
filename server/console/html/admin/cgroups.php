@@ -19,7 +19,7 @@ $cgcount = mysqli_num_rows($cgquery);
         <div class="module-content">
 		<div style="display: block; width: 100%; text-align: right;">
 		<a href="/index.php?view=cgroups&action=new"><button class="formgo" style="margin-top: 5px; margin-right: 0;">Create New</button></a>
-		<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Modify Selected</button>
+		<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Edit Selected</button>
 		<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Delete Selected</button>
 		<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Get Info</button>
 

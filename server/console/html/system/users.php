@@ -21,7 +21,7 @@ else {
 	<div class="module-content">
 		<div style="display: block; width: 100%; text-align: right;">
 			<button class="formgo" style="margin-top: 5px; margin-right: 0;">Add User</button>
-			<button class="formgo" id="modify" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Modify Selected</button>
+			<button class="formgo" id="modify" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Edit Selected</button>
 			<button class="formgo" id="delete" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Delete Selected</button>
 			<button class="formgo" id="getinfo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Get Info</button>
 		</div>

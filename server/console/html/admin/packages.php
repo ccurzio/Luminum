@@ -22,14 +22,14 @@ $pkgcount = mysqli_num_rows($pkgquery);
                 print "<div style=\"display: block; width: 100%; text-align: right;\">\n";
                 if (isset($acctrole) && $acctrole <= 2) {
                         print "<a href=\"/index.php?view=packages&action=new\"><button class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\">Create New</button></a>\n";
-                        print "<button class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\" disabled=\"disabled\">Modify Selected</button>\n";
+                        print "<button class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\" disabled=\"disabled\">Edit Selected</button>\n";
                         print "<button class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\" disabled=\"disabled\">Delete Selected</button>\n";
                         }
                 print "<button class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\" disabled=\"disabled\">Get Info</button>\n";
                 print "</div>\n";
                 ?>
 		<table style="margin-top: 10px;">
-		<tr><td colspan="10"><div style="position: absolute; padding-top: 7px; padding-left: 5px;">0 of <?php print $pkgcount; ?> items</div>
+		<tr><td colspan="10"><div style="position: absolute; padding-top: 7px; padding-left: 5px;"><span id="viscount"><?php print $pkgcount; ?></span> of <span id="totcount"><?php print $pkgcount; ?></span> items <span id="selcount"></span></div>
 		<div style="float: right; text-align: right; padding-right: 5px;">Content Set: <select id="contentset" name="contentset" style="margin-left: 2px; margin-right: 30px; margin-top: 2px; width: 170px; height: 28px;" <?php if ($pkgcount == 0) { print "disabled=\"disabled\""; } ?>>
 			<option value="all">All</option>
 			<?php
@@ -51,7 +51,7 @@ $pkgcount = mysqli_num_rows($pkgquery);
 			}
 		else {
 			while($row = mysqli_fetch_assoc($pkgquery)) {
-				print "<tr class=\"luminum-row\"><td id=\"" . $row["ID"] . "A\" style=\"width: 15px; background-color: #494a69;\"><input id=\"ID" . $row["ID"] . "\" type=\"checkbox\" onclick=\"rowHighlight(" . $row["ID"] . ")\"></td><td id=\"" . $row["ID"] . "B\" style=\"width: 50px; background-color: #494a69; font-weight: normal;\">" . $row["NAME"] . "</td><td id=\"" . $row["ID"] . "C\" style=\"width: 75px; background-color: #494a69; font-weight: normal;\">" . $row["DESCRIPTION"] . "</td><td id=\"" . $row["ID"] . "D\" style=\"width: 120px; background-color: #494a69; font-weight: normal; text-align: center;\">" . "COMPAT" . "</td><td id=\"" . $row["ID"] . "E\" style=\"background-color: #494a69; font-weight: normal;\">" . "SIZE" . "</td><td id=\"" . $row["ID"] . "F\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $row["AUTHOR"] . "</td><td id=\"" . $row["ID"] . "G\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $row["CREATED"] . "</td>" . "<td id=\"" . $row["ID"] . "H\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $row["MODIFIED"] . "</td><td id=\"" . $row["ID"] . "I\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["EDITOR"] . "</td></tr>\n";
+				print "<tr class=\"luminum-row\"><td id=\"" . $row["ID"] . "A\" style=\"width: 15px; background-color: #494a69;\"><input id=\"ID" . $row["ID"] . "\" type=\"checkbox\" onclick=\"rowHighlight(" . $row["ID"] . "); pkgAllCheck();\"></td><td id=\"" . $row["ID"] . "B\" style=\"width: 50px; background-color: #494a69; font-weight: normal;\">" . $row["NAME"] . "</td><td id=\"" . $row["ID"] . "C\" style=\"width: 75px; background-color: #494a69; font-weight: normal;\">" . $row["DESCRIPTION"] . "</td><td id=\"" . $row["ID"] . "D\" style=\"width: 120px; background-color: #494a69; font-weight: normal; text-align: center;\">" . "COMPAT" . "</td><td id=\"" . $row["ID"] . "E\" style=\"background-color: #494a69; font-weight: normal;\">" . "SIZE" . "</td><td id=\"" . $row["ID"] . "F\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $row["AUTHOR"] . "</td><td id=\"" . $row["ID"] . "G\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $row["CREATED"] . "</td>" . "<td id=\"" . $row["ID"] . "H\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $row["MODIFIED"] . "</td><td id=\"" . $row["ID"] . "I\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["EDITOR"] . "</td></tr>\n";
 				}
 			}
 		?>
@@ -61,7 +61,32 @@ $pkgcount = mysqli_num_rows($pkgquery);
 
 <script src="layout/table.js"></script>
 <script>
-LuminumTable.attachTextFilter('packagesfilter');
+// Header counters, matching the Sensors and Client Status tables: the
+// displayed count tracks the text filter, and "(N Selected)" appears next
+// to the counts while any rows are checked.
+LuminumTable.attachTextFilter('packagesfilter', function (visible) {
+	document.getElementById('viscount').textContent = visible;
+	});
+
+function rowHighlight(idnum) {
+	var checkBox = document.getElementById("ID" + idnum);
+	var bgcolor = (checkBox.checked == true) ? "#686993" : "#494a69";
+	document.getElementById(idnum + "A").style.backgroundColor = bgcolor;
+	document.getElementById(idnum + "B").style.backgroundColor = bgcolor;
+	document.getElementById(idnum + "C").style.backgroundColor = bgcolor;
+	document.getElementById(idnum + "D").style.backgroundColor = bgcolor;
+	document.getElementById(idnum + "E").style.backgroundColor = bgcolor;
+	document.getElementById(idnum + "F").style.backgroundColor = bgcolor;
+	document.getElementById(idnum + "G").style.backgroundColor = bgcolor;
+	document.getElementById(idnum + "H").style.backgroundColor = bgcolor;
+	document.getElementById(idnum + "I").style.backgroundColor = bgcolor;
+	}
+
+function pkgAllCheck() {
+	var n = 0;
+	document.querySelectorAll('input[id^="ID"]').forEach(function (cb) { if (cb.checked) { n++; } });
+	document.getElementById('selcount').textContent = n > 0 ? '(' + n + ' Selected)' : '';
+	}
 </script>
 
 	<?php elseif ($_GET["action"] == "new"): ?>

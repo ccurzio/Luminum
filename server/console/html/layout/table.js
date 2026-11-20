@@ -197,12 +197,15 @@
 	//
 	//   filterId - id of the <input> to listen on; its enclosing <table> is the
 	//              table that gets filtered.
+	//   onFilter - optional callback invoked as onFilter(visible, total) after
+	//              every re-apply (including the initial one), so the page can
+	//              keep a "displayed of total" counter in step with the filter.
 	//
 	// Data rows are the <tr> elements that contain a row checkbox
 	// (input[id^="ID"]); the header, counter and footer rows do not. When the
 	// table has data rows but no "No Results" row in the markup, one is created
 	// (hidden) and toggled as the filter changes.
-	function attachTextFilter(filterId) {
+	function attachTextFilter(filterId, onFilter) {
 		var filterEl = document.getElementById(filterId);
 		if (!filterEl) { return; }
 		var tableEl = filterEl.closest('table');
@@ -237,6 +240,7 @@
 			if (emptyRow) {
 				emptyRow.style.display = (text === '') ? emptyRowDefault : (visible === 0 ? '' : 'none');
 			}
+			if (typeof onFilter === 'function') { onFilter(visible, rows.length); }
 		}
 
 		filterEl.addEventListener('input', apply);

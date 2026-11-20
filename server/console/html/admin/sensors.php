@@ -29,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 		exit;
 	}
 	// Edit mode: the form posts a hidden sensorid when it was opened from
-	// the list's Modify Selected button. The same validator applies, and
+	// the list's Edit Selected button. The same validator applies, and
 	// failure redirects go back to the edit form for that sensor.
 	$editid = (isset($_POST['sensorid']) && is_string($_POST['sensorid']) && preg_match('/^[1-9][0-9]*$/', $_POST['sensorid'])) ? (int)$_POST['sensorid'] : null;
 	$back = $editid !== null ? 'edit&id=' . $editid : 'new';
@@ -71,6 +71,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	}
 	if ($editid !== null) {
 		$sv = function ($x) use ($eg) { return $x === null ? 'null' : "'" . $eg($x) . "'"; };
+		// Revision history: snapshot the pre-edit state into SENSORHISTORY
+		// (REV = the next number for this sensor) before the UPDATE applies
+		// the new values, so the edit form's Revisions select can roll the
+		// code back to any prior version.
+		$nextrev = 1;
+		$revq = mysqli_query($db, "select COALESCE(MAX(REV), 0) from SENSORHISTORY where ID = $editid");
+		if ($revq && ($rrow = $revq->fetch_row()) !== null) { $nextrev = (int)$rrow[0] + 1; }
+		$curq = mysqli_query($db, "select NAME,DESCRIPTION,CSET,CATEGORY,TIMEOUT,MSTYPE,MSCRIPT,LSTYPE,LSCRIPT,WSTYPE,WSCRIPT,RTYPE,USECASE,CSPLIT,DELIMITER,WITHPARAMS from SENSORS where ID = $editid");
+		if ($curq && ($crow = $curq->fetch_assoc()) !== null) {
+			$revins = "insert into SENSORHISTORY (ID,REV,NAME,DESCRIPTION,CSET,CATEGORY,TIMEOUT,MSTYPE,MSCRIPT,LSTYPE,LSCRIPT,WSTYPE,WSCRIPT,RTYPE,USECASE,CSPLIT,DELIMITER,WITHPARAMS,TIMESTAMP,EDITOR) values ("
+				. $editid . "," . $nextrev . ",'" . $eg($crow['NAME']) . "','" . $eg($crow['DESCRIPTION']) . "'," . (int)$crow['CSET'] . ","
+				. ($crow['CATEGORY'] === null ? 'null' : (int)$crow['CATEGORY']) . ",'" . $eg($crow['TIMEOUT']) . "',"
+				. $sv($crow['MSTYPE']) . "," . $sv($crow['MSCRIPT']) . "," . $sv($crow['LSTYPE']) . "," . $sv($crow['LSCRIPT']) . ","
+				. $sv($crow['WSTYPE']) . "," . $sv($crow['WSCRIPT']) . ",'" . $eg($crow['RTYPE']) . "'," . (int)$crow['USECASE'] . ","
+				. (int)$crow['CSPLIT'] . "," . $sv($crow['DELIMITER']) . "," . (int)$crow['WITHPARAMS'] . ",now()," . (int)$urow['ID'] . ")";
+			if (!mysqli_query($db, $revins)) {
+				header('Location: /index.php?view=sensors&action=' . $back . '&err=save');
+				exit;
+			}
+		}
 		$upd = "update SENSORS set NAME = '" . $eg($s['NAME']) . "',DESCRIPTION = '" . $eg($s['DESCRIPTION']) . "',CSET = " . (int)$s['CSET'] . ",CATEGORY = "
 			. ($s['CATEGORY'] === null ? 'null' : (int)$s['CATEGORY']) . ",TIMEOUT = '" . $eg($s['TIMEOUT']) . "',MSTYPE = " . $sv($s['MSTYPE'])
 			. ",MSCRIPT = " . $sv($s['MSCRIPT']) . ",LSTYPE = " . $sv($s['LSTYPE']) . ",LSCRIPT = " . $sv($s['LSCRIPT'])
@@ -108,7 +128,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 mysqli_select_db($db, "CONTENT") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
 
 $starttime = microtime(true);
-$sensorquery = mysqli_query($db, "select s.ID,s.NAME,s.DESCRIPTION,!ifnull(s.MSCRIPT,1) as MAC,!ifnull(s.LSCRIPT,1) as LIN,!ifnull(s.WSCRIPT,1) as WIN,u.USERNAME as AUTHOR,s.CREATED,s.MODIFIED,s.EDITOR from SENSORS s left join AUTH.USERS u ON s.AUTHOR = u.ID order by NAME;");
+$sensorquery = mysqli_query($db, "select s.ID,s.NAME,s.DESCRIPTION,!ifnull(s.MSCRIPT,1) as MAC,!ifnull(s.LSCRIPT,1) as LIN,!ifnull(s.WSCRIPT,1) as WIN,u.USERNAME as AUTHOR,s.CREATED,s.MODIFIED,e.USERNAME as EDITORNAME from SENSORS s left join AUTH.USERS u ON s.AUTHOR = u.ID left join AUTH.USERS e ON s.EDITOR = e.ID order by NAME;");
 $csets = mysqli_query($db, "select ID,NAME from SETS where NAME != 'Luminum Core' order by NAME");
 $endtime = microtime(true);
 
@@ -127,14 +147,14 @@ $sensorcount = mysqli_num_rows($sensorquery);
 		print "<div style=\"display: block; width: 100%; text-align: right;\">\n";
 		if (isset($acctrole) && $acctrole <= 2) {
 			print "<a href=\"/index.php?view=sensors&action=new\"><button class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\">Create New</button></a>\n";
-			print "<button id=\"modify\" class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\" disabled=\"disabled\">Modify Selected</button>\n";
+			print "<button id=\"modify\" class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\" disabled=\"disabled\">Edit Selected</button>\n";
 			print "<button id=\"delete\" class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\" disabled=\"disabled\">Delete Selected</button>\n";
 			}
 		print "<button id=\"getinfo\" class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\" disabled=\"disabled\">Get Info</button>\n";
 		print "</div>\n";
 		?>
 		<table style="margin-top: 10px;">
-		<tr><td colspan="8"><div style="position: absolute; padding-top: 7px; padding-left: 5px;"><span id="selcount">0</span> <span id="totcount">of <?php print $sensorcount; ?></span> items</div><div style="float: right; text-align: right; padding-right: 5px;">Content Set: <select id="contentset" name="contentset" style="margin-left: 2px; margin-right: 30px; margin-top: 2px; width: 170px; height: 28px;" <?php if ($sensorcount == 0) { print "disabled=\"disabled\""; } ?>>
+		<tr><td colspan="8"><div style="position: absolute; padding-top: 7px; padding-left: 5px;"><span id="viscount"><?php print $sensorcount; ?></span> of <span id="totcount"><?php print $sensorcount; ?></span> items <span id="selcount"></span></div><div style="float: right; text-align: right; padding-right: 5px;">Content Set: <select id="contentset" name="contentset" style="margin-left: 2px; margin-right: 30px; margin-top: 2px; width: 170px; height: 28px;" <?php if ($sensorcount == 0) { print "disabled=\"disabled\""; } ?>>
 			<option value="all">All</option>
 			<?php
 			while ($csrow = mysqli_fetch_assoc($csets)) {
@@ -156,10 +176,11 @@ $sensorcount = mysqli_num_rows($sensorquery);
 			while($row = mysqli_fetch_assoc($sensorquery)) {
 				$compat = "";
 				$modified = ($row["MODIFIED"] !== null && $row["MODIFIED"] !== '') ? $row["MODIFIED"] : "Never";
+				$editor = ($row["EDITORNAME"] !== null && $row["EDITORNAME"] !== '') ? $row["EDITORNAME"] : "Never";
 				if ($row["MAC"] == 1) { $compat .= "<img src=\"/images/macos.png\" alt=\"macOS\" style=\"width: 24px; height: 24px;\">"; }
 				if ($row["LIN"] == 1) { $compat .= "<img src=\"/images/linux.png\" alt=\"Linux\" style=\"width: 24px; height: 24px;\">"; }
 				if ($row["WIN"] == 1) { $compat .= "<img src=\"/images/windows.png\" alt=\"Windows\" style=\"width: 24px; height: 24px;\">"; }
-				print "<tr class=\"luminum-row\"><td id=\"" . $row["ID"] . "A\" style=\"width: 15px; background-color: #494a69;\"><input id=\"ID" . $row["ID"] . "\" class=\"sensorrow\" type=\"checkbox\" onclick=\"rowHighlight(" . $row["ID"] . "); allCheck();\"></td><td id=\"" . $row["ID"] . "B\" style=\"width: 50px; background-color: #494a69; font-weight: normal;\">" . $row["NAME"] . "</td><td id=\"" . $row["ID"] . "C\" style=\"width: 75px; background-color: #494a69; font-weight: normal;\">" . $row["DESCRIPTION"] . "</td><td id=\"" . $row["ID"] . "D\" style=\"background-color: #494a69; font-weight: normal; text-align: center;\">" . $compat . "</td><td id=\"" . $row["ID"] . "E\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["AUTHOR"] . "</td><td id=\"" . $row["ID"] . "F\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $row["CREATED"] . "</td>" . "<td id=\"" . $row["ID"] . "G\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $modified . "</td><td id=\"" . $row["ID"] . "H\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["EDITOR"] . "</td></tr>\n";
+				print "<tr class=\"luminum-row\"><td id=\"" . $row["ID"] . "A\" style=\"width: 15px; background-color: #494a69;\"><input id=\"ID" . $row["ID"] . "\" class=\"sensorrow\" type=\"checkbox\" onclick=\"rowHighlight(" . $row["ID"] . "); allCheck();\"></td><td id=\"" . $row["ID"] . "B\" style=\"width: 50px; background-color: #494a69; font-weight: normal;\">" . $row["NAME"] . "</td><td id=\"" . $row["ID"] . "C\" style=\"width: 75px; background-color: #494a69; font-weight: normal;\">" . $row["DESCRIPTION"] . "</td><td id=\"" . $row["ID"] . "D\" style=\"background-color: #494a69; font-weight: normal; text-align: center;\">" . $compat . "</td><td id=\"" . $row["ID"] . "E\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["AUTHOR"] . "</td><td id=\"" . $row["ID"] . "F\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $row["CREATED"] . "</td>" . "<td id=\"" . $row["ID"] . "G\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $modified . "</td><td id=\"" . $row["ID"] . "H\" style=\"background-color: #494a69; font-weight: normal;\">" . $editor . "</td></tr>\n";
 				}
 			}
 		?>
@@ -170,7 +191,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 	<?php elseif ($_GET["action"] == "new" || $_GET["action"] == "edit"): ?>
 
 		<?php
-		// Edit mode (the list's Modify Selected button) loads the selected
+		// Edit mode (the list's Edit Selected button) loads the selected
 		// sensor's stored values so the form renders exactly like the create
 		// form with the fields pre-filled. A missing/unknown id renders an
 		// error in place - the console header is already printed by
@@ -179,7 +200,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 		if ($_GET["action"] == "edit") {
 			$sid = (isset($_GET["id"]) && preg_match('/^[1-9][0-9]*$/', $_GET["id"])) ? (int)$_GET["id"] : 0;
 			if ($sid !== 0) {
-				$sq = mysqli_query($db, "select ID,NAME,DESCRIPTION,CSET,CATEGORY,TIMEOUT,MSTYPE,MSCRIPT,LSTYPE,LSCRIPT,WSTYPE,WSCRIPT,RTYPE,USECASE,CSPLIT,DELIMITER,WITHPARAMS from SENSORS where ID = $sid");
+				$sq = mysqli_query($db, "select ID,NAME,DESCRIPTION,CSET,CATEGORY,TIMEOUT,MSTYPE,MSCRIPT,LSTYPE,LSCRIPT,WSTYPE,WSCRIPT,RTYPE,USECASE,CSPLIT,DELIMITER,WITHPARAMS,MODIFIED from SENSORS where ID = $sid");
 				$sensor = ($sq && mysqli_num_rows($sq) > 0) ? $sq->fetch_assoc() : null;
 			}
 		}
@@ -209,6 +230,26 @@ $sensorcount = mysqli_num_rows($sensorquery);
 				'wstype' => $sensor['WSTYPE'], 'wscript' => $sensor['WSCRIPT'],
 				'csplit' => (int)$sensor['CSPLIT'],
 			];
+		}
+		// The sensor's prior revisions (newest first): each snapshot's
+		// datetime labels a Revisions select option, and the embedded
+		// payload carries the per-OS type/script pairs so selecting a
+		// revision loads its code into the editors instantly, without a
+		// round trip.
+		$revisions = [];
+		if ($sensor !== null) {
+			$rq = mysqli_query($db, "select REV,TIMESTAMP,MSTYPE,MSCRIPT,LSTYPE,LSCRIPT,WSTYPE,WSCRIPT from SENSORHISTORY where ID = " . (int)$sensor['ID'] . " order by REV desc");
+			if ($rq) {
+				while ($rrow = mysqli_fetch_assoc($rq)) {
+					$revisions[] = [
+						'rev' => (int)$rrow['REV'],
+						'ts' => $rrow['TIMESTAMP'],
+						'lstype' => $rrow['LSTYPE'], 'lscript' => $rrow['LSCRIPT'],
+						'mstype' => $rrow['MSTYPE'], 'mscript' => $rrow['MSCRIPT'],
+						'wstype' => $rrow['WSTYPE'], 'wscript' => $rrow['WSCRIPT'],
+					];
+				}
+			}
 		}
 		?>
 		<?php
@@ -241,7 +282,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 		<input type="hidden" name="mscript" id="mhscript" value="">
 		<input type="hidden" name="wscript" id="whscript" value="">
 		<div style="width: 100%; text-align: right; margin: -50px auto 10px auto;">
-			<a href="/index.php?view=sensors"><button type="button" class="formgo" style="margin-right: 0px;">Cancel</button></a>
+			<a href="/index.php?view=sensors" id="cancel"><button type="button" class="formgo" style="margin-right: 0px;">Cancel</button></a>
 			<button id="save" class="formgo" disabled="disabled" style="margin-top: 5px; margin-right: 25px;">Save Sensor</button>
 		</div>
 
@@ -295,6 +336,17 @@ $sensorcount = mysqli_num_rows($sensorquery);
 			<tr><td style="background-color: #494a69; font-weight: normal;">Mac</td><td id="men" style="text-align: center; background-color: #494a69; font-weight: normal;"><span style="font-weight: bold; font-size: 13px; color: #cf1104;">&#10060;</span></td><td id="msize" style="background-color: #494a69; font-weight: normal; text-align: center;"></td></tr>
 			<tr><td style="background-color: #494a69; font-weight: normal;">Windows</td><td id="wen" style="text-align: center; background-color: #494a69; font-weight: normal;"><span style="font-weight: bold; font-size: 13px; color: #cf1104;">&#10060;</span></td><td id="wsize" style="background-color: #494a69; font-weight: normal; text-align: center;"></td></tr>
 			</table>
+			<?php if ($sensor !== null && count($revisions) > 0): ?>
+			<div style="margin-top: 20px;">
+				<span style="color: #444; font-weight: bold;">Revisions:</span><br>
+				<select id="revisions" size="5" style="width: 250px; font-size: 15px;">
+				<option value="Current" selected="selected">Current (<?php print htmlspecialchars($sensor['MODIFIED'], ENT_QUOTES); ?>)</option>
+				<?php foreach ($revisions as $r): ?>
+				<option value="<?php print $r['rev']; ?>"><?php print htmlspecialchars($r['ts'], ENT_QUOTES); ?></option>
+				<?php endforeach; ?>
+				</select>
+			</div>
+			<?php endif; ?>
 		</div>
 
 		<div class="module-content" style="padding: 0 1px 1px 0; width: 700px; margin-left: auto; margin-right: auto; margin-top: 30px;">
@@ -320,6 +372,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 					leditor.getSession().setNewLineMode("unix");
 					leditor.getSession().on('change', function() {
 						document.getElementById('lsize').innerHTML = formatBytes(leditor.session.getValue().length,1);
+						markDirty();
 						formCheck();
 						});
 				</script>
@@ -337,6 +390,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 					meditor.getSession().setNewLineMode("unix");
 					meditor.getSession().on('change', function() {
 						document.getElementById('msize').innerHTML = formatBytes(meditor.session.getValue().length,1);
+						markDirty();
 						formCheck();
 						});
 				</script>
@@ -354,6 +408,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 					weditor.getSession().setNewLineMode("unix");
 					weditor.getSession().on('change', function() {
 						document.getElementById('wsize').innerHTML = formatBytes(weditor.session.getValue().length,1);
+						markDirty();
 						formCheck();
 						});
 				</script>
@@ -366,6 +421,11 @@ $sensorcount = mysqli_num_rows($sensorquery);
 // form); the init block at the bottom of this script loads them into the
 // ace editors.
 var editData = <?php print $editdata === null ? 'null' : json_encode($editdata, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+
+// The sensor's prior revisions (null/empty on the create form and for a
+// sensor with no history); each entry carries the per-OS type/script pairs
+// so the Revisions select can load a snapshot without a round trip.
+var revisionData = <?php print json_encode($revisions, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 
 const tiElement = document.getElementById('timeout');
 
@@ -625,6 +685,75 @@ function initEditEditor(edsel, type, script) {
 		}
 	}
 
+// The form is "dirty" once the user changes anything after page load; the
+// Cancel button warns about unsaved changes while it is. formReady is set
+// after the init block has loaded the stored values, so the programmatic
+// loads on page load do not count as user changes.
+var formDirty = false;
+var formReady = false;
+function markDirty() { if (formReady) { formDirty = true; } }
+
+// Revisions select (edit mode): loading a state replaces the per-OS code
+// state (enable checkbox, type, script) with it, for every operating
+// system. The non-code fields (name, description, timeout, ...) are left
+// as the user has them.
+function loadRevisionState(state) {
+	document.getElementById('leselect').checked = (state.lscript !== null);
+	document.getElementById('meselect').checked = (state.mscript !== null);
+	document.getElementById('weselect').checked = (state.wscript !== null);
+	if (state.lscript !== null) { initEditEditor('Linux', state.lstype, state.lscript); }
+	else { disableEditor('Linux'); }
+	if (state.mscript !== null) { initEditEditor('Mac', state.mstype, state.mscript); }
+	else { disableEditor('Mac'); }
+	if (state.wscript !== null) { initEditEditor('Windows', state.wstype, state.wscript); }
+	else { disableEditor('Windows'); }
+	markDirty();
+	formCheck();
+	}
+var revSelect = document.getElementById('revisions');
+if (revSelect) {
+	revSelect.addEventListener('change', function () {
+		// The "Current" option reloads the most recent saved state
+		// (editData); every other option is a prior revision number.
+		if (revSelect.value === 'Current') {
+			if (editData) { loadRevisionState(editData); }
+			return;
+			}
+		var r = null;
+		(revisionData || []).forEach(function (entry) { if (entry.rev === parseInt(revSelect.value, 10)) { r = entry; } });
+		if (r) { loadRevisionState(r); }
+		});
+	}
+
+// Cancel: warn about unsaved changes before leaving (the form is dirty
+// once anything has changed since page load).
+document.getElementById('cancel').addEventListener('click', function (e) {
+	if (!formDirty) { return; } // let the anchor navigate
+	e.preventDefault();
+	LuminumOverlay.show({
+		title: 'Unsaved Changes',
+		message: 'You have made changes to this sensor that have not been saved. Leave without saving them?',
+		buttons: [
+			{ label: 'Leave', onclick: function () { LuminumOverlay.hide(); window.location.href = '/index.php?view=sensors'; } },
+			{ label: 'Keep Editing', onclick: function () { LuminumOverlay.hide(); } }
+		]
+	});
+	});
+
+// Save: confirm before submitting (the button is only enabled while the
+// form is complete and valid).
+document.getElementById('save').addEventListener('click', function (e) {
+	e.preventDefault();
+	LuminumOverlay.show({
+		title: 'Save Sensor',
+		message: 'Save these changes to the sensor?',
+		buttons: [
+			{ label: 'Save', onclick: function () { LuminumOverlay.hide(); document.getElementById('nsform').requestSubmit(); } },
+			{ label: 'Cancel', onclick: function () { LuminumOverlay.hide(); } }
+		]
+	});
+	});
+
 function formatBytes(bytes, decimals = 2) {
 	if (!+bytes) return '0'
 	const k = 1024
@@ -680,6 +809,11 @@ document.querySelector('#nsform input[name="pkgdesc"]').addEventListener('input'
 ['case', 'split', 'useparams', 'leselect', 'meselect', 'weselect'].forEach(id => document.getElementById(id).addEventListener('change', formCheck));
 document.getElementById('delimeter').addEventListener('input', formCheck);
 document.getElementById('nsform').addEventListener('submit', formCheck);
+// Dirty tracking: capture-phase listeners on the form cover every field's
+// input/change events (the ace editors mark dirty from their own change
+// handlers, below).
+document.getElementById('nsform').addEventListener('input', markDirty, true);
+document.getElementById('nsform').addEventListener('change', markDirty, true);
 
 if (editData) {
 	// Edit mode: load each stored platform into its editor (the enable
@@ -699,6 +833,8 @@ else {
 	disableEditor('Windows');
 	}
 formCheck();
+// The stored values are loaded; from here on, any change is a user change.
+formReady = true;
 </script>
 
 		<?php else: ?>
@@ -711,7 +847,9 @@ formCheck();
 
 <script src="layout/table.js"></script>
 <script>
-LuminumTable.attachTextFilter('sensorsfilter');
+LuminumTable.attachTextFilter('sensorsfilter', function (visible) {
+	document.getElementById('viscount').textContent = visible;
+	});
 
 function rowHighlight(idnum) {
 	var checkbox = document.getElementById("ID" + idnum);
@@ -779,7 +917,7 @@ function allCheck() {
 		if (checkbox.checked == true) { checkTrigger++; }
 		});
 
-	document.getElementById("selcount").textContent = checkTrigger;
+	document.getElementById("selcount").textContent = checkTrigger > 0 ? '(' + checkTrigger + ' Selected)' : '';
 
 	if (checkTrigger == checkboxes.length) {
 		document.getElementById("selectall").checked = "checked";
@@ -791,7 +929,7 @@ function removeLetters(str) {
 	return str.replace(/[a-zA-Z]/g, '');
 	}
 
-// Modify Selected opens the create form pre-filled with the selected
+// Edit Selected opens the create form pre-filled with the selected
 // sensor's stored values (rowHighlight() only enables the button for a
 // single selection).
 document.getElementById("modify").addEventListener('click', function () {

@@ -509,6 +509,84 @@ check "console: no success message on the list" \
 # font-size rule applies (the :has()-only rule was dropped by some browsers).
 check "console: sensor data row is marked luminum-row" \
     $(grep -qF '<tr class="luminum-row">' "$RUN/sensors.html" 2>/dev/null; echo $?)
+# The list header mirrors the Client Status table: displayed of total items,
+# with an empty selection span that allCheck() fills with "(N Selected)".
+check "console: sensor list top row is displayed of total items with an empty selection span" \
+    $(grep -q 'id="viscount"' "$RUN/sensors.html" 2>/dev/null \
+        && grep -q 'id="totcount"' "$RUN/sensors.html" 2>/dev/null \
+        && grep -qF 'items <span id="selcount"></span>' "$RUN/sensors.html" 2>/dev/null; echo $?)
+check "console: sensor list selection span renders (N Selected) when rows are checked" \
+    $(grep -qF "textContent = checkTrigger > 0 ? '(' + checkTrigger + ' Selected)' : ''" "$RUN/sensors.html" 2>/dev/null; echo $?)
+check "console: sensor list displayed count tracks the text filter" \
+    $(grep -qF "attachTextFilter('sensorsfilter', function (visible)" "$RUN/sensors.html" 2>/dev/null \
+        && grep -qF "document.getElementById('viscount').textContent = visible" "$RUN/sensors.html" 2>/dev/null; echo $?)
+
+# The Packages list header carries the same displayed-of-total + selection
+# counters as the Sensors and Client Status tables. The row-wiring check
+# needs at least one rendered row, and the console has no package create
+# handler yet, so seed a package directly in the database.
+dbq "insert into CONTENT.PACKAGES (NAME,DESCRIPTION,CSET,AUTHOR,CREATED) values ('Deploy Pkg Wiring','Package for the row-wiring checks',$CSET_ID,$AUTHOR_ID,now());"
+code=$(curl -k -s -o "$RUN/packages.html" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/index.php?view=packages")
+check "console: packages list renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+check "console: packages list top row is displayed of total items with an empty selection span" \
+    $(grep -q 'id="viscount"' "$RUN/packages.html" 2>/dev/null \
+        && grep -q 'id="totcount"' "$RUN/packages.html" 2>/dev/null \
+        && grep -qF 'items <span id="selcount"></span>' "$RUN/packages.html" 2>/dev/null; echo $?)
+check "console: packages list displayed count tracks the text filter" \
+    $(grep -qF "attachTextFilter('packagesfilter', function (visible)" "$RUN/packages.html" 2>/dev/null \
+        && grep -qF "document.getElementById('viscount').textContent = visible" "$RUN/packages.html" 2>/dev/null; echo $?)
+check "console: packages list selection span renders (N Selected) when rows are checked" \
+    $(grep -qF "n > 0 ? '(' + n + ' Selected)' : ''" "$RUN/packages.html" 2>/dev/null; echo $?)
+check "console: packages rows wire the checkbox to row highlight + selection count" \
+    $(grep -qF 'function rowHighlight(idnum)' "$RUN/packages.html" 2>/dev/null \
+        && grep -qF 'onclick="rowHighlight(' "$RUN/packages.html" 2>/dev/null \
+        && grep -qF '); pkgAllCheck();"' "$RUN/packages.html" 2>/dev/null; echo $?)
+
+# The Content Sets list carries the same displayed-of-total + selection
+# counters, and its Sensors/Packages columns must count the set's content
+# via the CSET foreign key (the old join on the child tables' primary keys
+# only matched rows whose own ID equaled the set's ID).
+csensors=$(dbq "select count(*) from CONTENT.SENSORS where CSET='$CSET_ID';")
+code=$(curl -k -s -o "$RUN/csets.html" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/index.php?view=csets")
+check "console: content sets list renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+check "console: content sets top row is displayed of total items with an empty selection span" \
+    $(grep -q 'id="viscount"' "$RUN/csets.html" 2>/dev/null \
+        && grep -q 'id="totcount"' "$RUN/csets.html" 2>/dev/null \
+        && grep -qF 'items <span id="selcount"></span>' "$RUN/csets.html" 2>/dev/null; echo $?)
+check "console: content sets displayed count tracks the text filter" \
+    $(grep -qF "attachTextFilter('csetsfilter', function (visible)" "$RUN/csets.html" 2>/dev/null \
+        && grep -qF "document.getElementById('viscount').textContent = visible" "$RUN/csets.html" 2>/dev/null; echo $?)
+check "console: content sets selection span renders (N Selected) when rows are checked" \
+    $(grep -qF "textContent = checkTrigger > 0 ? '(' + checkTrigger + ' Selected)' : ''" "$RUN/csets.html" 2>/dev/null; echo $?)
+check "console: content sets Sensors column counts the set's sensors via CSET" \
+    $(grep -qF "\"${CSET_ID}E\" style=\"background-color: #494a69; font-weight: normal;\">$csensors</td>" "$RUN/csets.html" 2>/dev/null; echo $?) \
+    "expected: $csensors"
+
+# The Scheduled Actions and Action History tables are still row-less stubs,
+# but their headers carry the same displayed-of-total + selection structure
+# so no markup change is needed when the rows land.
+code=$(curl -k -s -o "$RUN/actions.html" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/index.php?view=actions")
+check "console: scheduled actions list renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+check "console: scheduled actions top row is displayed of total Items with an empty selection span" \
+    $(grep -q 'id="viscount"' "$RUN/actions.html" 2>/dev/null \
+        && grep -q 'id="totcount"' "$RUN/actions.html" 2>/dev/null \
+        && grep -qF 'Items <span id="selcount"></span>' "$RUN/actions.html" 2>/dev/null; echo $?)
+check "console: scheduled actions displayed count tracks the text filter" \
+    $(grep -qF "attachTextFilter('actionsfilter', function (visible)" "$RUN/actions.html" 2>/dev/null \
+        && grep -qF "document.getElementById('viscount').textContent = visible" "$RUN/actions.html" 2>/dev/null; echo $?)
+code=$(curl -k -s -o "$RUN/actionhistory.html" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/index.php?view=actionhistory")
+check "console: action history list renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+check "console: action history top row is displayed of total Items with an empty selection span" \
+    $(grep -q 'id="viscount"' "$RUN/actionhistory.html" 2>/dev/null \
+        && grep -q 'id="totcount"' "$RUN/actionhistory.html" 2>/dev/null \
+        && grep -qF 'Items <span id="selcount"></span>' "$RUN/actionhistory.html" 2>/dev/null; echo $?)
+check "console: action history displayed count tracks the text filter" \
+    $(grep -qF "attachTextFilter('actionhistoryfilter', function (visible)" "$RUN/actionhistory.html" 2>/dev/null \
+        && grep -qF "document.getElementById('viscount').textContent = visible" "$RUN/actionhistory.html" 2>/dev/null; echo $?)
 
 # A duplicate name is rejected (case-insensitive collation) and adds no row.
 code=$(curl -k -s -D "$RUN/sensor-dup.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
@@ -566,8 +644,8 @@ check "console: anonymous sensor POST rejected (302)" $([ "$code" = "302" ]; ech
 check "anonymous POST inserted nothing" \
     $([ "$(dbq "select count(*) from CONTENT.SENSORS where NAME='Anon Sensor';")" = "0" ]; echo $?)
 
-# --- sensor edit form (Modify Selected -> action=edit) -----------------------
-# The list's Modify Selected button opens the create form pre-filled with the
+# --- sensor edit form (Edit Selected -> action=edit) -------------------------
+# The list's Edit Selected button opens the create form pre-filled with the
 # selected sensor's stored values; saving posts the same fields plus a hidden
 # sensorid, which switches the handler to an UPDATE (MODIFIED/EDITOR stamped).
 check "console: create form carries a null editor payload" \
@@ -584,13 +662,13 @@ check "console: edit form pre-fills the stored name and description" \
 check "console: edit form carries the hidden sensor id and the stored script" \
     $(grep -qF "name=\"sensorid\" value=\"$SENSOR_E\"" "$RUN/sensor-edit.html" 2>/dev/null \
         && grep -q "echo probe-output-42" "$RUN/sensor-edit.html" 2>/dev/null; echo $?)
-check "console: list wires Modify Selected to the edit form" \
+check "console: list wires Edit Selected to the edit form" \
     $(grep -q 'action=edit&id=' "$RUN/sensors.html" 2>/dev/null; echo $?)
-# Modify Selected enables on any single selection (the create form stamps the
+# Edit Selected enables on any single selection (the create form stamps the
 # logged-in user as AUTHOR, so the old lumadmin-author guard disabled the
 # button for every sensor a lumadmin session created); only the still-stub
 # Delete button keeps an author guard.
-check "console: Modify Selected is no longer gated on the lumadmin author" \
+check "console: Edit Selected is no longer gated on the lumadmin author" \
     $([ "$(grep -c 'innerText != "lumadmin"' "$RUN/sensors.html" 2>/dev/null)" = "1" ]; echo $?)
 
 # An unknown id renders an in-view error (the console header is already
@@ -632,7 +710,8 @@ check "console: edit form pre-fills the minute timeout and number rtype" \
 check "console: edit form editor payload carries the stored script" \
     $(grep -q "echo edit-probe-42" "$RUN/sensor-edit-x.html" 2>/dev/null; echo $?)
 
-# A valid edit updates the row and stamps MODIFIED/EDITOR.
+# A valid edit updates the row, stamps MODIFIED/EDITOR, and snapshots the
+# pre-edit state into SENSORHISTORY (revision 1).
 code=$(curl -k -s -D "$RUN/sensor-edit-post.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
     --data-urlencode "sensorid=$SENSOR_X" \
     --data-urlencode "pkgname=Deploy Edit Sensor" \
@@ -644,7 +723,7 @@ code=$(curl -k -s -D "$RUN/sensor-edit-post.hdr" -o /dev/null -w '%{http_code}' 
     --data-urlencode "category=none" \
     --data-urlencode "leselect=on" \
     --data-urlencode "lstype=shell" \
-    --data-urlencode "lscript=echo edit-probe-42" \
+    --data-urlencode "lscript=echo edit-probe-43" \
     "https://127.0.0.1:$WPORT/admin/sensors.php")
 check "console: valid sensor edit POST redirects (302)" $([ "$code" = "302" ]; echo $?) "got: $code"
 check "console: edit POST redirected to the plain list" \
@@ -656,6 +735,70 @@ check "sensor row updated with the posted fields" \
     "got: $erow"
 check "edit did not add a second row" \
     $([ "$(dbq "select count(*) from CONTENT.SENSORS where NAME='Deploy Edit Sensor';")" = "1" ]; echo $?)
+
+# The pre-edit state is snapshotted as revision 1 (the sensor's original
+# values), stamped with the editor and a timestamp.
+hrow=$(dbq "select concat(REV,'|',DESCRIPTION,'|',TIMEOUT,'|',LSCRIPT,'|',ifnull(TIMESTAMP,'NULL'),'|',EDITOR) from CONTENT.SENSORHISTORY where ID='$SENSOR_X' order by REV;")
+check "edit snapshotted the pre-edit state as revision 1" \
+    $([ "$(dbq "select if(DESCRIPTION='Sensor created for the edit-form checks' and TIMEOUT='2M' and LSCRIPT='echo edit-probe-42' and TIMESTAMP is not null and EDITOR='$AUTHOR_ID','yes','no') from CONTENT.SENSORHISTORY where ID='$SENSOR_X' and REV=1;")" = "yes" ]; echo $?) \
+    "got: $hrow"
+check "SENSORHISTORY carries the SENSOR_REV unique key" \
+    $([ "$(dbq "select count(*) from information_schema.STATISTICS where TABLE_SCHEMA='CONTENT' and TABLE_NAME='SENSORHISTORY' and INDEX_NAME='SENSOR_REV' and NON_UNIQUE=0;")" = "2" ]; echo $?)
+
+# A second edit snapshots the intermediate state as revision 2.
+code=$(curl -k -s -D "$RUN/sensor-edit2-post.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "sensorid=$SENSOR_X" \
+    --data-urlencode "pkgname=Deploy Edit Sensor" \
+    --data-urlencode "pkgdesc=Edited twice by the deploy test" \
+    --data-urlencode "timeout=45" \
+    --data-urlencode "tint=sec" \
+    --data-urlencode "rtype=text" \
+    --data-urlencode "contentset=$CSET_ID" \
+    --data-urlencode "category=none" \
+    --data-urlencode "leselect=on" \
+    --data-urlencode "lstype=shell" \
+    --data-urlencode "lscript=echo edit-probe-43" \
+    "https://127.0.0.1:$WPORT/admin/sensors.php")
+check "console: second edit POST redirects (302)" $([ "$code" = "302" ]; echo $?) "got: $code"
+hrow2=$(dbq "select concat(REV,'|',DESCRIPTION,'|',LSCRIPT) from CONTENT.SENSORHISTORY where ID='$SENSOR_X' and REV=2;")
+check "second edit snapshotted the intermediate state as revision 2" \
+    $([ "$(dbq "select if(DESCRIPTION='Edited by the deploy test' and LSCRIPT='echo edit-probe-43','yes','no') from CONTENT.SENSORHISTORY where ID='$SENSOR_X' and REV=2;")" = "yes" ]; echo $?) \
+    "got: $hrow2"
+
+# The edit form now offers the prior revisions: the multi-line Revisions
+# select lists each snapshot's datetime (newest first) and the embedded
+# payload carries the old scripts so a selection loads them into the
+# editors without a round trip.
+code=$(curl -k -s -o "$RUN/sensor-edit-rev.html" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/index.php?view=sensors&action=edit&id=$SENSOR_X")
+check "console: edit form with history renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+check "console: Revisions label is bold with a line break" \
+    $(grep -qF '<span style="color: #444; font-weight: bold;">Revisions:</span><br>' "$RUN/sensor-edit-rev.html" 2>/dev/null; echo $?)
+check "console: Revisions select lists both prior revisions' datetimes" \
+    $(grep -q 'id="revisions"' "$RUN/sensor-edit-rev.html" 2>/dev/null \
+        && grep -q 'size="5"' "$RUN/sensor-edit-rev.html" 2>/dev/null \
+        && grep -qE 'value="2">[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}<' "$RUN/sensor-edit-rev.html" 2>/dev/null \
+        && grep -qE 'value="1">[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}<' "$RUN/sensor-edit-rev.html" 2>/dev/null; echo $?)
+check "console: Revisions select leads with the Current option" \
+    $(grep -A1 'value="Current"' "$RUN/sensor-edit-rev.html" 2>/dev/null | grep -q 'value="2">'; echo $?)
+modts=$(dbq "select MODIFIED from CONTENT.SENSORS where ID='$SENSOR_X';")
+check "console: Current option is selected by default and shows the current datetime" \
+    $(grep -qF "value=\"Current\" selected=\"selected\">Current ($modts)</option>" "$RUN/sensor-edit-rev.html" 2>/dev/null; echo $?) "modts=[$modts]"
+check "console: revision payload carries the pre-edit script" \
+    $(grep -q 'revisionData' "$RUN/sensor-edit-rev.html" 2>/dev/null \
+        && grep -q 'echo edit-probe-42' "$RUN/sensor-edit-rev.html" 2>/dev/null; echo $?)
+check "console: create form has no Revisions select" \
+    $(! grep -q 'id="revisions"' "$RUN/sensor-new.html" 2>/dev/null; echo $?)
+
+# The list's "Modified By" column must show the editor's username, not the
+# raw user ID (the row's EDITOR column is an AUTH.USERS foreign key).
+code=$(curl -k -s -o "$RUN/sensor-list-editor.html" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/index.php?view=sensors")
+check "console: sensor list renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+check "console: Modified By column shows the editor's username" \
+    $(grep -qF "\"${SENSOR_X}H\" style=\"background-color: #494a69; font-weight: normal;\">lumadmin</td>" "$RUN/sensor-list-editor.html" 2>/dev/null; echo $?)
+check "console: Modified By column does not show the raw editor ID" \
+    $(! grep -qF "\"${SENSOR_X}H\" style=\"background-color: #494a69; font-weight: normal;\">$AUTHOR_ID</td>" "$RUN/sensor-list-editor.html" 2>/dev/null; echo $?)
 
 # Renaming to another sensor's name is rejected; the failure redirect keeps
 # the edit form's id so the overlay popup shows on it.
@@ -693,7 +836,7 @@ code=$(curl -k -s -D "$RUN/sensor-edit-os.hdr" -o /dev/null -w '%{http_code}' -b
 check "console: platform-less edit redirected with err=os" \
     $(grep -qi "Location:.*action=edit&id=$SENSOR_X&err=os" "$RUN/sensor-edit-os.hdr" 2>/dev/null; echo $?)
 check "platform-less edit changed nothing" \
-    $([ "$(dbq "select if(DESCRIPTION='Edited by the deploy test' and LSCRIPT='echo edit-probe-42','yes','no') from CONTENT.SENSORS where ID='$SENSOR_X';")" = "yes" ]; echo $?)
+    $([ "$(dbq "select if(DESCRIPTION='Edited twice by the deploy test' and LSCRIPT='echo edit-probe-43','yes','no') from CONTENT.SENSORS where ID='$SENSOR_X';")" = "yes" ]; echo $?)
 
 # An edit POST for a nonexistent sensor bounces to the list and inserts nothing.
 code=$(curl -k -s -D "$RUN/sensor-edit-ghost.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \

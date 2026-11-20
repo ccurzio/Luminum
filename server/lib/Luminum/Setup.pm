@@ -286,6 +286,9 @@ sub run {
 	unless (migrate_commands($dbh, $log)) {
 		return $fail->("CLIENTS.COMMANDS migration failed");
 		}
+	unless (migrate_sensor_history($dbh, $log)) {
+		return $fail->("CONTENT.SENSORHISTORY migration failed");
+		}
 	unless (setup_dbuser($dbh, $dbuser, $dbpass)) {
 		return $fail->("database user setup failed");
 		}
@@ -1214,6 +1217,24 @@ sub migrate_commands {
 	my $rc = eval { $dbh->do("alter table CLIENTS.COMMANDS modify SID tinytext NOT NULL"); 1 };
 	unless ($rc) { $log->("  CLIENTS.COMMANDS migration failed for SID: $@"); return 0; }
 	$log->("  CLIENTS.COMMANDS: changed SID from int to tinytext");
+	return 1;
+	}
+
+# SENSORHISTORY (the sensor revision snapshots) was added to schema.sql
+# without a key; the revision feature relies on one snapshot per
+# (sensor, revision), so add the unique key on existing installs.
+#
+sub migrate_sensor_history {
+	my ($dbh, $log) = @_;
+	my ($table) = map { $_->[0] }
+		@{ $dbh->selectall_arrayref(qq{select TABLE_NAME from information_schema.TABLES where TABLE_SCHEMA = 'CONTENT' and TABLE_NAME = 'SENSORHISTORY'}) || [] };
+	return 1 unless defined $table; # table absent: nothing to migrate
+	my ($have) = map { $_->[0] }
+		@{ $dbh->selectall_arrayref(qq{select INDEX_NAME from information_schema.STATISTICS where TABLE_SCHEMA = 'CONTENT' and TABLE_NAME = 'SENSORHISTORY' and INDEX_NAME = 'SENSOR_REV'}) || [] };
+	return 1 if defined $have; # key already present
+	my $rc = eval { $dbh->do("alter table CONTENT.SENSORHISTORY add unique key SENSOR_REV (ID, REV)"); 1 };
+	unless ($rc) { $log->("  CONTENT.SENSORHISTORY migration failed for SENSOR_REV: $@"); return 0; }
+	$log->("  CONTENT.SENSORHISTORY: added missing unique key SENSOR_REV (ID, REV)");
 	return 1;
 	}
 
