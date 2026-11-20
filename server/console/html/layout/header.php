@@ -137,8 +137,8 @@ $ienabled = $invinfo["CVAL"];
 					<a href="#" class="submenu-link" style="cursor: default;">Endpoints <span class="arrow">▸</span></a>
 					<div class="submenu-content">
 						<a href="/index.php?view=clientstatus">Client Status</a>
-						<a href="/index.php?view=missing">Missing Clients</a>
 						<a href="/index.php?view=egroups">Endpoint Groups</a>
+						<a href="/index.php?view=missing">Missing Clients</a>
 					</div>
 				</div>
 				<div class="submenu">
