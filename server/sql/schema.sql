@@ -368,6 +368,15 @@ CREATE TABLE IF NOT EXISTS `CPUHIST` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
+-- Table structure for table `MEMHIST`
+--
+
+CREATE TABLE IF NOT EXISTS `MEMHIST` (
+  `TIMESTAMP` datetime DEFAULT NULL,
+  `PCT` tinytext DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
 -- Current Database: `CLIENTS`
 --
 

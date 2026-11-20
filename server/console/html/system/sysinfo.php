@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/sysinfomap.php';
 
 if ($acctrole > 1) {
 	print "<div class=\"content\">\n";
@@ -22,6 +23,7 @@ else {
 	mysqli_select_db($db, "SYSTEM") or die( "<h5>Fatal Error</h5>\n\n<p>Unable to access database.\n</p>");
 	//$cpuhistquery = mysqli_query($db, "select TIMESTAMP,PCT from CPUHIST order by TIMESTAMP limit 8");
 	$cpuhistquery = mysqli_query($db, "select * from (select TIMESTAMP,PCT from CPUHIST order by TIMESTAMP desc limit 9) as sub order by TIMESTAMP asc");
+	$memhistquery = mysqli_query($db, "select * from (select TIMESTAMP,PCT from MEMHIST order by TIMESTAMP desc limit 9) as sub order by TIMESTAMP asc");
 	$cpumodel = str_replace("\n", "", shell_exec("/usr/bin/cat /proc/cpuinfo | /usr/bin/grep -m 1 'model name' | /usr/bin/sed -e \"s/^.*\\\\: //\""));
 	$cpuspeed = str_replace("\n", "",shell_exec("/usr/bin/cat /proc/cpuinfo | /usr/bin/grep -m 1 'MHz' | /usr/bin/sed -e \"s/^.*\\\\: //\""));
 	$cpucores = str_replace("\n", "",shell_exec("/usr/bin/cat /proc/cpuinfo | /usr/bin/grep 'processor' | /usr/bin/wc -l"));
@@ -32,6 +34,10 @@ else {
 	$disks = array_filter(preg_split("/\r\n|\n|\r/",shell_exec("/usr/bin/lsblk | /usr/bin/grep disk | /usr/bin/sed -E 's/^([A-Za-z0-9]+).*$/\\1/'")));
 	$ifaces = shell_exec("/usr/sbin/ifconfig | /usr/bin/grep inet | /usr/bin/grep -v 127.0 | /usr/bin/wc -l");
 	$disksinfo = array_filter(preg_split("/\r\n|\n|\r/",shell_exec("/usr/bin/lsblk -o MODEL,STATE,VENDOR,TYPE --nodeps | /usr/bin/grep -v VENDOR | /usr/bin/grep -E ' disk$' | /usr/bin/grep -vE '(DVD|CD)' | /usr/bin/sed -E 's/ *disk$//; s/\\s+running /,/g'")));
+	// Memory: /proc/meminfo carries the totals; dmidecode carries the
+	// per-slot module details (empty when it cannot read the SMBIOS data).
+	$meminfo = luminum_meminfo_parse((string) shell_exec("/usr/bin/cat /proc/meminfo"));
+	$memslots = luminum_mem_dmidecode_slots((string) shell_exec("/usr/sbin/dmidecode -t memory"));
 ?>
 
 <div class="content">
@@ -157,7 +163,37 @@ else {
 		<div id="Memory" class="configtab" style="display: none;">
 			<div class="row" style="margin-left: 20px; margin-top: 20px; margin-bottom: 20px; margin-right: 20px;">
 				<div class="column" style="width: 15%; min-width: 220px; pointer-events: none; user-select: none;"><img src="/images/ram.png" style="width: 200px; height: 200px;"></div>
-				<div class="column" style="width: 25%; text-align: left; padding-right: 5%;">
+				<div class="column" style="width: 40%; text-align: left; padding-right: 20px;">
+					<table style="border: 0;">
+						<tr><td style="width: 150px; text-align: left; color: #444; background-color: transparent; border: 0;">Total Memory:</td><td style="font-weight: normal; color: #444; background-color: transparent; border: 0; text-align: left;"><?php print luminum_mem_kb_human($meminfo["MemTotal"]); ?></td></tr>
+						<tr><td style="width: 150px; text-align: left; color: #444; background-color: transparent; border: 0;">Used:</td><td style="font-weight: normal; color: #444; background-color: transparent; border: 0; text-align: left;"><?php print luminum_mem_kb_human($meminfo["MemTotal"] - $meminfo["MemAvailable"]); ?></td></tr>
+						<tr><td style="width: 150px; text-align: left; color: #444; background-color: transparent; border: 0;">Free:</td><td style="font-weight: normal; color: #444; background-color: transparent; border: 0; text-align: left;"><?php print luminum_mem_kb_human($meminfo["MemFree"]); ?></td></tr>
+						<tr><td style="width: 150px; text-align: left; color: #444; background-color: transparent; border: 0;">Available:</td><td style="font-weight: normal; color: #444; background-color: transparent; border: 0; text-align: left;"><?php print luminum_mem_kb_human($meminfo["MemAvailable"]); ?></td></tr>
+						<tr><td style="width: 150px; text-align: left; color: #444; background-color: transparent; border: 0;">Swap Total:</td><td style="font-weight: normal; color: #444; background-color: transparent; border: 0; text-align: left;"><?php print luminum_mem_kb_human($meminfo["SwapTotal"]); ?></td></tr>
+						<tr><td style="width: 150px; text-align: left; color: #444; background-color: transparent; border: 0;">Swap Used:</td><td style="font-weight: normal; color: #444; background-color: transparent; border: 0; text-align: left;"><?php print luminum_mem_kb_human($meminfo["SwapTotal"] - $meminfo["SwapFree"]); ?></td></tr>
+						<tr><td style="width: 150px; text-align: left; color: #444; background-color: transparent; border: 0;">Swap Free:</td><td style="font-weight: normal; color: #444; background-color: transparent; border: 0; text-align: left;"><?php print luminum_mem_kb_human($meminfo["SwapFree"]); ?></td></tr>
+					</table>
+
+					<hr style="width: 97%; margin-top: 20px; margin-bottom: 20px; min-width: 400px;">
+
+					<table style="border: 0;">
+						<?php if (empty($memslots)) { ?>
+						<tr><td style="width: 150px; text-align: left; color: #444; background-color: transparent; border: 0;">Module Details:</td><td style="font-weight: normal; color: #444; background-color: transparent; border: 0; text-align: left;">Not available</td></tr>
+						<?php } else { $scnt = 0; foreach ($memslots as $slot) { $scnt++; $slotlabel = "Slot $scnt"; if ($slot["Locator"] !== "") { $slotlabel .= " (" . $slot["Locator"] . ")"; } ?>
+						<tr><td colspan="2" style="text-align: left; color: #444; background-color: transparent; border: 0;"><u><?php print $slotlabel; ?></u>:</td></tr>
+						<?php if (!$slot["installed"]) { ?>
+						<tr><td colspan="2" style="padding-left: 20px; text-align: left; color: #444; background-color: transparent; border: 0;">No Module Installed</td></tr>
+						<?php } else { ?>
+						<tr><td style="width: 150px; text-align: left; color: #444; background-color: transparent; border: 0;">Size:</td><td style="font-weight: normal; color: #444; background-color: transparent; border: 0; text-align: left;"><?php print $slot["Size"] !== "" ? $slot["Size"] : "Unknown"; ?></td></tr>
+						<tr><td style="width: 150px; text-align: left; color: #444; background-color: transparent; border: 0;">Type:</td><td style="font-weight: normal; color: #444; background-color: transparent; border: 0; text-align: left;"><?php print $slot["Type"] !== "" ? $slot["Type"] : "Unknown"; ?></td></tr>
+						<tr><td style="width: 150px; text-align: left; color: #444; background-color: transparent; border: 0;">Speed:</td><td style="font-weight: normal; color: #444; background-color: transparent; border: 0; text-align: left;"><?php print $slot["Speed"] !== "" ? $slot["Speed"] : "Unknown"; ?></td></tr>
+						<tr><td style="width: 150px; text-align: left; color: #444; background-color: transparent; border: 0;">Manufacturer:</td><td style="font-weight: normal; color: #444; background-color: transparent; border: 0; text-align: left;"><?php print $slot["Manufacturer"] !== "" ? $slot["Manufacturer"] : "Unknown"; ?></td></tr>
+						<tr><td style="width: 150px; text-align: left; color: #444; background-color: transparent; border: 0;">Part Number:</td><td style="font-weight: normal; color: #444; background-color: transparent; border: 0; text-align: left;"><?php print $slot["Part Number"] !== "" ? $slot["Part Number"] : "Unknown"; ?></td></tr>
+						<?php } } } ?>
+					</table>
+				</div>
+				<div class="column" style="width: 35%; padding-right: 20px;">
+					<canvas id="memchart" style="width: 100%; background-color: #fff; border: 1px solid #aaa; border-radius: 8px; padding: 5px 25px 5px 5px;"></canvas>
 				</div>
 			</div>
 		</div>
@@ -218,6 +254,48 @@ new Chart("cpuchart", {
 		title: {
 			display: true,
 			text: "CPU Usage History"
+			},
+		},
+	});
+</script>
+
+<script>
+<?php
+	$memxvals = "";
+	$memyvals = "";
+	while ($row = mysqli_fetch_assoc($memhistquery)) {
+		$tentry = $row["TIMESTAMP"];
+		$tentry = preg_replace('/\d\d\d\d-\d\d-\d\d (\d\d:\d\d):\d\d/',"$1",$tentry);
+		$muentry = $row["PCT"];
+		$memxvals .= "'$tentry',";
+		$memyvals .= "$muentry,";
+		}
+	$memxvals = substr($memxvals, 0, -1);
+	$memyvals = substr($memyvals, 0, -1);
+	print "const memXValues = [$memxvals];\n";
+	print "const memYValues = [$memyvals];\n\n";
+	?>
+
+new Chart("memchart", {
+	type: "line",
+	data: {
+		labels: memXValues,
+		datasets: [{
+			fill: false,
+			lineTension: 0,
+			backgroundColor: "rgba(100,150,220,0.1)",
+			borderColor: "rgba(100,150,220,1.0)",
+			data: memYValues
+			}]
+		},
+	options: {
+		legend: { display: false },
+		scales: { yAxes: [{ scaleLabel: { display: true, labelString: '% Utilization' }, ticks: { min: 0, max:100 } }],
+			xAxes: [{ scaleLabel: { display: true, labelString: 'Time' } }],
+			},
+		title: {
+			display: true,
+			text: "Memory Usage History"
 			},
 		},
 	});

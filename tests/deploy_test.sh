@@ -1040,6 +1040,69 @@ check "console: query results pre-wrap the multi-line sensor output" \
     $([ "$code" = "200" ] && grep -q "whiteSpace: 'pre-wrap'" "$RUN/queryresults.js" 2>/dev/null \
         && grep -q 'col.whiteSpace' "$RUN/table.js" 2>/dev/null; echo $?)
 
+# --- system information (Memory tab) -----------------------------------------
+# The Memory tab reads /proc/meminfo for the totals and dmidecode for the
+# per-slot module details, and its usage graph reads SYSTEM.MEMHIST
+# (populated by the not-yet-built memory health check, like CPUHIST).
+check "database: SYSTEM.MEMHIST table exists" \
+    $([ "$(dbq "select count(*) from information_schema.tables where table_schema='SYSTEM' and table_name='MEMHIST';")" = "1" ]; echo $?)
+code=$(curl -k -s -o "$RUN/sysinfo.html" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/index.php?view=sysinfo")
+check "console: System Information page renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+check "console: Memory tab markup present" \
+    $(grep -q 'id="Memory"' "$RUN/sysinfo.html" 2>/dev/null \
+        && grep -q '/images/ram.png' "$RUN/sysinfo.html" 2>/dev/null; echo $?)
+# The Total Memory and Swap Total values must match the live /proc/meminfo
+# within the page's one-decimal rounding.
+python3 - "$RUN/sysinfo.html" <<'EOF'
+import re, sys
+html = open(sys.argv[1]).read()
+def row(label):
+    m = re.search(label + r':</td><td[^>]*>([^<]*)</td>', html)
+    assert m, "row missing: " + label
+    return m.group(1).strip()
+def to_kb(val):
+    num, unit = val.split()
+    return float(num) * {'KB': 1, 'MB': 1024, 'GB': 1024**2, 'TB': 1024**3}[unit]
+meminfo = {}
+for line in open('/proc/meminfo'):
+    parts = line.split()
+    if len(parts) >= 2 and parts[1].isdigit():
+        meminfo[parts[0].rstrip(':')] = int(parts[1])
+for label, key in (('Total Memory', 'MemTotal'), ('Swap Total', 'SwapTotal')):
+    got, want = to_kb(row(label)), meminfo[key]
+    assert abs(got - want) / want < 0.01, "%s: %s vs %d kB" % (label, got, want)
+EOF
+check "console: Memory totals match /proc/meminfo" $? "see $RUN/sysinfo.html"
+check "console: Memory used/free/available/swap rows present" \
+    $(grep -q '>Used:</td>' "$RUN/sysinfo.html" 2>/dev/null \
+        && grep -q '>Free:</td>' "$RUN/sysinfo.html" 2>/dev/null \
+        && grep -q '>Available:</td>' "$RUN/sysinfo.html" 2>/dev/null \
+        && grep -q '>Swap Total:</td>' "$RUN/sysinfo.html" 2>/dev/null \
+        && grep -q '>Swap Used:</td>' "$RUN/sysinfo.html" 2>/dev/null \
+        && grep -q '>Swap Free:</td>' "$RUN/sysinfo.html" 2>/dev/null; echo $?)
+# The module section renders the per-slot details when dmidecode can read
+# the SMBIOS data, and the not-available row otherwise (this test container
+# exposes no DMI data, so the fallback is what renders here).
+flag=0
+grep -q 'Slot 1' "$RUN/sysinfo.html" 2>/dev/null || grep -q 'Not available' "$RUN/sysinfo.html" 2>/dev/null || flag=1
+check "console: Memory module section renders (slots or fallback)" "$flag"
+# The usage graph is wired like the CPU chart: a canvas, a title, and the
+# JS payload built from the MEMHIST rows.
+check "console: Memory usage graph wired to MEMHIST" \
+    $(grep -q 'id="memchart"' "$RUN/sysinfo.html" 2>/dev/null \
+        && grep -q 'Memory Usage History' "$RUN/sysinfo.html" 2>/dev/null \
+        && grep -q 'const memXValues' "$RUN/sysinfo.html" 2>/dev/null \
+        && grep -q 'const memYValues' "$RUN/sysinfo.html" 2>/dev/null; echo $?)
+# Seed two history samples: they must reach the chart payload in
+# oldest-first order, like the CPU chart's rows.
+dbq "insert into SYSTEM.MEMHIST (TIMESTAMP,PCT) values (now() - interval 30 minute, '42'), (now() - interval 15 minute, '57');"
+code=$(curl -k -s -o "$RUN/sysinfo2.html" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/index.php?view=sysinfo")
+check "console: System Information re-renders with history (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+check "console: MEMHIST samples reach the chart payload oldest first" \
+    $(grep -q 'const memYValues = \[42,57\];' "$RUN/sysinfo2.html" 2>/dev/null; echo $?)
+
 # --- inactivity session timeout ----------------------------------------------
 # Login must stamp the deadline from the UTIMEOUT server option (seeded 15M),
 # not the old hardcoded 60 minutes.
