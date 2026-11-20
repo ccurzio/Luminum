@@ -241,8 +241,8 @@ new Chart("cpuchart", {
 		datasets: [{
 			fill: false,
 			lineTension: 0,
-			backgroundColor: "rgba(200,100,100,1.0)",
-			borderColor: "rgba(200,100,100,0.1)",
+			backgroundColor: "rgba(200,100,100,0.1)",
+			borderColor: "rgba(200,100,100,1.0)",
 			data: yValues
 			}]
 		},

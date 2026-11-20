@@ -1094,6 +1094,13 @@ check "console: Memory usage graph wired to MEMHIST" \
         && grep -q 'Memory Usage History' "$RUN/sysinfo.html" 2>/dev/null \
         && grep -q 'const memXValues' "$RUN/sysinfo.html" 2>/dev/null \
         && grep -q 'const memYValues' "$RUN/sysinfo.html" 2>/dev/null; echo $?)
+# Both usage charts draw their line with a solid border color (the CPU
+# chart originally had the colors swapped, leaving a 0.1-alpha line
+# invisible against the white canvas).
+check "console: CPU chart draws its line with a solid border color" \
+    $(grep -qF 'borderColor: "rgba(200,100,100,1.0)"' "$RUN/sysinfo.html" 2>/dev/null; echo $?)
+check "console: Memory chart draws its line with a solid border color" \
+    $(grep -qF 'borderColor: "rgba(100,150,220,1.0)"' "$RUN/sysinfo.html" 2>/dev/null; echo $?)
 # Seed two history samples: they must reach the chart payload in
 # oldest-first order, like the CPU chart's rows.
 dbq "insert into SYSTEM.MEMHIST (TIMESTAMP,PCT) values (now() - interval 30 minute, '42'), (now() - interval 15 minute, '57');"
