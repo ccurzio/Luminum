@@ -73,8 +73,12 @@ $showsaved = !$showresults && isset($_GET['tab']) && $_GET['tab'] === 'saved';
 				<p style="margin-top: 20px;">
 				<span style="font-size: 20px; font-weight: bold; color: #444;">From</span> <select style="font-size: 15px; height: 30px; margin-left: 2px; margin-right: 2px;" name="targets" id="targets" class="target-dropdown" onchange="selectSuffix();"><option name="matching" value="matching" default="default">endpoints matching</option><option name="all" value="all">all endpoints</option></select> <span id="tsuffix" style="font-size: 20px; font-weight: bold; color: #444;"> the following condition:</span>
 				</p>
+				<!-- The condition row's operator dropdown and value field
+				     start disabled: layout/querybuilder.js enables them
+				     once the row's sensor field resolves to a valid
+				     sensor (applyRowType drives the disabled state). -->
 				<div id="from-list">
-					<div class="list-item"><img src="/icons/reorder-dis.png" class="drag-handle" style="vertical-align: middle;"> <input type="text" placeholder="Sensor" style="width: 200px;" maxlength="128"> <select class="row-dropdown" style="font-size: 15px; height: 30px; margin-left: 5px; margin-right: 10px;" name="fromop"><option name="equals" value="equals">==</option><option name="notequals" value="notequals">!=</option><option name="contains" value="contains">=~</option><option name="notcontains" value="notcontains">!~</option><option name="greaterthan" value="greaterthan">&gt;</option><option name="greaterthan" value="greaterorequal">&gt;=</option><option name="lessthan" value="lessthan">&lt;</option><option name="greaterthan" value="lessorequal">&lt;=</option></select><span class="bool-op" style="display: none; font-size: 15px; height: 30px; line-height: 30px; margin-left: 5px; margin-right: 10px; vertical-align: middle;">==</span><input type="text" placeholder="Value" maxlength="128"> <select class="bool-value" style="display: none; font-size: 15px; height: 30px; width: 100px;"><option value="TRUE">TRUE</option><option value="FALSE">FALSE</option></select> <img src="/icons/add.png" class="add" style="vertical-align: middle; margin-bottom: 3px;"></div>
+					<div class="list-item"><img src="/icons/reorder-dis.png" class="drag-handle" style="vertical-align: middle;"> <input type="text" placeholder="Sensor" style="width: 200px;" maxlength="128"> <select class="row-dropdown" style="font-size: 15px; height: 30px; margin-left: 5px; margin-right: 10px;" name="fromop" disabled="disabled"><option name="equals" value="equals">==</option><option name="notequals" value="notequals">!=</option><option name="contains" value="contains">=~</option><option name="notcontains" value="notcontains">!~</option><option name="greaterthan" value="greaterthan">&gt;</option><option name="greaterthan" value="greaterorequal">&gt;=</option><option name="lessthan" value="lessthan">&lt;</option><option name="greaterthan" value="lessorequal">&lt;=</option></select><span class="bool-op" style="display: none; font-size: 15px; height: 30px; line-height: 30px; margin-left: 5px; margin-right: 10px; vertical-align: middle;">==</span><input type="text" placeholder="Value" maxlength="128" disabled="disabled"> <select class="bool-value" style="display: none; font-size: 15px; height: 30px; width: 100px;"><option value="TRUE">TRUE</option><option value="FALSE">FALSE</option></select> <img src="/icons/add.png" class="add" style="vertical-align: middle; margin-bottom: 3px;"></div>
 				</div>
 			</div>
 		</div>
@@ -82,16 +86,19 @@ $showsaved = !$showresults && isset($_GET['tab']) && $_GET['tab'] === 'saved';
 			<!-- The Saved Queries table: the console's standard table - the
 			     displayed-of-total count with the (N Selected) suffix, the
 			     right-hand filter box, the checkbox column, and the footer -
-			     the same structure as the main table pages. Saved queries
-			     have no storage yet, so the table renders its empty state;
-			     rows (checkbox id="ID<n>", class "savedqueryrow") render
-			     here once saving exists. -->
+			     the same structure as the main table pages. The Structure
+			     column renders the query's full text-based interpretation
+			     (LuminumQueryBuilder.queryStructure on the saved query's
+			     payload). Saved queries have no storage yet, so the
+			     table renders its empty state; rows (checkbox id="ID<n>",
+			     class "savedqueryrow", cells <n>A..E) render here once
+			     saving exists. -->
 			<div style="padding: 5px 20px 20px 20px;">
 				<table style="margin-top: 10px;">
-				<tr><td colspan="4"><div style="position: absolute; padding-top: 7px; padding-left: 5px;"><span id="sqviscount">0</span> of <span id="sqtotcount">0</span> items <span id="sqselcount"></span></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="savedqueriesfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" disabled="disabled" maxlength="64"></div></td></tr>
-				<tr><td style="width: 15px;"><input type="checkbox" disabled="disabled"></td><td>Query Name</td><td style="width: 100px;">Author</td><td style="width: 100px;">Create Date</td></tr>
-				<tr><td colspan="4" style="text-align: center; background-color: #494a69; font-weight: normal; font-style: italic;">No Results</td></tr>
-				<tr style="height: 35px;"><td colspan="4"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;"><i>Query Completed in 0.00 Seconds</i></div></td></tr>
+				<tr><td colspan="5"><div style="position: absolute; padding-top: 7px; padding-left: 5px;"><span id="sqviscount">0</span> of <span id="sqtotcount">0</span> items <span id="sqselcount"></span></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="savedqueriesfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" disabled="disabled" maxlength="64"></div></td></tr>
+				<tr><td style="width: 15px;"><input type="checkbox" disabled="disabled"></td><td>Query Name</td><td>Structure</td><td style="width: 100px;">Author</td><td style="width: 100px;">Create Date</td></tr>
+				<tr><td colspan="5" style="text-align: center; background-color: #494a69; font-weight: normal; font-style: italic;">No Results</td></tr>
+				<tr style="height: 35px;"><td colspan="5"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;"><i>Query Completed in 0.00 Seconds</i></div></td></tr>
 				</table>
 			</div>
 		</div>
@@ -119,6 +126,11 @@ window.addEventListener('DOMContentLoaded', () => {
 	updateDragHandleIcons(document.getElementById('from-list'));
 	attachHandlers();
 	initSortable();
+	// The builder leads with the first retrieve field: it takes focus on
+	// load (after initSortable, which replaces the list containers with
+	// clones, so the element must be re-queried)
+	const firstField = document.querySelector('#get-list .list-item input');
+	if (firstField) { firstField.focus(); }
 	});
 
 let initialGetList = '';
@@ -152,6 +164,11 @@ function addRow(event) {
 	// group's trailing AND/OR onto the group's last row, which read as an
 	// operator inside the group.
 	listItem.after(newRow);
+
+	// The new row's first field takes focus so the operator can type
+	// immediately
+	const newField = newRow.querySelector('input');
+	if (newField) { newField.focus(); }
 
 	// Update the whole edited list (not just the group) so remove buttons and
 	// drag handles stay consistent whether the row was added at top level or
@@ -378,6 +395,10 @@ function toggleGroup(event) {
 		newRow.querySelectorAll('select').forEach(select => select.selectedIndex = 0);
 		newRow.querySelectorAll('.logical-operator, .logical-operator-br, .group-button, .remove').forEach(el => el.remove());
 		groupContainer.appendChild(newRow);
+		// The group's new empty row takes focus after the sortable re-init
+		// (which replaces the containers with clones) - mark it so it can
+		// be re-found in the live tree
+		newRow.setAttribute('data-focusrow', '1');
 		}
 	else {
 		// Collapse: the ungroup button sits above the group it collapses, so
@@ -410,6 +431,14 @@ function toggleGroup(event) {
 	insertLogicalOperators(fromContainer);
 	attachHandlers();
 	initSortable();
+	// A newly grouped row takes focus (the containers were replaced with
+	// clones by initSortable, so re-find the marked row in the live tree)
+	const focusRow = document.querySelector('#from-list [data-focusrow]');
+	if (focusRow) {
+		focusRow.removeAttribute('data-focusrow');
+		const field = focusRow.querySelector('input');
+		if (field) { field.focus(); }
+		}
 	}
 
 function selectSuffix() {
@@ -532,6 +561,7 @@ function sqRowHighlight(idnum) {
 	document.getElementById(idnum + "B").style.backgroundColor = bgcolor;
 	document.getElementById(idnum + "C").style.backgroundColor = bgcolor;
 	document.getElementById(idnum + "D").style.backgroundColor = bgcolor;
+	document.getElementById(idnum + "E").style.backgroundColor = bgcolor;
 	}
 
 function sqAllToggle() {

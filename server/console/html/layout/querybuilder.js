@@ -12,14 +12,18 @@
 // dropdown of sensors whose name starts with the text being typed) and
 // re-points each condition row's operator options at the chosen sensor's
 // result type (CONTENT.SENSORS.RTYPE): text/ipaddress compare as strings,
-// number/datetime numerically.
+// number/datetime numerically. A condition row's operator dropdown and
+// value field stay disabled until the row's sensor field resolves to a
+// valid sensor, and queryStructure renders a query payload as the full
+// text-based interpretation the Saved Queries table's Structure column
+// shows.
 //
 // The pure functions (findSensor, resolveSensorId, filterSensors,
-// opsForType, condBlocksToTree, findUnresolved, findUnresolvedAll) are
-// DOM-free so they can be unit-tested under Node. The DOM helpers
-// (applyOpsToSelect, applyRowType, collectCondBlocks, condRowsStatus,
-// invalidSensorNames, submitEnabled, buildQueryPayload, init) only run in
-// the browser.
+// opsForType, condBlocksToTree, findUnresolved, findUnresolvedAll,
+// queryStructure) are DOM-free so they can be unit-tested under Node. The
+// DOM helpers (applyOpsToSelect, applyRowType, normalizeRows,
+// collectCondBlocks, condRowsStatus, invalidSensorNames, submitEnabled,
+// buildQueryPayload, init) only run in the browser.
 //
 (function (root, factory) {
 	if (typeof module === 'object' && module.exports) {
@@ -272,9 +276,12 @@
 	// <select> and the value <input> are hidden, the row is tagged "bool-row",
 	// and the bool controls are shown. Any other sensor (or an empty/unknown
 	// field) shows the operator <select> (its options set to the sensor's
-	// result type) and the value <input>. collectCondBlocks and condRowsStatus
-	// read the "bool-row" class to know which controls hold the row's value
-	// and op. Retrieve rows carry none of these controls, so this is a no-op.
+	// result type) and the value <input>. The operator <select> and the value
+	// <input> are disabled while the field is empty or names no sensor -
+	// they only take a value for a row whose sensor resolves - and enabled
+	// once it does. collectCondBlocks and condRowsStatus read the "bool-row"
+	// class to know which controls hold the row's value and op. Retrieve rows
+	// carry none of these controls, so this is a no-op.
 	function applyRowType(catalog, input) {
 		let row = input;
 		while (row && !(row.classList && row.classList.contains('list-item'))) { row = row.parentElement || null; }
@@ -290,14 +297,14 @@
 
 		if (isBool) {
 			if (!row.classList.contains('bool-row')) { row.classList.add('bool-row'); }
-			if (opSel) { opSel.style.display = 'none'; }
-			if (valInp) { valInp.style.display = 'none'; }
+			if (opSel) { opSel.style.display = 'none'; opSel.disabled = !sensor; }
+			if (valInp) { valInp.style.display = 'none'; valInp.disabled = !sensor; }
 			if (boolOp) { boolOp.style.display = 'inline-block'; }
 			if (boolVal) { boolVal.style.display = ''; }
 		} else {
 			if (row.classList.contains('bool-row')) { row.classList.remove('bool-row'); }
-			if (opSel) { opSel.style.display = ''; }
-			if (valInp) { valInp.style.display = ''; }
+			if (opSel) { opSel.style.display = ''; opSel.disabled = !sensor; }
+			if (valInp) { valInp.style.display = ''; valInp.disabled = !sensor; }
 			if (boolOp) { boolOp.style.display = 'none'; }
 			if (boolVal) { boolVal.style.display = 'none'; }
 			if (opSel) { applyOpsToSelect(opSel, sensor ? opsForType(sensor.rtype) : DEFAULT_OPS); }
@@ -343,6 +350,63 @@
 			payload.conditions = tree;
 		}
 		return { payload: payload };
+	}
+
+	// The full text-based interpretation of a query payload (the
+	// /api/commands.php statement buildQueryPayload builds) - the content of
+	// the Saved Queries table's Structure column:
+	//   "Retrieve Hostname, CPU Load from all endpoints"
+	//   "Retrieve Hostname from endpoints matching: Hostname matches web-01 AND CPU Load > 10"
+	// The condition tree is walked in-order: it folds left-associatively
+	// from the builder's rows, so the in-order traversal is exactly the row
+	// sequence with the AND/OR between the rows. Each leaf renders as
+	// "<sensor> <operator> <value>", the operator as the sensor's
+	// result-type word label where the builder offers one (text/ipaddress:
+	// matches / does not match / contains / does not contain), the
+	// comparison symbol for number/datetime, and "is" for a bool sensor's
+	// "==" (its value is TRUE/FALSE). A sid missing from the catalog
+	// renders as "Sensor <id>".
+	function queryStructure(catalog, payload) {
+		if (!payload) { return ''; }
+		const byId = {};
+		for (const s of catalog) { byId[s.id] = s; }
+		const name = (sid) => {
+			const s = byId[sid];
+			return s ? s.name : 'Sensor ' + sid;
+		};
+		const opLabel = (sid, op) => {
+			const s = byId[sid];
+			const rt = s ? String(s.rtype === null || s.rtype === undefined ? '' : s.rtype).toLowerCase() : '';
+			if (rt === 'bool') { return 'is'; }
+			if (rt === 'text' || rt === 'ipaddress') {
+				switch (op) {
+					case '==': return 'matches';
+					case '!=': return 'does not match';
+					case '=~': return 'contains';
+					case '!~': return 'does not contain';
+					default: return op;
+				}
+			}
+			return op;
+		};
+		const parts = [];
+		(function walk(node) {
+			if (!node) { return; }
+			if (node.logic) {
+				walk(node.left);
+				parts.push(node.logic);
+				walk(node.right);
+			} else {
+				parts.push(name(node.sid) + ' ' + opLabel(node.sid, node.op) + ' ' + node.value);
+			}
+		})(payload.conditions);
+		const sensors = (payload.sensors || []).map((s) => name(s.sid)).join(', ');
+		const head = 'Retrieve ' + sensors + ' from ';
+		if (payload.conditions) {
+			const cond = parts.join(' ');
+			return head + 'endpoints matching' + (cond !== '' ? ': ' + cond : '');
+		}
+		return head + 'all endpoints';
 	}
 
 	// Every sensor the operator typed (the retrieve fields and, when the
@@ -394,6 +458,24 @@
 		const fromContainer = document.getElementById('from-list');
 		const cs = (all || !fromContainer) ? 'ok' : condRowsStatus(fromContainer);
 		return count > 0 && cs === 'ok' && invalidSensorNames(catalog).length === 0;
+	}
+
+	// Re-point every condition row at the sensor its field currently holds:
+	// the operator <select>'s options follow the sensor's result type, and
+	// the operator/value disabled state follows whether the sensor resolves.
+	// A freshly added condition row is a clone of an existing one, so its
+	// operator <select> carries the source row's options; every row addition
+	// (the add button, the group button, Reset) is a click, so normalizing
+	// on the document click covers them all - and it re-reads the live
+	// from-list each time, so it survives the page's Sortable init replacing
+	// the container with a clone.
+	function normalizeRows(catalog) {
+		const fl = document.getElementById('from-list');
+		if (!fl || !fl.querySelectorAll) { return; }
+		for (const r of Array.from(fl.querySelectorAll('.list-item'))) {
+			const inp = r.querySelector('input');
+			if (inp) { applyRowType(catalog, inp); }
+		}
 	}
 
 	// The sensor autocomplete: one floating list, repositioned under the
@@ -553,26 +635,11 @@
 		document.addEventListener('keydown', onKeyDown);
 		document.addEventListener('mousedown', onDocMouseDown);
 
-		// A freshly added condition row is a clone of an existing one, so its
-		// operator <select> carries the source row's options; re-point every
-		// row at the set for the sensor its field holds. Every row addition
-		// (the add button, the group button, Reset) is a click, so normalizing
-		// on the document click covers them all - and it re-reads the live
-		// from-list each time, so it survives the page's Sortable init
-		// replacing the container with a clone. Clicks that open a native
-		// <select> are skipped so a select's options are never rewritten
-		// mid-choice.
-		function normalizeRows() {
-			const fl = document.getElementById('from-list');
-			if (!fl || !fl.querySelectorAll) { return; }
-			for (const r of Array.from(fl.querySelectorAll('.list-item'))) {
-				const inp = r.querySelector('input');
-				if (inp) { applyRowType(catalog, inp); }
-			}
-		}
+		// Clicks that open a native <select> are skipped so a select's
+		// options are never rewritten mid-choice.
 		function onDocClick(e) {
 			if (e.target && e.target.closest && e.target.closest('select')) { return; }
-			normalizeRows();
+			normalizeRows(catalog);
 		}
 		document.addEventListener('click', onDocClick);
 	}
@@ -585,6 +652,11 @@
 		const btn = document.getElementById('querygo');
 		if (!btn) { return; }
 		initAutocomplete(catalog);
+		// The condition rows' operator dropdowns and value fields start
+		// disabled (the page's template row carries disabled="disabled"):
+		// applyRowType enables them once a row's sensor resolves. Normalize
+		// once on load so the initial row's state matches its (empty) field.
+		normalizeRows(catalog);
 
 		function updateSubmitState() {
 			btn.disabled = !submitEnabled(catalog);
@@ -655,6 +727,7 @@
 		filterSensors: filterSensors,
 		applyOpsToSelect: applyOpsToSelect,
 		applyRowType: applyRowType,
+		normalizeRows: normalizeRows,
 		condBlocksToTree: condBlocksToTree,
 		collectCondBlocks: collectCondBlocks,
 		findUnresolved: findUnresolved,
@@ -663,6 +736,7 @@
 		invalidSensorNames: invalidSensorNames,
 		submitEnabled: submitEnabled,
 		buildQueryPayload: buildQueryPayload,
+		queryStructure: queryStructure,
 		init: init
 	};
 }));

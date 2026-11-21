@@ -165,10 +165,16 @@ function res(uid, sensor, status, output, err) {
 
 (function () {
 	var q = { sensors: [{ sid: 7, name: "Is Windows" }, { sid: 9, name: "CPU Load" }] };
-	var cfg = Q.buildConfig(q, 3);
+	// A duplicate row (count 2) -> the Count column is present.
+	var rows = [
+		{ id: 0, count: 2, s7: "TRUE", s9: "1" },
+		{ id: 1, count: 1, s7: "FALSE", s9: "2" },
+		{ id: 2, count: 1, s7: "MAYBE", s9: "3" }
+	];
+	var cfg = Q.buildConfig(q, rows);
 	ok("config: the first column is the select checkbox",
 		cfg.columns[0].type === "checkbox" && cfg.columns[0].header.indexOf('id="qrselectall"') >= 0);
-	ok("config: the sensors in query order, Count last",
+	ok("config: a duplicate row -> the sensors in query order, Count last",
 		eq(cfg.columns.slice(1).map(function (c) { return c.label; }), ["Is Windows", "CPU Load", "Count"]));
 	ok("config: the Count column is centered",
 		cfg.columns[3].key === "count" && cfg.columns[3].align === "center");
@@ -181,11 +187,32 @@ function res(uid, sensor, status, output, err) {
 	ok("config: rows present -> 'No Results' empty message", cfg.emptyMessage === "No Results");
 })();
 
+// The Count column appears only when at least one answer is shared by more
+// than one endpoint (a duplicate row) - with all-unique answers every count
+// would be 1 and the column carries nothing.
 (function () {
 	var q = { sensors: [{ sid: 7, name: "Is Windows" }] };
-	var cfg = Q.buildConfig(q, 0);
-	ok("config: a single sensor -> checkbox, one column plus Count",
-		eq(cfg.columns.slice(1).map(function (c) { return c.label; }), ["Is Windows", "Count"]));
+	var unique = [
+		{ id: 0, count: 1, s7: "TRUE" },
+		{ id: 1, count: 1, s7: "FALSE" }
+	];
+	var cfg = Q.buildConfig(q, unique);
+	ok("config: all-unique answers -> no Count column",
+		eq(cfg.columns.slice(1).map(function (c) { return c.label; }), ["Is Windows"]));
+	var dup = [
+		{ id: 0, count: 3, s7: "TRUE" },
+		{ id: 1, count: 1, s7: "FALSE" }
+	];
+	var cfg2 = Q.buildConfig(q, dup);
+	ok("config: one shared answer -> the Count column appears",
+		eq(cfg2.columns.slice(1).map(function (c) { return c.label; }), ["Is Windows", "Count"]));
+})();
+
+(function () {
+	var q = { sensors: [{ sid: 7, name: "Is Windows" }] };
+	var cfg = Q.buildConfig(q, []);
+	ok("config: no rows yet -> no Count column (no duplicates to count)",
+		eq(cfg.columns.slice(1).map(function (c) { return c.label; }), ["Is Windows"]));
 	ok("config: no rows yet -> 'No results yet' empty message", cfg.emptyMessage === "No results yet");
 })();
 
@@ -225,18 +252,22 @@ ok("page: ?tab=saved shows the Saved tab",
 // The Saved Queries tab carries the console's standard table (the old
 // "No saved queries yet." placeholder is gone): the displayed-of-total
 // count with the (N Selected) suffix span, the right-hand filter box, the
-// checkbox / Query Name / Author / Create Date columns, and the empty
-// state - saved queries have no storage yet, so the table renders 0 of 0.
+// checkbox / Query Name / Structure / Author / Create Date columns, and the
+// empty state - saved queries have no storage yet, so the table renders 0
+// of 0. The Structure column renders the query's full text-based
+// interpretation (LuminumQueryBuilder.queryStructure).
 ok("page: the Saved tab's placeholder text is gone", pageSrc.indexOf("No saved queries yet.") < 0);
 ok("page: the Saved tab's top row shows displayed of total items",
 	pageSrc.indexOf('<span id="sqviscount">0</span> of <span id="sqtotcount">0</span> items <span id="sqselcount"></span>') >= 0);
 ok("page: the Saved tab's top row carries the filter box", pageSrc.indexOf('id="savedqueriesfilter"') >= 0);
-// The Query Name column carries no fixed width: it is the flexible column
-// that absorbs the table's 100% width (the Computer Name column's role on
-// the Client Status page), which keeps the 15px checkbox column from being
-// stretched by the auto table layout.
-ok("page: the Saved tab's columns are Query Name, Author, Create Date",
-	/<td>Query Name<\/td><td style="width: 100px;">Author<\/td><td style="width: 100px;">Create Date<\/td>/.test(pageSrc));
+// The Query Name and Structure columns carry no fixed width: they are the
+// flexible columns that absorb the table's 100% width (the Computer Name
+// column's role on the Client Status page), which keeps the 15px checkbox
+// column from being stretched by the auto table layout.
+ok("page: the Saved tab's columns are Query Name, Structure, Author, Create Date",
+	/<td>Query Name<\/td><td>Structure<\/td><td style="width: 100px;">Author<\/td><td style="width: 100px;">Create Date<\/td>/.test(pageSrc));
+ok("page: the Saved tab's rows span the five columns",
+	/<tr><td colspan="5" style="text-align: center; background-color: #494a69; font-weight: normal; font-style: italic;">No Results<\/td><\/tr>/.test(pageSrc));
 // The table sits inside the blue content box with the standard module
 // padding around it (the tab's module-content is padding: 0 for the tab bar).
 ok("page: the Saved tab's table carries the standard module inset",

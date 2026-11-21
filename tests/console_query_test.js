@@ -721,6 +721,91 @@ ok("applyRowType: an empty field on a full row leaves it in standard mode", (fun
 	return !r.row.classList.contains("bool-row") && r.op.style.display === "";
 })());
 
+// The operator dropdown and the value field stay disabled until the row's
+// sensor field resolves to a valid sensor.
+ok("applyRowType: an empty field disables the operator and value controls", (function () {
+	const r = condRowFull("");
+	Q.applyRowType(catalogR, r.sensor);
+	return r.op.disabled === true && r.value.disabled === true;
+})());
+ok("applyRowType: an unresolved sensor disables the operator and value controls", (function () {
+	const r = condRowFull("Nope");
+	Q.applyRowType(catalogR, r.sensor);
+	return r.op.disabled === true && r.value.disabled === true;
+})());
+ok("applyRowType: a valid sensor enables the operator and value controls", (function () {
+	const r = condRowFull("CPU Load");
+	Q.applyRowType(catalogR, r.sensor);
+	return r.op.disabled === false && r.value.disabled === false;
+})());
+ok("applyRowType: a bool sensor enables the controls it hides", (function () {
+	const r = condRowFull("Root FS Encrypted");
+	Q.applyRowType(catalogR, r.sensor);
+	return r.op.disabled === false && r.value.disabled === false && r.boolVal.style.display === "";
+})());
+ok("applyRowType: clearing a valid sensor re-disables the controls", (function () {
+	const r = condRowFull("CPU Load");
+	Q.applyRowType(catalogR, r.sensor);
+	r.sensor.value = "";
+	Q.applyRowType(catalogR, r.sensor);
+	return r.op.disabled === true && r.value.disabled === true;
+})());
+ok("applyRowType: switching to an unresolved sensor re-disables the controls", (function () {
+	const r = condRowFull("CPU Load");
+	Q.applyRowType(catalogR, r.sensor);
+	r.sensor.value = "Nope";
+	Q.applyRowType(catalogR, r.sensor);
+	return r.op.disabled === true && r.value.disabled === true;
+})());
+
+// --- queryStructure (the Saved Queries table's Structure column) ----------
+ok("structure: all endpoints, two sensors",
+	Q.queryStructure(catalogR, { target: "all", action: "query", sensors: [{ sid: 1 }, { sid: 3 }] }) ===
+		"Retrieve Hostname, CPU Load from all endpoints");
+ok("structure: matching, a text sensor's '==' renders as 'matches'",
+	Q.queryStructure(catalogR, {
+		target: "all", action: "query", sensors: [{ sid: 1 }],
+		conditions: { sid: 1, op: "==", value: "web-01" }
+	}) === "Retrieve Hostname from endpoints matching: Hostname matches web-01");
+ok("structure: the text word operators (contains / does not contain)",
+	Q.queryStructure(catalogR, {
+		target: "all", action: "query", sensors: [{ sid: 2 }],
+		conditions: { logic: "OR", left: { sid: 2, op: "=~", value: "probe" }, right: { sid: 2, op: "!~", value: "junk" } }
+	}) === "Retrieve Deploy Test Sensor from endpoints matching: Deploy Test Sensor contains probe OR Deploy Test Sensor does not contain junk");
+ok("structure: an ipaddress sensor uses the text word operators",
+	Q.queryStructure(catalogR, {
+		target: "all", action: "query", sensors: [{ sid: 6 }],
+		conditions: { sid: 6, op: "!=", value: "10.0.0.1" }
+	}) === "Retrieve Default Gateway from endpoints matching: Default Gateway does not match 10.0.0.1");
+ok("structure: the numeric operators keep their symbols",
+	Q.queryStructure(catalogR, {
+		target: "all", action: "query", sensors: [{ sid: 3 }],
+		conditions: { logic: "AND", left: { sid: 3, op: ">", value: "10" }, right: { sid: 4, op: "<=", value: "90" } }
+	}) === "Retrieve CPU Load from endpoints matching: CPU Load > 10 AND Uptime <= 90");
+ok("structure: a bool sensor's '==' renders as 'is'",
+	Q.queryStructure(catalogR, {
+		target: "all", action: "query", sensors: [{ sid: 7 }],
+		conditions: { sid: 7, op: "==", value: "TRUE" }
+	}) === "Retrieve Root FS Encrypted from endpoints matching: Root FS Encrypted is TRUE");
+ok("structure: the in-order walk reproduces the builder's row sequence",
+	Q.queryStructure(catalogR, {
+		target: "all", action: "query", sensors: [{ sid: 1 }],
+		conditions: { logic: "OR",
+			left: { logic: "AND", left: { sid: 1, op: "==", value: "a" }, right: { sid: 3, op: ">", value: "10" } },
+			right: { sid: 1, op: "!=", value: "b" } }
+	}) === "Retrieve Hostname from endpoints matching: Hostname matches a AND CPU Load > 10 OR Hostname does not match b");
+ok("structure: a sensor with no result type keeps the raw operator",
+	Q.queryStructure(catalog, {
+		target: "all", action: "query", sensors: [{ sid: 1 }],
+		conditions: { sid: 1, op: "==", value: "a" }
+	}) === "Retrieve Hostname from endpoints matching: Hostname == a");
+ok("structure: an unknown sid renders as 'Sensor <id>'",
+	Q.queryStructure(catalogR, {
+		target: "all", action: "query", sensors: [{ sid: 99 }],
+		conditions: { sid: 99, op: "==", value: "x" }
+	}) === "Retrieve Sensor 99 from endpoints matching: Sensor 99 == x");
+ok("structure: a null payload renders empty", Q.queryStructure(catalogR, null) === "");
+
 console.log("-".repeat(60));
 if (failures) {
 	console.log("FAILED: " + failures + " check(s) failed");

@@ -12,9 +12,11 @@
 // per sensor, titled with the sensor's name. The rows are the query's
 // unique answers - one row per
 // combination of sensor values, with endpoints that answered identically in
-// every sensor column sharing a row - and the Count column shows how many
+// every sensor column sharing a row. The Count column shows how many
 // endpoints returned that answer (15 endpoints all answering TRUE -> a
-// single row TRUE/15).
+// single row TRUE/15); it appears only when at least one answer is shared
+// by more than one endpoint (a duplicate row) - when every answer is
+// unique the count would be 1 in every row and the column carries nothing.
 //
 // The pure functions (cellValue, pivotResults, buildConfig) are DOM-free so
 // they can be unit-tested under Node. The DOM helper (init) only runs in the
@@ -83,10 +85,14 @@
 
 	// The LuminumTable column config for a collapsed query: the select
 	// checkbox column first (like the other console tables), one column per
-	// requested sensor (titled with the sensor's name), and the Count column
-	// at the end (how many endpoints returned the row's answer). The filter
-	// searches the sensor cells (not the count).
-	function buildConfig(q, rowCount) {
+	// requested sensor (titled with the sensor's name), and - only when at
+	// least one row is a duplicate (more than one endpoint returned the
+	// answer) - the Count column at the end (how many endpoints returned
+	// the row's answer). The filter searches the sensor cells (not the
+	// count).
+	function buildConfig(q, rows) {
+		var rowCount = rows.length;
+		var hasDuplicate = rows.some(function (r) { return r.count > 1; });
 		var cols = [];
 		var keys = [];
 		cols.push({ type: 'checkbox', width: '15px', inputClass: 'qrrow', idPrefix: 'ID',
@@ -98,7 +104,9 @@
 			cols.push({ key: 's' + s.sid, label: s.name, whiteSpace: 'pre-wrap' });
 			keys.push('s' + s.sid);
 		});
-		cols.push({ key: 'count', label: 'Count', width: '60px', align: 'center' });
+		if (hasDuplicate) {
+			cols.push({ key: 'count', label: 'Count', width: '60px', align: 'center' });
+		}
 		return {
 			emptyMessage: rowCount === 0 ? 'No results yet' : 'No Results',
 			searchKeys: keys,
@@ -158,7 +166,7 @@
 			}
 
 			rows = pivotResults(q);
-			config = buildConfig(q, rows.length);
+			config = buildConfig(q, rows);
 			var ncol = config.columns.length;
 			topcell.colSpan = ncol;
 			footcell.colSpan = ncol;

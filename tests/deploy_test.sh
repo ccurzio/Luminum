@@ -878,21 +878,26 @@ check "console: tab=saved opens the page on the Saved Queries tab" \
     $(grep -q 'tablink tabbarsel" style="border-right: 1px solid #07f;" onclick="switchTab(event, .Saved.)"' "$RUN/query-saved.html" 2>/dev/null; echo $?)
 # The Saved Queries tab carries the console's standard table (the old
 # "No saved queries yet." placeholder is gone): the displayed-of-total
-# count, the right-hand filter box, and the checkbox / Query Name / Author /
-# Create Date columns - saved queries have no storage yet, so the table
-# renders its empty state.
+# count, the right-hand filter box, and the checkbox / Query Name /
+# Structure / Author / Create Date columns - saved queries have no storage
+# yet, so the table renders its empty state. The Structure column renders
+# the query's full text-based interpretation.
 check "console: the Saved Queries tab carries the standard table" \
     $(grep -q 'id="savedqueriesfilter"' "$RUN/query-saved.html" 2>/dev/null \
         && grep -q '>Query Name<' "$RUN/query-saved.html" 2>/dev/null \
+        && grep -q '>Structure<' "$RUN/query-saved.html" 2>/dev/null \
         && grep -q '>Author<' "$RUN/query-saved.html" 2>/dev/null \
         && grep -q '>Create Date<' "$RUN/query-saved.html" 2>/dev/null; echo $?)
 # The table sits inside the blue content box with the standard module
-# padding, and the Query Name column is the flexible (width-less) column so
-# the auto table layout does not stretch the 15px checkbox column.
+# padding, and the Query Name and Structure columns are the flexible
+# (width-less) columns so the auto table layout does not stretch the 15px
+# checkbox column.
 check "console: the Saved Queries table carries the standard module inset" \
     $(grep -q '<div style="padding: 5px 20px 20px 20px;">' "$RUN/query-saved.html" 2>/dev/null; echo $?)
-check "console: the Saved Queries table's Query Name column is the flexible column" \
+check "console: the Saved Queries table's Query Name column is a flexible column" \
     $(grep -q '<td>Query Name</td>' "$RUN/query-saved.html" 2>/dev/null; echo $?)
+check "console: the Saved Queries table's Structure column is a flexible column" \
+    $(grep -q '<td>Structure</td>' "$RUN/query-saved.html" 2>/dev/null; echo $?)
 check "console: the Saved Queries tab shows the displayed-of-total count" \
     $(grep -q '<span id="sqviscount">0</span> of <span id="sqtotcount">0</span> items <span id="sqselcount"></span>' "$RUN/query-saved.html" 2>/dev/null; echo $?)
 check "console: the Saved Queries placeholder text is gone" \
