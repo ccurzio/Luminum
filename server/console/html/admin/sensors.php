@@ -734,8 +734,8 @@ document.getElementById('cancel').addEventListener('click', function (e) {
 		title: 'Unsaved Changes',
 		message: 'You have made changes to this sensor that have not been saved. Leave without saving them?',
 		buttons: [
-			{ label: 'Leave', onclick: function () { LuminumOverlay.hide(); window.location.href = '/index.php?view=sensors'; } },
-			{ label: 'Keep Editing', onclick: function () { LuminumOverlay.hide(); } }
+			{ label: 'Go Back', onclick: function () { LuminumOverlay.hide(); } },
+			{ label: 'Leave', onclick: function () { LuminumOverlay.hide(); window.location.href = '/index.php?view=sensors'; } }
 		]
 	});
 	});
@@ -748,8 +748,8 @@ document.getElementById('save').addEventListener('click', function (e) {
 		title: 'Save Sensor',
 		message: 'Save these changes to the sensor?',
 		buttons: [
-			{ label: 'Save', onclick: function () { LuminumOverlay.hide(); document.getElementById('nsform').requestSubmit(); } },
-			{ label: 'Cancel', onclick: function () { LuminumOverlay.hide(); } }
+			{ label: 'Cancel', onclick: function () { LuminumOverlay.hide(); } },
+			{ label: 'Save', onclick: function () { LuminumOverlay.hide(); document.getElementById('nsform').requestSubmit(); } }
 		]
 	});
 	});
