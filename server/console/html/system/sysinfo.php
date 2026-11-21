@@ -37,7 +37,7 @@ else {
 	// Memory: /proc/meminfo carries the totals; dmidecode carries the
 	// per-slot module details (empty when it cannot read the SMBIOS data).
 	$meminfo = luminum_meminfo_parse((string) shell_exec("/usr/bin/cat /proc/meminfo"));
-	$memslots = luminum_mem_dmidecode_slots((string) shell_exec("/usr/sbin/dmidecode -t memory"));
+	$memslots = luminum_mem_dmidecode_slots((string) shell_exec("sudo -n /usr/sbin/dmidecode -t memory 2>&1"));
 ?>
 
 <div class="content">
