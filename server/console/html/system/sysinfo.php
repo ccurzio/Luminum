@@ -210,7 +210,7 @@ else {
 		<div id="Devices" class="configtab" style="display: none;">
 			<div class="row" style="margin-left: 20px; margin-top: 20px; margin-bottom: 20px; margin-right: 20px;">
 				<div class="column" style="width: 15%; min-width: 220px; pointer-events: none; user-select: none;"><img src="/images/devices.png" style="width: 200px; height: 200px;"></div>
-				<div class="column" style="width: 45%; text-align: left; padding-right: 5%;">
+				<div class="column" style="width: 70%; text-align: left; padding-right: 5%;">
 					<p style="margin-left: 3px;">
 					<span style="color: #444;"><b>Devices found:</b> &nbsp;&nbsp; <?php print $devtotal; ?></span>
 					</p>
@@ -231,16 +231,6 @@ else {
 							<?php } ?>
 						</div>
 						<?php } } ?>
-					</div>
-				</div>
-				<div class="column" style="width: 35%; padding-left: 10%; text-align: right; margin-right: 20px;">
-					<div style="width: 100%; min-width: 425px; background-color: #fff; border: 1px solid #aaa; border-radius: 8px; padding: 15px; pointer-events: none; user-select: none;">
-						<div style="width: 100%; text-align: center; color: #777; font-size: 13px;"><b>Devices by Category</b></div>
-						<table style="border: 0; width: 400px; margin-top: 10px; margin-left: auto; margin-right: auto;">
-						<?php foreach ($devtree as $cat => $devs) { ?>
-						<tr><td style="width: 200px; height: 30px; text-align: left; color: #777; background-color: transparent; border: 0; padding-bottom: 10px;"><b><?php print $cat; ?>:</b></td><td style="text-align: left; background-color: transparent; width: 70%; border: 0; color: #777; font-weight: normal;"><?php print count($devs); ?></td></tr>
-						<?php } ?>
-						</table>
 					</div>
 				</div>
 			</div>

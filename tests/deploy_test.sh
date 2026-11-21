@@ -1139,8 +1139,6 @@ check "console: Devices found count matches sysfs" \
 check "console: device categories render with the toggle wiring" \
     $(grep -q 'onclick="toggleDeviceCat(' "$RUN/sysinfo.html" 2>/dev/null \
         && grep -q 'function toggleDeviceCat' "$RUN/sysinfo.html" 2>/dev/null; echo $?)
-check "console: Devices by Category summary box present" \
-    $(grep -q 'Devices by Category' "$RUN/sysinfo.html" 2>/dev/null; echo $?)
 usb_prod=""
 for d in /sys/bus/usb/devices/*; do
     n=$(basename "$d")
