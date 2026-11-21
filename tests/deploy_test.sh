@@ -1151,6 +1151,160 @@ if [ -n "$usb_prod" ]; then
         $(grep -qF "$usb_prod" "$RUN/sysinfo.html" 2>/dev/null; echo $?) "product: $usb_prod"
 fi
 
+# --- server options -----------------------------------------------------------
+# The Server Options form (config.php?view=options) posts to
+# /system/serveropts.php and must persist every presented option to
+# SYSTEM.CONFIG (and the administrator email to AUTH.USERS).
+code=$(curl -k -s -o "$RUN/serveropts.html" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/config.php?view=options")
+check "console: Server Options page renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+check "console: Server Options form posts to serveropts.php" \
+    $(grep -q 'action="/system/serveropts.php"' "$RUN/serveropts.html" 2>/dev/null; echo $?)
+CSET_ID=$(dbq "select ID from CONTENT.SETS where NAME = 'Luminum Default';")
+check "database: Luminum Default content set exists" $([ -n "$CSET_ID" ]; echo $?)
+# A full valid save: every tab's options in one POST.
+code=$(curl -k -s -D "$RUN/serveropts-post.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "adminemail=ops@example.com" \
+    --data-urlencode "minactconf=enabled" \
+    --data-urlencode "actconfclients=100" \
+    --data-urlencode "commproto=hybrid" \
+    --data-urlencode "checkinint=10" \
+    --data-urlencode "missingafter=45" \
+    --data-urlencode "sensorset=$CSET_ID" \
+    --data-urlencode "packageset=$CSET_ID" \
+    --data-urlencode "sensorhist=Enabled" \
+    --data-urlencode "srevcnt=7" \
+    --data-urlencode "packagehist=Disabled" \
+    --data-urlencode "passlen=12" \
+    --data-urlencode "complexpass=enabled" \
+    --data-urlencode "pwdcase=on" \
+    --data-urlencode "pwdspec=on" \
+    --data-urlencode "passkeys=Enabled" \
+    --data-urlencode "2fa=Required" \
+    --data-urlencode "inactiveint=30" \
+    --data-urlencode "inttype=hour" \
+    --data-urlencode "2minwarn=disabled" \
+    "https://127.0.0.1:$WPORT/system/serveropts.php")
+check "console: Server Options save redirects (302)" $([ "$code" = "302" ]; echo $?) "got: $code"
+check "console: save redirects to the saved banner" \
+    $(grep -qi 'location:.*saved=1' "$RUN/serveropts-post.hdr" 2>/dev/null; echo $?)
+# Every value must land in SYSTEM.CONFIG.
+for pair in "TARGETCONF:Enabled" "TCONFTHRESHOLD:100" "ENDPOINTCOMM:hybrid" "CHECKININT:10" \
+            "MISSINGAFTER:45" "DEFSENSORSET:$CSET_ID" "DEFPKGSET:$CSET_ID" "SENREVS:7" "PKGREVS:0" \
+            "MINPASS:12" "COMPLEXPASS:Enabled" "PCUPPERLOWER:Enabled" "PCLETNUM:Disabled" \
+            "PCSPECIAL:Enabled" "PASSKEYS:Enabled" "2FA:Required" "UTIMEOUT:30H" "UTIMEOUTWARN:Disabled"; do
+    key=${pair%%:*}; val=${pair#*:}
+    check "database: $key saved to $val" \
+        $([ "$(dbq "select CVAL from SYSTEM.CONFIG where CKEY = '$key';")" = "$val" ]; echo $?)
+done
+check "database: admin email saved" \
+    $([ "$(dbq "select EMAIL from AUTH.USERS where USERNAME = 'lumadmin';")" = "ops@example.com" ]; echo $?)
+# ...and the page must re-render with the saved values (following the
+# redirect target the browser lands on after the save).
+code=$(curl -k -s -o "$RUN/serveropts2.html" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/config.php?view=options&saved=1")
+check "console: Server Options re-renders after save (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+check "console: saved banner shown" \
+    $(grep -q 'Configuration saved.' "$RUN/serveropts2.html" 2>/dev/null; echo $?)
+check "console: saved values re-render (email, threshold, check-in)" \
+    $(grep -qF 'value="ops@example.com"' "$RUN/serveropts2.html" 2>/dev/null \
+        && grep -qF 'value="100"' "$RUN/serveropts2.html" 2>/dev/null \
+        && grep -qF 'value="10"' "$RUN/serveropts2.html" 2>/dev/null; echo $?)
+check "console: saved choices re-render selected (hybrid, Required, 30 hour)" \
+    $(grep -q 'value="hybrid" selected="selected"' "$RUN/serveropts2.html" 2>/dev/null \
+        && grep -q 'value="Required" selected="selected"' "$RUN/serveropts2.html" 2>/dev/null \
+        && grep -qF 'value="30"' "$RUN/serveropts2.html" 2>/dev/null \
+        && grep -q 'value="hour" selected="selected"' "$RUN/serveropts2.html" 2>/dev/null; echo $?)
+check "console: saved content sets re-render selected" \
+    $(grep -q "value=\"$CSET_ID\" selected=\"selected\"" "$RUN/serveropts2.html" 2>/dev/null; echo $?)
+check "console: complexity checkboxes re-render checked" \
+    $(grep -q 'id="pwdcase" name="pwdcase" type="checkbox" checked="checked"' "$RUN/serveropts2.html" 2>/dev/null \
+        && grep -q 'id="pwdspec" name="pwdspec" type="checkbox" checked="checked"' "$RUN/serveropts2.html" 2>/dev/null; echo $?)
+# An invalid save must redirect with the offending fields and write nothing.
+before=$(dbq "select CVAL from SYSTEM.CONFIG where CKEY = 'CHECKININT';")
+code=$(curl -k -s -D "$RUN/serveropts-bad.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "adminemail=not-an-email" \
+    --data-urlencode "minactconf=enabled" \
+    --data-urlencode "actconfclients=100" \
+    --data-urlencode "commproto=mqtt" \
+    --data-urlencode "checkinint=0" \
+    --data-urlencode "missingafter=45" \
+    --data-urlencode "sensorset=$CSET_ID" \
+    --data-urlencode "packageset=$CSET_ID" \
+    --data-urlencode "sensorhist=Enabled" \
+    --data-urlencode "srevcnt=7" \
+    --data-urlencode "packagehist=Disabled" \
+    --data-urlencode "passlen=12" \
+    --data-urlencode "complexpass=enabled" \
+    --data-urlencode "pwdcase=on" \
+    --data-urlencode "passkeys=Enabled" \
+    --data-urlencode "2fa=Required" \
+    --data-urlencode "inactiveint=30" \
+    --data-urlencode "inttype=hour" \
+    --data-urlencode "2minwarn=disabled" \
+    "https://127.0.0.1:$WPORT/system/serveropts.php")
+check "console: invalid save redirects (302)" $([ "$code" = "302" ]; echo $?) "got: $code"
+check "console: invalid save reports the offending fields" \
+    $(grep -qi 'location:.*err=adminemail,checkinint' "$RUN/serveropts-bad.hdr" 2>/dev/null; echo $?)
+check "database: invalid save wrote nothing" \
+    $([ "$(dbq "select CVAL from SYSTEM.CONFIG where CKEY = 'CHECKININT';")" = "$before" ]; echo $?)
+# A nonexistent content set is rejected (the dropdowns only list real sets).
+code=$(curl -k -s -D "$RUN/serveropts-ghost.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "adminemail=ops@example.com" \
+    --data-urlencode "minactconf=enabled" \
+    --data-urlencode "actconfclients=100" \
+    --data-urlencode "commproto=mqtt" \
+    --data-urlencode "checkinint=10" \
+    --data-urlencode "missingafter=45" \
+    --data-urlencode "sensorset=9999" \
+    --data-urlencode "packageset=$CSET_ID" \
+    --data-urlencode "sensorhist=Enabled" \
+    --data-urlencode "srevcnt=7" \
+    --data-urlencode "packagehist=Disabled" \
+    --data-urlencode "passlen=12" \
+    --data-urlencode "complexpass=enabled" \
+    --data-urlencode "pwdcase=on" \
+    --data-urlencode "passkeys=Enabled" \
+    --data-urlencode "2fa=Required" \
+    --data-urlencode "inactiveint=30" \
+    --data-urlencode "inttype=hour" \
+    --data-urlencode "2minwarn=disabled" \
+    "https://127.0.0.1:$WPORT/system/serveropts.php")
+check "console: nonexistent content set rejected" \
+    $(grep -qi 'location:.*err=sensorset' "$RUN/serveropts-ghost.hdr" 2>/dev/null; echo $?)
+# A markup-breaking email (attribute-breakout payload) must be rejected by
+# the backend validator and must not reach AUTH.USERS.
+before=$(dbq "select EMAIL from AUTH.USERS where USERNAME = 'lumadmin';")
+code=$(curl -k -s -D "$RUN/serveropts-xss.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode 'adminemail=a"onfocus=alert(1)@x.com' \
+    --data-urlencode "minactconf=enabled" \
+    --data-urlencode "actconfclients=100" \
+    --data-urlencode "commproto=mqtt" \
+    --data-urlencode "checkinint=10" \
+    --data-urlencode "missingafter=45" \
+    --data-urlencode "sensorset=$CSET_ID" \
+    --data-urlencode "packageset=$CSET_ID" \
+    --data-urlencode "sensorhist=Enabled" \
+    --data-urlencode "srevcnt=7" \
+    --data-urlencode "packagehist=Disabled" \
+    --data-urlencode "passlen=12" \
+    --data-urlencode "complexpass=enabled" \
+    --data-urlencode "pwdcase=on" \
+    --data-urlencode "passkeys=Enabled" \
+    --data-urlencode "2fa=Required" \
+    --data-urlencode "inactiveint=30" \
+    --data-urlencode "inttype=hour" \
+    --data-urlencode "2minwarn=disabled" \
+    "https://127.0.0.1:$WPORT/system/serveropts.php")
+check "console: markup-breaking email rejected" \
+    $(grep -qi 'location:.*err=adminemail' "$RUN/serveropts-xss.hdr" 2>/dev/null; echo $?)
+check "database: markup-breaking email not stored" \
+    $([ "$(dbq "select EMAIL from AUTH.USERS where USERNAME = 'lumadmin';")" = "$before" ]; echo $?)
+# Restore the seeded UTIMEOUT: the inactivity section below verifies the 15M
+# deadline stamping, and a page load re-stamps the deadline from the value.
+dbq "update SYSTEM.CONFIG set CVAL = '15M' where CKEY = 'UTIMEOUT';"
+curl -k -s -o /dev/null -b "$RUN/cookies" "https://127.0.0.1:$WPORT/index.php?view=clientstatus"
+
 # --- inactivity session timeout ----------------------------------------------
 # Login must stamp the deadline from the UTIMEOUT server option (seeded 15M),
 # not the old hardcoded 60 minutes.
