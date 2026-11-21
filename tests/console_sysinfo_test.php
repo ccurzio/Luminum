@@ -112,6 +112,62 @@ ok("header-only output has no slots", luminum_mem_dmidecode_slots("# dmidecode 3
 ok("slot with no Size field is empty", luminum_mem_dmidecode_slots("Memory Device\n    Locator: X1\n") === [['installed' => false, 'Size' => '', 'Form Factor' => '', 'Locator' => 'X1', 'Bank Locator' => '', 'Type' => '', 'Speed' => '', 'Manufacturer' => '', 'Part Number' => '']]);
 ok("value containing a colon is kept whole", luminum_mem_dmidecode_slots("Memory Device\n    Size: 8 GB\n    Part Number: ABC:123\n") === [['installed' => true, 'Size' => '8 GB', 'Form Factor' => '', 'Locator' => '', 'Bank Locator' => '', 'Type' => '', 'Speed' => '', 'Manufacturer' => '', 'Part Number' => 'ABC:123']]);
 
+// --- luminum_pci_class_category ---------------------------------------------
+ok("VGA class maps to Display adapters", luminum_pci_class_category('0x030000') === 'Display adapters');
+ok("Ethernet class maps to Network adapters", luminum_pci_class_category('0x020000') === 'Network adapters');
+ok("wireless class joins Network adapters", luminum_pci_class_category('0x0d0000') === 'Network adapters');
+ok("USB host controller gets its own category", luminum_pci_class_category('0x0c0330') === 'USB controllers');
+ok("other serial bus stays Serial bus controllers", luminum_pci_class_category('0x0c0000') === 'Serial bus controllers');
+ok("NVM storage maps to Storage controllers", luminum_pci_class_category('0x010802') === 'Storage controllers');
+ok("host bridge maps to System devices", luminum_pci_class_category('0x060000') === 'System devices');
+ok("bare hex (no 0x) accepted", luminum_pci_class_category('060400') === 'System devices');
+ok("unknown base class maps to Other devices", luminum_pci_class_category('0x000000') === 'Other devices');
+ok("0xff base maps to Other devices", luminum_pci_class_category('0xff0000') === 'Other devices');
+ok("garbage class maps to Other devices", luminum_pci_class_category('nope') === 'Other devices');
+ok("empty class maps to Other devices", luminum_pci_class_category('') === 'Other devices');
+
+// --- luminum_pci_vendor_name --------------------------------------------------
+ok("Intel vendor name", luminum_pci_vendor_name('0x8086') === 'Intel');
+ok("NVIDIA vendor name", luminum_pci_vendor_name('0x10de') === 'NVIDIA');
+ok("AMD vendor name (device id form)", luminum_pci_vendor_name('0x1022') === 'Advanced Micro Devices');
+ok("MediaTek second vendor ID", luminum_pci_vendor_name('0x14c3') === 'MediaTek');
+ok("Realtek second vendor ID", luminum_pci_vendor_name('0x10ec') === 'Realtek');
+ok("bare hex (no 0x) accepted", luminum_pci_vendor_name('8086') === 'Intel');
+ok("unknown vendor reports its raw ID", luminum_pci_vendor_name('0x1234') === 'Vendor 0x1234');
+ok("garbage vendor is Unknown vendor", luminum_pci_vendor_name('zz') === 'Unknown vendor');
+
+// --- luminum_devices_build ----------------------------------------------------
+$pcifix = "0000:00:00.0|0x060000|0x8086|0x7d29|\n"
+    . "0000:00:02.0|0x030000|0x8086|0x7d67|i915\n"
+    . "0000:00:0d.0|0x0c0330|0x8086|0x7ec0|xhci_hcd\n"
+    . "0000:00:1f.6|0x020000|0x8086|0x15d8|igc\n"
+    . "badline\n"
+    . "zzzz:00:00.0|0x030000|0x8086|0x7d67|\n";
+$usbfix = "3-14|0489|e0e2|MediaTek Inc.|Wireless_Device\n"
+    . "3-7|05e3|0608||USB2.0 Hub\n"
+    . "3-9|1234|5678||\n";
+$tree = luminum_devices_build($pcifix, $usbfix, 'Intel(R) Xeon(R) CPU E5-2680 v4', '8');
+$keys = array_keys($tree);
+ok("fixed categories keep their order", $keys === ['Processors', 'Display adapters', 'Network adapters', 'USB controllers', 'USB devices', 'System devices'], json_encode($keys));
+ok("processor entry carries the model and core count", $tree['Processors'][0]['label'] === 'Intel(R) Xeon(R) CPU E5-2680 v4 (8 cores)', json_encode($tree['Processors'][0]));
+ok("single core reads 'core'", luminum_devices_build('', '', 'Test CPU', '1')['Processors'][0]['label'] === 'Test CPU (1 core)');
+ok("display adapter labeled with vendor name and IDs", $tree['Display adapters'][0]['label'] === 'Intel 0x8086:0x7d67', json_encode($tree['Display adapters'][0]));
+ok("display adapter detail carries address and driver", $tree['Display adapters'][0]['detail'] === '0000:00:02.0 - driver: i915');
+ok("bridge without a driver has no driver note", $tree['System devices'][0]['detail'] === '0000:00:00.0');
+ok("USB controller classified separately from other serial bus", isset($tree['USB controllers']) && !isset($tree['Serial bus controllers']));
+ok("network adapter labeled", $tree['Network adapters'][0]['label'] === 'Intel 0x8086:0x15d8');
+ok("USB device labeled manufacturer + product", $tree['USB devices'][0]['label'] === 'MediaTek Inc. Wireless_Device', json_encode($tree['USB devices'][0]));
+ok("USB device detail carries IDs and bus", $tree['USB devices'][0]['detail'] === '0x0489:0xe0e2 - bus 3-14');
+ok("USB device without manufacturer falls back to product", $tree['USB devices'][1]['label'] === 'USB2.0 Hub');
+ok("USB device without names falls back to IDs", $tree['USB devices'][2]['label'] === 'USB device 0x1234:0x5678');
+ok("malformed PCI lines are skipped", count($tree['Display adapters']) === 1 && count($tree['System devices']) === 1);
+ok("empty input with a CPU yields only Processors", array_keys(luminum_devices_build('', '', 'CPU X', '4')) === ['Processors']);
+ok("empty input with no CPU yields no categories", luminum_devices_build('', '', '', '') === []);
+ok("empty input with a null CPU yields no categories", luminum_devices_build(null, null, null, null) === []);
+$tree2 = luminum_devices_build("0000:00:00.0|0x000000|0x8086|0x7d29|\n0000:00:01.0|0x050000|0x8086|0xae7f|\n", '', '', '');
+$keys2 = array_keys($tree2);
+ok("remaining categories sort alphabetically with Other devices last", $keys2 === ['Memory controllers', 'Other devices'], json_encode($keys2));
+
 echo "------------------------------------------------------------\n";
 if ($failures > 0) {
     echo "FAILED: $failures check(s) failed\n";

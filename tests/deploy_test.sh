@@ -1110,6 +1110,49 @@ check "console: System Information re-renders with history (200)" $([ "$code" = 
 check "console: MEMHIST samples reach the chart payload oldest first" \
     $(grep -q 'const memYValues = \[42,57\];' "$RUN/sysinfo2.html" 2>/dev/null; echo $?)
 
+# --- devices tab ---------------------------------------------------------------
+# The Devices tab enumerates the PCI and USB buses directly from sysfs (no
+# lspci/lsusb dependency) and groups them into Device Manager-style
+# categories; the rendered count must match what sysfs actually exposes.
+check "console: Devices tab markup present" \
+    $(grep -q 'id="Devices"' "$RUN/sysinfo.html" 2>/dev/null \
+        && grep -q '/images/devices.png' "$RUN/sysinfo.html" 2>/dev/null; echo $?)
+pci_n=0
+for d in /sys/bus/pci/devices/*; do
+    [ -d "$d" ] || continue
+    a=$(basename "$d")
+    if [[ "$a" =~ ^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{1,2}\.[0-9a-f]$ ]]; then pci_n=$((pci_n + 1)); fi
+done
+usb_n=0
+for d in /sys/bus/usb/devices/*; do
+    n=$(basename "$d")
+    case "$n" in *:*) continue;; esac
+    case "$n" in *-*) ;; *) continue;; esac
+    [ -f "$d/idVendor" ] && usb_n=$((usb_n + 1))
+done
+cpu_n=0
+grep -q 'model name' /proc/cpuinfo && cpu_n=1
+dev_expect=$((pci_n + usb_n + cpu_n))
+dev_got=$(sed -n 's/.*Devices found:<\/b> &nbsp;&nbsp; \([0-9][0-9]*\).*/\1/p' "$RUN/sysinfo.html" 2>/dev/null | head -n1)
+check "console: Devices found count matches sysfs" \
+    $([ "$dev_got" = "$dev_expect" ]; echo $?) "got: ${dev_got:-<none>} expected: $dev_expect"
+check "console: device categories render with the toggle wiring" \
+    $(grep -q 'onclick="toggleDeviceCat(' "$RUN/sysinfo.html" 2>/dev/null \
+        && grep -q 'function toggleDeviceCat' "$RUN/sysinfo.html" 2>/dev/null; echo $?)
+check "console: Devices by Category summary box present" \
+    $(grep -q 'Devices by Category' "$RUN/sysinfo.html" 2>/dev/null; echo $?)
+usb_prod=""
+for d in /sys/bus/usb/devices/*; do
+    n=$(basename "$d")
+    case "$n" in *:*) continue;; esac
+    case "$n" in *-*) ;; *) continue;; esac
+    if [ -f "$d/product" ]; then usb_prod=$(cat "$d/product"); break; fi
+done
+if [ -n "$usb_prod" ]; then
+    check "console: USB device product from sysfs is rendered" \
+        $(grep -qF "$usb_prod" "$RUN/sysinfo.html" 2>/dev/null; echo $?) "product: $usb_prod"
+fi
+
 # --- inactivity session timeout ----------------------------------------------
 # Login must stamp the deadline from the UTIMEOUT server option (seeded 15M),
 # not the old hardcoded 60 minutes.

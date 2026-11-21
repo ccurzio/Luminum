@@ -516,7 +516,7 @@ TBD
 |&#10003;|**Completed**  |CPU Utilization             |Rolling line graph showing server CPU usage over the last 4 hours                       |
 |&#10003;|**Completed**  |Storage Information         |User interface to display server disk information                                       |
 |&#10003;|**Completed**  |Memory Information          |User interface to display server memory information                                     |
-|&#9654; |*In Progress*  |Device Information          |User interface to display server connected device information                           |
+|&#10003;|**Completed**  |Device Information          |User interface to display server connected device information                           |
 |&#9654; |*In Progress*  |Network Information         |User interface to display server network interface information                          |
 |&#10003;|**Completed**  |User Accounts               |Presents a table displaying information about all user accounts                         |
 </li>

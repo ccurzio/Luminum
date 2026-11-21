@@ -38,6 +38,15 @@ else {
 	// per-slot module details (empty when it cannot read the SMBIOS data).
 	$meminfo = luminum_meminfo_parse((string) shell_exec("/usr/bin/cat /proc/meminfo"));
 	$memslots = luminum_mem_dmidecode_slots((string) shell_exec("sudo -n /usr/sbin/dmidecode -t memory 2>&1"));
+	// Devices: sysfs enumerates the PCI and USB buses directly (no
+	// lspci/lsusb dependency); the tree groups them Device Manager-style.
+	$devpci = shell_exec('for d in /sys/bus/pci/devices/*; do [ -d "$d" ] || continue; printf "%s|%s|%s|%s|%s\n" "$(basename "$d")" "$(cat "$d/class" 2>/dev/null)" "$(cat "$d/vendor" 2>/dev/null)" "$(cat "$d/device" 2>/dev/null)" "$(basename "$(readlink "$d/driver" 2>/dev/null)" 2>/dev/null)"; done');
+	$devusb = shell_exec('for d in /sys/bus/usb/devices/*; do n=$(basename "$d"); case "$n" in *:*) continue;; esac; case "$n" in *-*) ;; *) continue;; esac; [ -f "$d/idVendor" ] || continue; printf "%s|%s|%s|%s|%s\n" "$n" "$(cat "$d/idVendor" 2>/dev/null)" "$(cat "$d/idProduct" 2>/dev/null)" "$(cat "$d/manufacturer" 2>/dev/null)" "$(cat "$d/product" 2>/dev/null)"; done');
+	$devtree = luminum_devices_build((string) $devpci, (string) $devusb, $cpumodel, $cpucores);
+	$devtotal = 0;
+	foreach ($devtree as $devlist) {
+		$devtotal += count($devlist);
+	}
 ?>
 
 <div class="content">
@@ -201,7 +210,38 @@ else {
 		<div id="Devices" class="configtab" style="display: none;">
 			<div class="row" style="margin-left: 20px; margin-top: 20px; margin-bottom: 20px; margin-right: 20px;">
 				<div class="column" style="width: 15%; min-width: 220px; pointer-events: none; user-select: none;"><img src="/images/devices.png" style="width: 200px; height: 200px;"></div>
-				<div class="column" style="width: 25%; text-align: left; padding-right: 5%;">
+				<div class="column" style="width: 45%; text-align: left; padding-right: 5%;">
+					<p style="margin-left: 3px;">
+					<span style="color: #444;"><b>Devices found:</b> &nbsp;&nbsp; <?php print $devtotal; ?></span>
+					</p>
+
+					<div style="margin-top: 25px;">
+						<?php if (empty($devtree)) { ?>
+						<p style="color: #444;">No devices found.</p>
+						<?php } else { $dcid = 0; foreach ($devtree as $cat => $devs) { $dcid++; $cid = "devcat$dcid"; ?>
+						<div style="padding: 4px 0; cursor: pointer; color: #444;" onclick="toggleDeviceCat('<?php print $cid; ?>')">
+							<span id="<?php print $cid; ?>arrow" style="display: inline-block; width: 14px; color: #777;">&#9662;</span><b><?php print $cat; ?></b> <span style="color: #777; font-size: 12px;">(<?php print count($devs); ?>)</span>
+						</div>
+						<div id="<?php print $cid; ?>" style="margin-bottom: 6px;">
+							<?php foreach ($devs as $dev) { ?>
+							<div style="padding-left: 28px; padding-top: 2px; padding-bottom: 2px; color: #444;">
+								<span style="color: #444;"><?php print $dev["label"]; ?></span>
+								<?php if ($dev["detail"] !== "") { ?> <span style="color: #777; font-size: 12px;"><?php print $dev["detail"]; ?></span><?php } ?>
+							</div>
+							<?php } ?>
+						</div>
+						<?php } } ?>
+					</div>
+				</div>
+				<div class="column" style="width: 35%; padding-left: 10%; text-align: right; margin-right: 20px;">
+					<div style="width: 100%; min-width: 425px; background-color: #fff; border: 1px solid #aaa; border-radius: 8px; padding: 15px; pointer-events: none; user-select: none;">
+						<div style="width: 100%; text-align: center; color: #777; font-size: 13px;"><b>Devices by Category</b></div>
+						<table style="border: 0; width: 400px; margin-top: 10px; margin-left: auto; margin-right: auto;">
+						<?php foreach ($devtree as $cat => $devs) { ?>
+						<tr><td style="width: 200px; height: 30px; text-align: left; color: #777; background-color: transparent; border: 0; padding-bottom: 10px;"><b><?php print $cat; ?>:</b></td><td style="text-align: left; background-color: transparent; width: 70%; border: 0; color: #777; font-weight: normal;"><?php print count($devs); ?></td></tr>
+						<?php } ?>
+						</table>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -317,6 +357,19 @@ function switchTab(evt, configSect) {
 
 	document.getElementById(configSect).style.display = "block";
 	evt.currentTarget.className += " tabbarsel";
+	}
+
+function toggleDeviceCat(cid) {
+	var items = document.getElementById(cid);
+	var arrow = document.getElementById(cid + "arrow");
+	if (items.style.display === "none") {
+		items.style.display = "block";
+		arrow.innerHTML = "&#9662;";
+		}
+	else {
+		items.style.display = "none";
+		arrow.innerHTML = "&#9656;";
+		}
 	}
 </script>
 
