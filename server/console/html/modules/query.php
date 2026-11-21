@@ -79,7 +79,21 @@ $showsaved = !$showresults && isset($_GET['tab']) && $_GET['tab'] === 'saved';
 			</div>
 		</div>
 		<div id="Saved" class="configtab" style="<?php print $showsaved ? '' : 'display: none;'; ?>">
-			<div style="margin: 20px; text-align: center; font-style: italic; color: #777;">No saved queries yet.</div>
+			<!-- The Saved Queries table: the console's standard table - the
+			     displayed-of-total count with the (N Selected) suffix, the
+			     right-hand filter box, the checkbox column, and the footer -
+			     the same structure as the main table pages. Saved queries
+			     have no storage yet, so the table renders its empty state;
+			     rows (checkbox id="ID<n>", class "savedqueryrow") render
+			     here once saving exists. -->
+			<div style="display: block; width: 100%;">
+				<table style="margin-top: 10px;">
+				<tr><td colspan="4"><div style="position: absolute; padding-top: 7px; padding-left: 5px;"><span id="sqviscount">0</span> of <span id="sqtotcount">0</span> items <span id="sqselcount"></span></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="savedqueriesfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" disabled="disabled" maxlength="64"></div></td></tr>
+				<tr><td style="width: 15px;"><input type="checkbox" disabled="disabled"></td><td style="width: 300px;">Query Name</td><td style="width: 100px;">Author</td><td style="width: 100px;">Create Date</td></tr>
+				<tr><td colspan="4" style="text-align: center; background-color: #494a69; font-weight: normal; font-style: italic;">No Results</td></tr>
+				<tr style="height: 35px;"><td colspan="4"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;"><i>Query Completed in 0.00 Seconds</i></div></td></tr>
+				</table>
+			</div>
 		</div>
 	</div>
 	<div id="formbuttons" style="width: 100%; text-align: right; padding-top: 10px;">
@@ -499,6 +513,50 @@ function switchTab(evt, configSect) {
 window.addEventListener('DOMContentLoaded', () => {
 	LuminumQueryBuilder.init(<?php print $sensorjson; ?>);
 	});
+</script>
+
+<script src="layout/table.js"></script>
+<script>
+// The Saved Queries tab's table wiring - the same client-side behaviour as
+// the main table pages: the filter hides non-matching rows and keeps the
+// displayed count in step, and the checkbox column highlights the row and
+// maintains the (N Selected) suffix.
+LuminumTable.attachTextFilter('savedqueriesfilter', function (visible) {
+	document.getElementById('sqviscount').textContent = visible;
+	});
+
+function sqRowHighlight(idnum) {
+	var checkbox = document.getElementById("ID" + idnum);
+	var bgcolor = checkbox.checked == true ? "#686993" : "#494a69";
+	document.getElementById(idnum + "A").style.backgroundColor = bgcolor;
+	document.getElementById(idnum + "B").style.backgroundColor = bgcolor;
+	document.getElementById(idnum + "C").style.backgroundColor = bgcolor;
+	document.getElementById(idnum + "D").style.backgroundColor = bgcolor;
+	}
+
+function sqAllToggle() {
+	const allCheckbox = document.getElementById("sqselectall");
+	const checkboxes = document.querySelectorAll('input[class="savedqueryrow"]');
+	checkboxes.forEach(checkbox => {
+		checkbox.checked = allCheckbox.checked;
+		sqRowHighlight(removeLetters(checkbox.id));
+		});
+	sqAllCheck();
+	}
+
+function sqAllCheck() {
+	const checkboxes = document.querySelectorAll('input[class="savedqueryrow"]');
+	var checkTrigger = 0;
+	checkboxes.forEach(checkbox => { if (checkbox.checked == true) { checkTrigger++; } });
+	document.getElementById("sqselcount").textContent = checkTrigger > 0 ? '(' + checkTrigger + ' Selected)' : '';
+	if (checkboxes.length > 0 && checkTrigger == checkboxes.length) {
+		document.getElementById("sqselectall").checked = "checked";
+		} else { document.getElementById("sqselectall").checked = false; }
+	}
+
+function removeLetters(str) {
+	return str.replace(/[a-zA-Z]/g, '');
+	}
 </script>
 <?php } ?>
 

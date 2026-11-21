@@ -221,6 +221,23 @@ ok("page: ?tab=saved hides the Builder tab",
 	pageSrc.indexOf("<div id=\"Builder\" class=\"configtab\" style=\"<?php print $showsaved ? 'display: none;' : ''; ?>\">") >= 0);
 ok("page: ?tab=saved shows the Saved tab",
 	pageSrc.indexOf("<div id=\"Saved\" class=\"configtab\" style=\"<?php print $showsaved ? '' : 'display: none;'; ?>\">") >= 0);
+
+// The Saved Queries tab carries the console's standard table (the old
+// "No saved queries yet." placeholder is gone): the displayed-of-total
+// count with the (N Selected) suffix span, the right-hand filter box, the
+// checkbox / Query Name / Author / Create Date columns, and the empty
+// state - saved queries have no storage yet, so the table renders 0 of 0.
+ok("page: the Saved tab's placeholder text is gone", pageSrc.indexOf("No saved queries yet.") < 0);
+ok("page: the Saved tab's top row shows displayed of total items",
+	pageSrc.indexOf('<span id="sqviscount">0</span> of <span id="sqtotcount">0</span> items <span id="sqselcount"></span>') >= 0);
+ok("page: the Saved tab's top row carries the filter box", pageSrc.indexOf('id="savedqueriesfilter"') >= 0);
+ok("page: the Saved tab's columns are Query Name, Author, Create Date",
+	/>Query Name<\/td><td style="width: 100px;">Author<\/td><td style="width: 100px;">Create Date<\/td>/.test(pageSrc));
+ok("page: the Saved tab renders the empty state", pageSrc.indexOf("No Results") >= 0);
+ok("page: the Saved tab's filter keeps the displayed count in step",
+	pageSrc.indexOf("LuminumTable.attachTextFilter('savedqueriesfilter'") >= 0 && pageSrc.indexOf("document.getElementById('sqviscount')") >= 0);
+ok("page: the Saved tab's selection maintains the (N Selected) suffix",
+	pageSrc.indexOf("document.getElementById(\"sqselcount\").textContent = checkTrigger > 0 ? '(' + checkTrigger + ' Selected)' : ''") >= 0);
 const headerSrc = fs.readFileSync(path.join(__dirname, "..", "server", "console", "html", "layout", "header.php"), "utf8");
 ok("header: the Saved Queries link opens the query page's Saved tab",
 	headerSrc.indexOf('href=\\"/modules.php?view=query&tab=saved\\"') >= 0);

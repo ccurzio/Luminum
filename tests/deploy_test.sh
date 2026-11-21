@@ -876,6 +876,20 @@ code=$(curl -k -s -o "$RUN/query-saved.html" -w '%{http_code}' -b "$RUN/cookies"
 check "console: query page with tab=saved renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
 check "console: tab=saved opens the page on the Saved Queries tab" \
     $(grep -q 'tablink tabbarsel" style="border-right: 1px solid #07f;" onclick="switchTab(event, .Saved.)"' "$RUN/query-saved.html" 2>/dev/null; echo $?)
+# The Saved Queries tab carries the console's standard table (the old
+# "No saved queries yet." placeholder is gone): the displayed-of-total
+# count, the right-hand filter box, and the checkbox / Query Name / Author /
+# Create Date columns - saved queries have no storage yet, so the table
+# renders its empty state.
+check "console: the Saved Queries tab carries the standard table" \
+    $(grep -q 'id="savedqueriesfilter"' "$RUN/query-saved.html" 2>/dev/null \
+        && grep -q '>Query Name<' "$RUN/query-saved.html" 2>/dev/null \
+        && grep -q '>Author<' "$RUN/query-saved.html" 2>/dev/null \
+        && grep -q '>Create Date<' "$RUN/query-saved.html" 2>/dev/null; echo $?)
+check "console: the Saved Queries tab shows the displayed-of-total count" \
+    $(grep -q '<span id="sqviscount">0</span> of <span id="sqtotcount">0</span> items <span id="sqselcount"></span>' "$RUN/query-saved.html" 2>/dev/null; echo $?)
+check "console: the Saved Queries placeholder text is gone" \
+    $(! grep -q 'No saved queries yet.' "$RUN/query-saved.html" 2>/dev/null; echo $?)
 code=$(curl -k -s -o "$RUN/savedqueries.html" -w '%{http_code}' -b "$RUN/cookies" \
     "https://127.0.0.1:$WPORT/index.php?view=savedqueries")
 # (the header menu still carries the "Saved Queries" nav link, so match the
