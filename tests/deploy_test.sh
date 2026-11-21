@@ -1227,7 +1227,7 @@ code=$(curl -k -s -D "$RUN/serveropts-post.hdr" -o /dev/null -w '%{http_code}' -
     --data-urlencode "2minwarn=disabled" \
     "https://127.0.0.1:$WPORT/system/serveropts.php")
 check "console: Server Options save redirects (302)" $([ "$code" = "302" ]; echo $?) "got: $code"
-check "console: save redirects to the saved banner" \
+check "console: save redirects with saved=1" \
     $(grep -qi 'location:.*saved=1' "$RUN/serveropts-post.hdr" 2>/dev/null; echo $?)
 # Every value must land in SYSTEM.CONFIG.
 for pair in "TARGETCONF:Enabled" "TCONFTHRESHOLD:100" "ENDPOINTCOMM:hybrid" "CHECKININT:10" \
@@ -1240,13 +1240,26 @@ for pair in "TARGETCONF:Enabled" "TCONFTHRESHOLD:100" "ENDPOINTCOMM:hybrid" "CHE
 done
 check "database: admin email saved" \
     $([ "$(dbq "select EMAIL from AUTH.USERS where USERNAME = 'lumadmin';")" = "ops@example.com" ]; echo $?)
+# The save must re-stamp the CURRENT session's deadline from the NEW UTIMEOUT
+# before the redirect: the handler's own gate had refreshed it with the old
+# seeded 15M (and the per-request UTIMEOUT cache would keep a plain touch
+# stale), so without the re-stamp the delta would still be ~15 minutes.
+delta=$(dbq "select timestampdiff(second, now(), EXPIRES) from AUTH.SESSION;")
+check "session: save re-stamps the deadline from the new UTIMEOUT (30H)" \
+    $([ "$delta" -gt 107000 ] && [ "$delta" -lt 109000 ]; echo $?) "delta: ${delta}s"
 # ...and the page must re-render with the saved values (following the
 # redirect target the browser lands on after the save).
 code=$(curl -k -s -o "$RUN/serveropts2.html" -w '%{http_code}' -b "$RUN/cookies" \
     "https://127.0.0.1:$WPORT/config.php?view=options&saved=1")
 check "console: Server Options re-renders after save (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
-check "console: saved banner shown" \
-    $(grep -q 'Configuration saved.' "$RUN/serveropts2.html" 2>/dev/null; echo $?)
+# The save confirmation is the forced-focus overlay (shown when the reloaded
+# page carries ?saved=1) with an OK button - not the old green banner.
+check "console: saved confirmation shows the overlay with an OK button" \
+    $(grep -q "get('saved') === '1'" "$RUN/serveropts2.html" 2>/dev/null \
+        && grep -q "'Configuration saved.'" "$RUN/serveropts2.html" 2>/dev/null \
+        && grep -q "label: 'OK'" "$RUN/serveropts2.html" 2>/dev/null; echo $?)
+check "console: the old saved banner is gone" \
+    $(! grep -q 'background-color: #e6f4e6' "$RUN/serveropts2.html" 2>/dev/null; echo $?)
 check "console: saved values re-render (email, threshold, check-in)" \
     $(grep -qF 'value="ops@example.com"' "$RUN/serveropts2.html" 2>/dev/null \
         && grep -qF 'value="100"' "$RUN/serveropts2.html" 2>/dev/null \

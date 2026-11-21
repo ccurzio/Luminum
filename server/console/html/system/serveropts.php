@@ -75,6 +75,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 		exit;
 	}
 	mysqli_query($db, "commit");
+	// The inactivity timeout may have just changed: re-stamp this session's
+	// deadline from the saved value now, before the redirect. The gate at
+	// the top of this handler refreshed it with the OLD value, and a plain
+	// luminum_session_touch() here would still see the old one (UTIMEOUT is
+	// cached per request in luminum_utimeout_seconds()), so parse the saved
+	// value directly.
+	$utsecs = luminum_parse_utimeout($v['config']['UTIMEOUT']);
+	if ($utsecs !== null) {
+		mysqli_query($db, "update AUTH.SESSION set EXPIRES = now() + interval $utsecs second where SID = '$psid'");
+	}
 	header('Location: /config.php?view=options&saved=1');
 	exit;
 }
@@ -134,10 +144,7 @@ else {
 		<button id="save" class="formgo" disabled="disabled">Save Changes</button>
 	</div>
 
-	<?php if (isset($_GET['saved']) && $_GET['saved'] == '1') {
-		print "<div style=\"width: 80%; margin: 0 auto 10px auto; padding: 8px 12px; background-color: #e6f4e6; border: 1px solid #4a4; color: #262; font-size: 14px;\">Configuration saved.</div>\n";
-	}
-	elseif (isset($_GET['err'])) {
+	<?php if (isset($_GET['err'])) {
 		$errfields = preg_replace('/[^a-z0-9,]/', '', $_GET['err']);
 		if ($errfields === 'save') {
 			print "<div style=\"width: 80%; margin: 0 auto 10px auto; padding: 8px 12px; background-color: #f4e6e6; border: 1px solid #a44; color: #622; font-size: 14px;\">The configuration could not be saved. Please try again.</div>\n";
@@ -343,6 +350,19 @@ else {
 		print "['" . str_replace(',', "', '", $errfields) . "'].forEach(function(id) { var el = document.getElementById(id); if (el) { el.classList.add('textError'); } });\n";
 	}
 } ?>
+// The save is a PRG redirect: when the reloaded page carries ?saved=1,
+// confirm it with the forced-focus overlay (OK returns to the form).
+// DOMContentLoaded fires after the footer's layout/session.js has defined
+// LuminumOverlay, so the listener body can use it directly.
+window.addEventListener('DOMContentLoaded', function () {
+	if (new URLSearchParams(window.location.search).get('saved') === '1') {
+		LuminumOverlay.show({
+			title: 'Server Options',
+			message: 'Configuration saved.',
+			buttons: [{ label: 'OK', onclick: function () { LuminumOverlay.hide(); } }]
+		});
+	}
+	});
 const mtElement = document.getElementById('actconfclients');
 const ciElement = document.getElementById('checkinint');
 const maElement = document.getElementById('missingafter');
