@@ -249,6 +249,18 @@ ok("page: ?tab=saved hides the Builder tab",
 ok("page: ?tab=saved shows the Saved tab",
 	pageSrc.indexOf("<div id=\"Saved\" class=\"configtab\" style=\"<?php print $showsaved ? '' : 'display: none;'; ?>\">") >= 0);
 
+// The left form button follows the active tab: Reset Form on the Query
+// Builder tab, Copy to Builder on the Saved Queries tab - switchTab swaps
+// the label, the click dispatches on the active tab, and the initial
+// label matches ?tab=saved.
+ok("page: the form button's initial label matches ?tab=saved",
+	/<button id="resetform" class="formgo" style="margin-right: 0;"><\?php print \$showsaved \? 'Copy to Builder' : 'Reset Form'; \?><\/button>/.test(pageSrc));
+ok("page: switchTab swaps the form button label with the active tab",
+	pageSrc.indexOf('document.getElementById("resetform").textContent = (configSect === "Saved") ? "Copy to Builder" : "Reset Form"') >= 0);
+ok("page: the form button dispatches on the active tab",
+	pageSrc.indexOf("if (document.getElementById('Saved').style.display !== 'none')") >= 0 &&
+	pageSrc.indexOf("copyToBuilder();") >= 0);
+
 // The Saved Queries tab carries the console's standard table (the old
 // "No saved queries yet." placeholder is gone): the displayed-of-total
 // count with the (N Selected) suffix span, the right-hand filter box, the

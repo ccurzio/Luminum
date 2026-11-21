@@ -16,14 +16,20 @@
 // value field stay disabled until the row's sensor field resolves to a
 // valid sensor, and queryStructure renders a query payload as the full
 // text-based interpretation the Saved Queries table's Structure column
-// shows.
+// shows. Copy to Builder (the Saved Queries tab's form button) copies the
+// selected saved query back into the builder form and switches to the
+// Query Builder tab: the selected row's checkbox carries the query's JSON
+// payload in data-payload, condTreeToRows turns the condition tree back
+// into the builder's row sequence, and populateBuilder rebuilds the
+// retrieve rows, the target, and the condition rows.
 //
 // The pure functions (findSensor, resolveSensorId, filterSensors,
-// opsForType, condBlocksToTree, findUnresolved, findUnresolvedAll,
-// queryStructure) are DOM-free so they can be unit-tested under Node. The
-// DOM helpers (applyOpsToSelect, applyRowType, normalizeRows,
-// collectCondBlocks, condRowsStatus, invalidSensorNames, submitEnabled,
-// buildQueryPayload, init) only run in the browser.
+// opsForType, condBlocksToTree, condTreeToRows, findUnresolved,
+// findUnresolvedAll, queryStructure) are DOM-free so they can be
+// unit-tested under Node. The DOM helpers (applyOpsToSelect, applyRowType,
+// normalizeRows, collectCondBlocks, condRowsStatus, invalidSensorNames,
+// submitEnabled, buildQueryPayload, populateBuilder, copyToBuilder, init)
+// only run in the browser.
 //
 (function (root, factory) {
 	if (typeof module === 'object' && module.exports) {
@@ -38,6 +44,14 @@
 	const COND_OPS = {
 		equals: '==', notequals: '!=', contains: '=~', notcontains: '!~',
 		greaterthan: '>', greaterorequal: '>=', lessthan: '<', lessorequal: '<='
+	};
+
+	// The protocol's operators (7.3) -> the builder's operator dropdown
+	// values (COND_OPS reversed) - Copy to Builder re-points a saved
+	// query's condition operators at the dropdown.
+	const PROTOCOL_OP_KEYS = {
+		'==': 'equals', '!=': 'notequals', '=~': 'contains', '!~': 'notcontains',
+		'>': 'greaterthan', '>=': 'greaterorequal', '<': 'lessthan', '<=': 'lessorequal'
 	};
 
 	// The condition operator options, by the sensor's result type
@@ -140,6 +154,30 @@
 			op = nextOp;
 		}
 		return tree;
+	}
+
+	// The condition tree's in-order row sequence - what Copy to Builder
+	// reconstructs in the builder's From list: one entry per leaf, in the
+	// order the builder's rows lay them out (the tree folds
+	// left-associatively, so the in-order traversal is the row sequence),
+	// each carrying the AND/OR that joins it to the next row (opAfter,
+	// null on the last row).
+	function condTreeToRows(tree) {
+		const rows = [];
+		(function walk(node) {
+			if (!node) { return; }
+			if (node.logic) {
+				walk(node.left);
+				// node.logic joins the last row emitted so far (the left
+				// subtree's last leaf) to the next one (the right subtree's
+				// first leaf)
+				if (rows.length) { rows[rows.length - 1].opAfter = node.logic; }
+				walk(node.right);
+			} else {
+				rows.push({ sid: node.sid, op: node.op, value: node.value, opAfter: null });
+			}
+		})(tree);
+		return rows;
 	}
 
 	// Walk the From list (rows and group containers, recursively) into the
@@ -409,6 +447,142 @@
 		return head + 'all endpoints';
 	}
 
+	// Every query error is shown through the forced-focus overlay with an
+	// OK button that hides it and returns the operator to the form.
+	function showError(title, message) {
+		LuminumOverlay.show({
+			title: title,
+			message: message,
+			buttons: [{ label: 'OK', onclick: function () { LuminumOverlay.hide(); } }]
+		});
+	}
+
+	// Populate the (pristine) builder form from a query payload: one
+	// retrieve row per requested sensor (resolved to its name), the target
+	// dropdown (endpoints matching when the payload carries conditions, all
+	// endpoints otherwise), and the condition rows reconstructed from the
+	// tree's in-order row sequence - the operator dropdown re-pointed at
+	// the protocol operator, the value field filled, and the AND/OR between
+	// the rows set on the trailing operator selects. Rows are added through
+	// the last row's own add button (the page's addRow) so the remove
+	// buttons, drag handles, and handlers stay consistent; normalizeRows
+	// then re-points each row's operator options and disabled state at the
+	// sensor it now names (a bool row swaps to its TRUE/FALSE select). A
+	// sid missing from the catalog renders as "Sensor <id>" (the builder
+	// then flags it as an unknown sensor and keeps Run Query disabled).
+	function populateBuilder(catalog, payload) {
+		const byId = {};
+		for (const s of catalog) { byId[s.id] = s; }
+		const name = (sid) => {
+			const s = byId[sid];
+			return s ? s.name : 'Sensor ' + sid;
+		};
+		const getContainer = document.getElementById('get-list');
+		const fromContainer = document.getElementById('from-list');
+		if (!getContainer || !fromContainer) { return; }
+		const getRows = () => Array.from(getContainer.querySelectorAll('.list-item'));
+		const fromRows = () => Array.from(fromContainer.querySelectorAll('.list-item'));
+
+		// Retrieve sensors: the first template row takes the first sensor,
+		// each further sensor is added through the last row's add button
+		const sensors = payload.sensors || [];
+		if (sensors.length > 0) {
+			getRows()[0].querySelector('input').value = name(sensors[0].sid);
+			for (let i = 1; i < sensors.length; i++) {
+				const last = getRows()[getRows().length - 1];
+				last.querySelector('.add').click();
+				getRows()[getRows().length - 1].querySelector('input').value = name(sensors[i].sid);
+			}
+		}
+
+		// Target: conditions present -> endpoints matching (the reset
+		// default), otherwise all endpoints
+		const targets = document.getElementById('targets');
+		if (targets) {
+			targets.value = payload.conditions ? 'matching' : 'all';
+			if (typeof selectSuffix === 'function') { selectSuffix(); }
+		}
+
+		// Conditions: the tree's in-order row sequence - the first template
+		// row takes the first condition, each further row is added through
+		// the last row's add button
+		const rows = payload.conditions ? condTreeToRows(payload.conditions) : [];
+		if (rows.length > 0) {
+			const setRow = (rowEl, r) => {
+				const inputs = rowEl.querySelectorAll('input');
+				if (inputs.length > 0) { inputs[0].value = name(r.sid); }
+				const opSel = rowEl.querySelector('select[name="fromop"]');
+				if (opSel) { opSel.value = PROTOCOL_OP_KEYS[r.op] || 'equals'; }
+				const valInp = rowEl.querySelector('input[placeholder="Value"]');
+				if (valInp) { valInp.value = r.value; }
+				const boolVal = rowEl.querySelector('select.bool-value');
+				if (boolVal) { boolVal.value = r.value; }
+			};
+			setRow(fromRows()[0], rows[0]);
+			for (let i = 1; i < rows.length; i++) {
+				const last = fromRows()[fromRows().length - 1];
+				last.querySelector('.add').click();
+				setRow(fromRows()[fromRows().length - 1], rows[i]);
+			}
+			// The AND/OR between the rows: insertLogicalOperators (run by
+			// each add) created the trailing selects, so set them once all
+			// rows exist
+			fromRows().forEach((rowEl, i) => {
+				if (i >= rows.length - 1) { return; }
+				const sel = rowEl.querySelector('select.logical-operator');
+				if (sel && rows[i].opAfter) { sel.value = rows[i].opAfter; }
+			});
+			// Re-point each row's operator options and disabled state at
+			// the sensor it now names
+			normalizeRows(catalog);
+		}
+
+		// Lead with the first retrieve field, like the page does on load
+		const firstField = getContainer.querySelector('input');
+		if (firstField && typeof firstField.focus === 'function') { firstField.focus(); }
+	}
+
+	// Copy the selected saved query into the builder form and switch to the
+	// Query Builder tab (the "Copy to Builder" button on the Saved Queries
+	// tab). Exactly one saved query must be selected: its row's checkbox
+	// (class "savedqueryrow") carries the query's JSON payload in
+	// data-payload (the /api/commands.php statement). Zero or multiple
+	// selections, or an unreadable payload, show an overlay and leave the
+	// builder untouched.
+	function copyToBuilder(catalog) {
+		const checked = Array.from(document.querySelectorAll('.savedqueryrow'))
+			.filter((cb) => cb.checked);
+		if (checked.length === 0) {
+			showError('No Query Selected', 'Select a saved query to copy.');
+			return;
+		}
+		if (checked.length > 1) {
+			showError('Multiple Queries Selected', 'Select exactly one saved query to copy.');
+			return;
+		}
+		const raw = checked[0].getAttribute('data-payload');
+		let payload = null;
+		if (raw) {
+			try { payload = JSON.parse(raw); } catch (e) { payload = null; }
+		}
+		if (!payload) {
+			showError('Copy Failed', 'The selected saved query could not be read.');
+			return;
+		}
+		// Reset to the pristine builder first (the page's resetForm
+		// restores the template rows, the matching target, and the
+		// singular suffix, and re-inits the sortable lists)
+		if (typeof resetForm === 'function') { resetForm(); }
+		// Switch to the Query Builder tab (its tab button runs switchTab,
+		// which also swaps the form button back to Reset Form) - before the
+		// populate, so the populate's final focus on the first retrieve
+		// field is not stolen by the tab button click
+		for (const t of Array.from(document.querySelectorAll('.tablink'))) {
+			if (t.textContent === 'Query Builder') { t.click(); break; }
+		}
+		populateBuilder(catalog, payload);
+	}
+
 	// Every sensor the operator typed (the retrieve fields and, when the
 	// conditions are part of the query, the condition rows - groups
 	// included) that resolves to no sensor - deduplicated, retrieve list
@@ -662,16 +836,6 @@
 			btn.disabled = !submitEnabled(catalog);
 		}
 
-		// Every query error is shown through the forced-focus overlay with an
-		// OK button that hides it and returns the operator to the form.
-		function showError(title, message) {
-			LuminumOverlay.show({
-				title: title,
-				message: message,
-				buttons: [{ label: 'OK', onclick: function () { LuminumOverlay.hide(); } }]
-			});
-		}
-
 		btn.addEventListener('click', function () {
 			// The button is disabled while any typed sensor fails to
 			// resolve; this is the backstop for a force-submitted form -
@@ -718,6 +882,7 @@
 
 	return {
 		COND_OPS: COND_OPS,
+		PROTOCOL_OP_KEYS: PROTOCOL_OP_KEYS,
 		DEFAULT_OPS: DEFAULT_OPS,
 		TEXT_OPS: TEXT_OPS,
 		NUMERIC_OPS: NUMERIC_OPS,
@@ -729,6 +894,7 @@
 		applyRowType: applyRowType,
 		normalizeRows: normalizeRows,
 		condBlocksToTree: condBlocksToTree,
+		condTreeToRows: condTreeToRows,
 		collectCondBlocks: collectCondBlocks,
 		findUnresolved: findUnresolved,
 		findUnresolvedAll: findUnresolvedAll,
@@ -737,6 +903,8 @@
 		submitEnabled: submitEnabled,
 		buildQueryPayload: buildQueryPayload,
 		queryStructure: queryStructure,
+		populateBuilder: populateBuilder,
+		copyToBuilder: copyToBuilder,
 		init: init
 	};
 }));

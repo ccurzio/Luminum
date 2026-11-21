@@ -869,6 +869,10 @@ check "console: query page renders (200)" $([ "$code" = "200" ]; echo $?) "got: 
 check "console: query page offers the sensor fields and catalog" \
     $(grep -q 'placeholder="Sensor"' "$RUN/query.html" 2>/dev/null \
         && grep -q "Deploy Test Sensor" "$RUN/query.html" 2>/dev/null; echo $?)
+# The left form button follows the active tab: Reset Form on the Query
+# Builder tab, Copy to Builder on the Saved Queries tab.
+check "console: the builder tab's form button is Reset Form" \
+    $(grep -q '>Reset Form<' "$RUN/query.html" 2>/dev/null; echo $?)
 # The header menu's "Saved Queries" link opens the query page on its Saved
 # Queries tab (?tab=saved) - the old standalone Saved Queries page is gone.
 code=$(curl -k -s -o "$RUN/query-saved.html" -w '%{http_code}' -b "$RUN/cookies" \
@@ -876,6 +880,8 @@ code=$(curl -k -s -o "$RUN/query-saved.html" -w '%{http_code}' -b "$RUN/cookies"
 check "console: query page with tab=saved renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
 check "console: tab=saved opens the page on the Saved Queries tab" \
     $(grep -q 'tablink tabbarsel" style="border-right: 1px solid #07f;" onclick="switchTab(event, .Saved.)"' "$RUN/query-saved.html" 2>/dev/null; echo $?)
+check "console: the Saved tab's form button is Copy to Builder" \
+    $(grep -q '>Copy to Builder<' "$RUN/query-saved.html" 2>/dev/null; echo $?)
 # The Saved Queries tab carries the console's standard table (the old
 # "No saved queries yet." placeholder is gone): the displayed-of-total
 # count, the right-hand filter box, and the checkbox / Query Name /
@@ -998,6 +1004,13 @@ check "console: query builder disables submit on invalid sensors" \
 check "console: query errors show the overlay with an OK button" \
     $(grep -q "Invalid Sensor(s)" "$RUN/querybuilder.js" 2>/dev/null \
         && grep -q "label: 'OK'" "$RUN/querybuilder.js" 2>/dev/null; echo $?)
+# Copy to Builder (the Saved Queries tab's form button): the page boots the
+# sensor catalog the module reads, and the served module carries the copy
+# wiring (the selected row's checkbox payload in data-payload).
+check "console: the Copy to Builder wiring is served" \
+    $(grep -q "luminumSensorCatalog" "$RUN/query.html" 2>/dev/null \
+        && grep -q "function copyToBuilder" "$RUN/querybuilder.js" 2>/dev/null \
+        && grep -q "data-payload" "$RUN/querybuilder.js" 2>/dev/null; echo $?)
 
 # --- per-OS sensor pairs (protocol 7.3): a client runs only its own pair ---
 # The config command carries all six type/script fields per sensor; the

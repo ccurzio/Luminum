@@ -92,7 +92,10 @@ $showsaved = !$showresults && isset($_GET['tab']) && $_GET['tab'] === 'saved';
 			     payload). Saved queries have no storage yet, so the
 			     table renders its empty state; rows (checkbox id="ID<n>",
 			     class "savedqueryrow", cells <n>A..E) render here once
-			     saving exists. -->
+			     saving exists. Each row's checkbox carries the query's
+			     JSON payload (the /api/commands.php statement) in
+			     data-payload - Copy to Builder reads it to repopulate
+			     the builder form. -->
 			<div style="padding: 5px 20px 20px 20px;">
 				<table style="margin-top: 10px;">
 				<tr><td colspan="5"><div style="position: absolute; padding-top: 7px; padding-left: 5px;"><span id="sqviscount">0</span> of <span id="sqtotcount">0</span> items <span id="sqselcount"></span></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="savedqueriesfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" disabled="disabled" maxlength="64"></div></td></tr>
@@ -103,8 +106,11 @@ $showsaved = !$showresults && isset($_GET['tab']) && $_GET['tab'] === 'saved';
 			</div>
 		</div>
 	</div>
+	<!-- The left form button follows the active tab: Reset Form on the
+	     Query Builder tab, Copy to Builder on the Saved Queries tab -
+	     switchTab swaps the label, and the initial label matches ?tab=saved. -->
 	<div id="formbuttons" style="width: 100%; text-align: right; padding-top: 10px;">
-		<button id="resetform" class="formgo" style="margin-right: 0;">Reset Form</button> <button id="querygo" class="formgo" style="margin-left: 0;" disabled="disabled">Run Query</button>
+		<button id="resetform" class="formgo" style="margin-right: 0;"><?php print $showsaved ? 'Copy to Builder' : 'Reset Form'; ?></button> <button id="querygo" class="formgo" style="margin-left: 0;" disabled="disabled">Run Query</button>
 	</div>
 
 </div>
@@ -119,7 +125,16 @@ window.addEventListener('DOMContentLoaded', () => {
 	initialGetList = document.getElementById('get-list').innerHTML;
 	initialFromList = document.getElementById('from-list').innerHTML;
 
-	document.getElementById('resetform').addEventListener('click', resetForm);
+	document.getElementById('resetform').addEventListener('click', function () {
+		// The button follows the active tab: Reset Form on the Query
+		// Builder tab, Copy to Builder on the Saved Queries tab
+		if (document.getElementById('Saved').style.display !== 'none') {
+			copyToBuilder();
+			}
+		else {
+			resetForm();
+			}
+		});
 	updateRemoveButtons(document.getElementById('get-list'));
 	updateRemoveButtons(document.getElementById('from-list'));
 	updateDragHandleIcons(document.getElementById('get-list'));
@@ -148,6 +163,13 @@ function resetForm() {
 	fromContainer.style.opacity = '1';
 
 	initSortable();
+	}
+
+function copyToBuilder() {
+	// The module drives the copy: it validates the selection, reads the
+	// selected query's payload, resets and populates the builder, and
+	// switches to the Query Builder tab
+	LuminumQueryBuilder.copyToBuilder(window.luminumSensorCatalog);
 	}
 
 function addRow(event) {
@@ -533,6 +555,9 @@ function switchTab(evt, configSect) {
 
 	document.getElementById(configSect).style.display = "block";
 	evt.currentTarget.className += " tabbarsel";
+	// The form button follows the active tab: Reset Form on the Query
+	// Builder tab, Copy to Builder on the Saved Queries tab
+	document.getElementById("resetform").textContent = (configSect === "Saved") ? "Copy to Builder" : "Reset Form";
 	}
 </script>
 
@@ -540,7 +565,10 @@ function switchTab(evt, configSect) {
 
 <script>
 window.addEventListener('DOMContentLoaded', () => {
-	LuminumQueryBuilder.init(<?php print $sensorjson; ?>);
+	// The sensor catalog the builder's wiring resolves typed sensor fields
+	// against (also read by Copy to Builder)
+	window.luminumSensorCatalog = <?php print $sensorjson; ?>;
+	LuminumQueryBuilder.init(window.luminumSensorCatalog);
 	});
 </script>
 

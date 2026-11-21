@@ -29,6 +29,7 @@ function eq(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
 // insertLogicalOperators use: children with parent links, classList,
 // className, style, value, querySelector(All) for the selectors they use,
 // appendChild/after/before/remove, and the sibling/parent accessors.
+const ALL_ELS = [];
 class El {
 	constructor(tag, classes) {
 		this.tagName = String(tag).toLowerCase();
@@ -41,6 +42,7 @@ class El {
 		this.textContent = "";
 		this.id = "";
 		this._listeners = {};
+		ALL_ELS.push(this);
 	}
 	get classList() {
 		const self = this;
@@ -63,6 +65,12 @@ class El {
 	}
 	get firstChild() { return this.children.length ? this.children[0] : null; }
 	addEventListener(type, fn) { (this._listeners[type] = this._listeners[type] || []).push(fn); }
+	removeEventListener(type, fn) {
+		const l = this._listeners[type];
+		if (!l) { return; }
+		const i = l.indexOf(fn);
+		if (i >= 0) { l.splice(i, 1); }
+	}
 	remove() {
 		if (!this.parent) { return; }
 		const i = this.parent.children.indexOf(this);
@@ -79,13 +87,49 @@ class El {
 		el.parent = this.parent;
 		this.parent.children.splice(this.parent.children.indexOf(this), 0, el);
 	}
+	insertBefore(el, ref) {
+		if (ref === null) { this.appendChild(el); return el; }
+		const i = this.children.indexOf(ref);
+		if (i < 0) { this.appendChild(el); return el; }
+		el.parent = this;
+		this.children.splice(i, 0, el);
+		return el;
+	}
+	closest(sel) {
+		let el = this;
+		while (el) {
+			if (el._matches && el._matches(sel)) { return el; }
+			el = el.parent;
+		}
+		return null;
+	}
+	focus() { global.__focused = this; }
+	click() {
+		const evt = { target: this, currentTarget: this };
+		(this._listeners.click || []).slice().forEach((fn) => fn(evt));
+	}
+	cloneNode(deep) {
+		const c = new El(this.tagName, this.classes.slice());
+		c.attrs = Object.assign({}, this.attrs);
+		c.id = this.id;
+		c.value = this.value;
+		c.style = Object.assign({}, this.style);
+		c.textContent = this.textContent;
+		if (deep) {
+			for (const child of this.children) { c.appendChild(child.cloneNode(true)); }
+		}
+		return c;
+	}
 	_matches(sel) {
 		if (sel === "input") { return this.tagName === "input"; }
+		if (sel === "select") { return this.tagName === "select"; }
+		if (sel === "img") { return this.tagName === "img"; }
 		if (sel === 'select[name="fromop"]') { return this.tagName === "select" && this.attrs["name"] === "fromop"; }
 		if (sel === "select.logical-operator") { return this.tagName === "select" && this.classes.indexOf("logical-operator") >= 0; }
 		if (sel === "span.bool-op") { return this.tagName === "span" && this.classes.indexOf("bool-op") >= 0; }
 		if (sel === "select.bool-value") { return this.tagName === "select" && this.classes.indexOf("bool-value") >= 0; }
 		if (sel === 'input[placeholder="Value"]') { return this.tagName === "input" && this.attrs["placeholder"] === "Value"; }
+		if (sel.charAt(0) === "#") { return this.id === sel.slice(1); }
 		if (sel.charAt(0) === ".") { return this.classes.indexOf(sel.slice(1)) >= 0; }
 		throw new Error("unsupported selector: " + sel);
 	}
@@ -107,7 +151,18 @@ class El {
 const doc = {
 	byId: {},
 	getElementById(id) { return (id in this.byId) ? this.byId[id] : null; },
-	createElement(tag) { return new El(tag); }
+	createElement(tag) { return new El(tag); },
+	// Walks every element ever created (the page's document-level
+	// delegation - attachHandlers, the module's click/input listeners -
+	// queries the whole document, not a container)
+	querySelectorAll(sel) {
+		const parts = sel.indexOf(",") >= 0 ? sel.split(",").map((s) => s.trim()) : [sel];
+		const out = [];
+		for (const n of ALL_ELS) {
+			if (n._matches && parts.some((p) => n._matches(p)) && out.indexOf(n) < 0) { out.push(n); }
+		}
+		return out;
+	}
 };
 global.document = doc;
 
@@ -167,6 +222,64 @@ ok("tree: a group whose rows are all empty drops out",
 ok("tree: a lone group is its subtree",
 	eq(Q.condBlocksToTree([{ kind: "group", blocks: [row("Hostname", "==", "a", "AND"), row("CPU Load", ">", "10", null)], opAfter: null }]),
 		{ logic: "AND", left: { sid: 1, op: "==", value: "a" }, right: { sid: 3, op: ">", value: "10" } }));
+
+// --- condTreeToRows (the tree's in-order row sequence) ----------------------
+// Copy to Builder reconstructs the builder's From rows from the saved
+// query's condition tree: one entry per leaf, in the order the builder's
+// rows lay them out (the tree folds left-associatively, so the in-order
+// traversal is the row sequence), each carrying the AND/OR that joins it
+// to the next row (opAfter, null on the last row).
+ok("rows: a single leaf is one row",
+	eq(Q.condTreeToRows({ sid: 1, op: "==", value: "web-01" }),
+		[{ sid: 1, op: "==", value: "web-01", opAfter: null }]));
+ok("rows: two leaves carry the join as the first row's opAfter",
+	eq(Q.condTreeToRows({ logic: "AND", left: { sid: 1, op: "==", value: "a" }, right: { sid: 3, op: ">", value: "10" } }),
+		[{ sid: 1, op: "==", value: "a", opAfter: "AND" }, { sid: 3, op: ">", value: "10", opAfter: null }]));
+ok("rows: three leaves fold left-associatively back to the row sequence",
+	eq(Q.condTreeToRows({ logic: "OR",
+		left: { logic: "AND", left: { sid: 1, op: "==", value: "a" }, right: { sid: 3, op: ">", value: "10" } },
+		right: { sid: 1, op: "!=", value: "b" } }),
+		[{ sid: 1, op: "==", value: "a", opAfter: "AND" },
+		 { sid: 3, op: ">", value: "10", opAfter: "OR" },
+		 { sid: 1, op: "!=", value: "b", opAfter: null }]));
+ok("rows: a nested right subtree keeps the in-order sequence",
+	eq(Q.condTreeToRows({ logic: "AND",
+		left: { sid: 1, op: "==", value: "a" },
+		right: { logic: "OR", left: { sid: 3, op: ">", value: "10" }, right: { sid: 4, op: "<=", value: "90" } } }),
+		[{ sid: 1, op: "==", value: "a", opAfter: "AND" },
+		 { sid: 3, op: ">", value: "10", opAfter: "OR" },
+		 { sid: 4, op: "<=", value: "90", opAfter: null }]));
+ok("rows: null -> []", eq(Q.condTreeToRows(null), []));
+ok("rows: round-trips condBlocksToTree's output", (function () {
+	const blocks = [
+		row("Hostname", "==", "a", "OR"),
+		{ kind: "group", blocks: [row("CPU Load", ">", "10", null), row("Uptime", "<=", "90", null)], opAfter: "AND" },
+		row("Deploy Test Sensor", "=~", "probe", null)
+	];
+	const rows = Q.condTreeToRows(Q.condBlocksToTree(blocks));
+	// The group's boundaries are gone (the tree does not carry them), but
+	// the in-order sequence and every join survive: Hostname OR CPU Load
+	// AND Uptime AND Deploy Test Sensor.
+	return rows.length === 4 &&
+		rows[0].opAfter === "OR" && rows[1].opAfter === "AND" &&
+		rows[2].opAfter === "AND" && rows[3].opAfter === null &&
+		rows[3].sid === 2 && rows[3].op === "=~" && rows[3].value === "probe";
+})());
+
+// PROTOCOL_OP_KEYS (the protocol's operators -> the builder's dropdown
+// values, COND_OPS reversed - Copy to Builder re-points a saved query's
+// condition operators at the dropdown)
+ok("opkeys: every protocol operator maps to its dropdown key",
+	eq(Q.PROTOCOL_OP_KEYS, {
+		'==': 'equals', '!=': 'notequals', '=~': 'contains', '!~': 'notcontains',
+		'>': 'greaterthan', '>=': 'greaterorequal', '<': 'lessthan', '<=': 'lessorequal'
+	}));
+ok("opkeys: the inverse of COND_OPS", (function () {
+	for (const key of Object.keys(Q.COND_OPS)) {
+		if (Q.PROTOCOL_OP_KEYS[Q.COND_OPS[key]] !== key) { return false; }
+	}
+	return true;
+})());
 
 // --- DOM helpers (shim) -----------------------------------------------------
 // A From row: sensor input, operator select, value input, optional
@@ -805,6 +918,179 @@ ok("structure: an unknown sid renders as 'Sensor <id>'",
 		conditions: { sid: 99, op: "==", value: "x" }
 	}) === "Retrieve Sensor 99 from endpoints matching: Sensor 99 == x");
 ok("structure: a null payload renders empty", Q.queryStructure(catalogR, null) === "");
+
+// --- Copy to Builder (copyToBuilder / populateBuilder) ----------------------
+// The Saved Queries tab's form button copies the selected saved query into
+// the builder form and switches to the Query Builder tab: the module reads
+// the selected row's checkbox (class "savedqueryrow", the query's JSON
+// payload in data-payload), resets the builder (the page's resetForm),
+// repopulates it (retrieve rows, the target, the condition rows - added
+// through the page's own addRow so the remove buttons, drag handles, and
+// handlers stay consistent), and clicks the Query Builder tab button.
+// The page's inline script (eval'd above) provides addRow/attachHandlers/
+// selectSuffix; the page's resetForm is spied on (the pristine builder is
+// built fresh for each test instead).
+
+// A pristine builder: fresh get-list / from-list containers with one
+// template row each, the target dropdown, the suffix span, and the tab
+// buttons. The element registry is cleared first so document-level
+// queries (attachHandlers, the module's .savedqueryrow / .tablink scans)
+// see only this builder's elements.
+function getRowFull() {
+	const el = new El("div", ["list-item"]);
+	const drag = new El("img", ["drag-handle"]); drag.setAttribute("src", "/icons/reorder-dis.png"); el.appendChild(drag);
+	const s = new El("input"); s.setAttribute("placeholder", "Sensor"); el.appendChild(s);
+	const add = new El("img", ["add"]); add.setAttribute("src", "/icons/add.png"); el.appendChild(add);
+	return el;
+}
+function fromRowFull() {
+	const el = new El("div", ["list-item"]);
+	const drag = new El("img", ["drag-handle"]); drag.setAttribute("src", "/icons/reorder-dis.png"); el.appendChild(drag);
+	const s = new El("input"); s.setAttribute("placeholder", "Sensor"); el.appendChild(s);
+	const opSel = new El("select"); opSel.setAttribute("name", "fromop");
+	const t = new El("option"); t.value = "TRUE"; opSel.appendChild(t);
+	el.appendChild(opSel);
+	const boolOp = new El("span", ["bool-op"]); el.appendChild(boolOp);
+	const v = new El("input"); v.setAttribute("placeholder", "Value"); el.appendChild(v);
+	const boolVal = new El("select", ["bool-value"]);
+	const b1 = new El("option"); b1.value = "TRUE"; boolVal.appendChild(b1);
+	const b2 = new El("option"); b2.value = "FALSE"; boolVal.appendChild(b2);
+	el.appendChild(boolVal);
+	const add = new El("img", ["add"]); add.setAttribute("src", "/icons/add.png"); el.appendChild(add);
+	return el;
+}
+function pristineBuilder() {
+	const gl = new El("div"); gl.id = "get-list"; gl.appendChild(getRowFull());
+	const fl = new El("div"); fl.id = "from-list"; fl.appendChild(fromRowFull());
+	doc.byId["get-list"] = gl;
+	doc.byId["from-list"] = fl;
+	doc.byId["targets"] = new El("select"); doc.byId["targets"].value = "matching";
+	doc.byId["tsuffix"] = new El("span");
+	// Clear the registry (the rows were registered at construction, before
+	// the clear) and re-register the containers with their descendants, so
+	// the document-level queries see exactly this builder's elements
+	ALL_ELS.length = 0;
+	for (const r of [gl, fl]) {
+		ALL_ELS.push(r);
+		for (const n of r.walk()) { ALL_ELS.push(n); }
+	}
+	ALL_ELS.push(doc.byId["targets"], doc.byId["tsuffix"]);
+	attachHandlers(); // the page's add-row wiring (the eval'd inline script)
+	const tabs = [];
+	for (const label of ["Query Builder", "Saved Queries"]) {
+		const b = new El("button", ["tablink"]);
+		b.textContent = label;
+		b.addEventListener("click", function () { tabClicked = label; });
+		tabs.push(b);
+	}
+	ALL_ELS.push(tabs[0], tabs[1]);
+	return { gl: gl, fl: fl, tabs: tabs };
+}
+function savedRow(checked, payload) {
+	const cb = new El("input", ["savedqueryrow"]);
+	cb.checked = checked;
+	if (payload !== undefined) { cb.setAttribute("data-payload", payload); }
+	ALL_ELS.push(cb);
+	return cb;
+}
+let resetCalls = 0;
+let tabClicked = null;
+let overlayShown = null;
+global.resetForm = function () { resetCalls++; };
+global.selectSuffix = selectSuffix; // the page's (eval'd) suffix/opacity updater
+global.LuminumOverlay = { show: (o) => { overlayShown = o; }, hide: () => {} };
+global.__focused = null;
+
+ok("copy: no query selected -> overlay, builder untouched", (function () {
+	overlayShown = null; resetCalls = 0; tabClicked = null;
+	const b = pristineBuilder();
+	savedRow(false);
+	Q.copyToBuilder(catalogR);
+	return overlayShown && overlayShown.title === "No Query Selected" &&
+		overlayShown.message === "Select a saved query to copy." &&
+		resetCalls === 0 && tabClicked === null;
+})());
+ok("copy: multiple queries selected -> overlay, builder untouched", (function () {
+	overlayShown = null; resetCalls = 0; tabClicked = null;
+	const b = pristineBuilder();
+	savedRow(true, "{}");
+	savedRow(true, "{}");
+	Q.copyToBuilder(catalogR);
+	return overlayShown && overlayShown.title === "Multiple Queries Selected" &&
+		overlayShown.message === "Select exactly one saved query to copy." &&
+		resetCalls === 0 && tabClicked === null;
+})());
+ok("copy: an unreadable payload -> overlay, builder untouched", (function () {
+	overlayShown = null; resetCalls = 0; tabClicked = null;
+	const b = pristineBuilder();
+	savedRow(true, "{not json");
+	Q.copyToBuilder(catalogR);
+	return overlayShown && overlayShown.title === "Copy Failed" &&
+		overlayShown.message === "The selected saved query could not be read." &&
+		resetCalls === 0 && tabClicked === null;
+})());
+ok("copy: a valid query repopulates the builder and switches tabs", (function () {
+	overlayShown = null; resetCalls = 0; tabClicked = null; global.__focused = null;
+	const b = pristineBuilder();
+	savedRow(true, JSON.stringify({
+		target: "all", action: "query", sensors: [{ sid: 1 }, { sid: 3 }],
+		conditions: { logic: "OR",
+			left: { logic: "AND", left: { sid: 1, op: "==", value: "web-01" }, right: { sid: 3, op: ">", value: "10" } },
+			right: { sid: 7, op: "==", value: "TRUE" } }
+	}));
+	Q.copyToBuilder(catalogR);
+	const getRows = b.gl.querySelectorAll(".list-item");
+	const fromRows = b.fl.querySelectorAll(".list-item");
+	const gvals = getRows.map((r) => r.querySelector("input").value);
+	const fvals = fromRows.map((r) => {
+		const inputs = r.querySelectorAll("input");
+		return { sensor: inputs[0].value, op: r.querySelector('select[name="fromop"]').value, value: inputs[1].value };
+	});
+	const trails = fromRows.map((r) => {
+		const sel = r.querySelector("select.logical-operator");
+		return sel ? sel.value : null;
+	});
+	const row3 = fromRows[2];
+	return eq(gvals, ["Hostname", "CPU Load"]) &&
+		doc.byId["targets"].value === "matching" &&
+		fvals.length === 3 &&
+		fvals[0].sensor === "Hostname" && fvals[0].op === "equals" && fvals[0].value === "web-01" &&
+		fvals[1].sensor === "CPU Load" && fvals[1].op === "greaterthan" && fvals[1].value === "10" &&
+		fvals[2].sensor === "Root FS Encrypted" && fvals[2].op === "equals" &&
+		row3.querySelector("select.bool-value").value === "TRUE" &&
+		eq(trails, ["AND", "OR", null]) &&
+		row3.classList.contains("bool-row") &&
+		row3.querySelector('select[name="fromop"]').style.display === "none" &&
+		row3.querySelector("input[placeholder=\"Value\"]").style.display === "none" &&
+		fromRows[0].querySelector('select[name="fromop"]').disabled === false &&
+		fromRows[0].querySelector("input[placeholder=\"Value\"]").disabled === false &&
+		resetCalls === 1 && tabClicked === "Query Builder" &&
+		global.__focused === getRows[0].querySelector("input");
+})());
+ok("copy: a query without conditions targets all endpoints", (function () {
+	overlayShown = null; resetCalls = 0; tabClicked = null; global.__focused = null;
+	const b = pristineBuilder();
+	savedRow(true, JSON.stringify({ target: "all", action: "query", sensors: [{ sid: 2 }] }));
+	Q.copyToBuilder(catalogR);
+	const getRows = b.gl.querySelectorAll(".list-item");
+	const fromRows = b.fl.querySelectorAll(".list-item");
+	return getRows.length === 1 && getRows[0].querySelector("input").value === "Deploy Test Sensor" &&
+		doc.byId["targets"].value === "all" &&
+		doc.byId["tsuffix"].textContent === "" &&
+		b.fl.style.opacity === "0" &&
+		fromRows.length === 1 &&
+		fromRows[0].querySelector("input").value === "" &&
+		resetCalls === 1 && tabClicked === "Query Builder";
+})());
+
+// The page wires the button to the module and boots the catalog: the
+// resetform button dispatches to copyToBuilder on the Saved tab, and the
+// boot script sets window.luminumSensorCatalog (read by Copy to Builder).
+ok("page: the form button dispatches to the module's copyToBuilder on the Saved tab",
+	pageSrc.indexOf("copyToBuilder();") >= 0 &&
+	pageSrc.indexOf("LuminumQueryBuilder.copyToBuilder(window.luminumSensorCatalog)") >= 0);
+ok("page: the boot script sets the sensor catalog the module reads",
+	pageSrc.indexOf("window.luminumSensorCatalog = ") >= 0);
 
 console.log("-".repeat(60));
 if (failures) {
