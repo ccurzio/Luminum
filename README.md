@@ -1,5 +1,5 @@
 # Luminum
-**Autonomous Endpoint Security &amp; Management**
+**Autonomous Endpoint Security &amp; Management**  
 by Christopher R. Curzio
 
 ## Introduction
