@@ -15,9 +15,10 @@
 // number/datetime numerically.
 //
 // The pure functions (findSensor, resolveSensorId, filterSensors,
-// opsForType, condBlocksToTree) are DOM-free so they can be unit-tested
-// under Node. The DOM helpers (applyOpsToSelect, applyRowType,
-// collectCondBlocks, condRowsStatus, buildQueryPayload, init) only run in
+// opsForType, condBlocksToTree, findUnresolved, findUnresolvedAll) are
+// DOM-free so they can be unit-tested under Node. The DOM helpers
+// (applyOpsToSelect, applyRowType, collectCondBlocks, condRowsStatus,
+// invalidSensorNames, submitEnabled, buildQueryPayload, init) only run in
 // the browser.
 //
 (function (root, factory) {
@@ -204,6 +205,23 @@
 		return null;
 	}
 
+	// Every non-empty sensor text in a normalized block list that resolves
+	// to no sensor (findUnresolved returns only the first) - deduplicated,
+	// in first-occurrence order, groups walked recursively.
+	function findUnresolvedAll(blocks) {
+		const out = [];
+		for (const b of blocks) {
+			if (b.kind === 'group') {
+				for (const n of findUnresolvedAll(b.blocks)) {
+					if (out.indexOf(n) < 0) { out.push(n); }
+				}
+			} else if (b.sensor !== '' && b.sid === null) {
+				if (out.indexOf(b.sensor) < 0) { out.push(b.sensor); }
+			}
+		}
+		return out;
+	}
+
 	// 'empty' | 'incomplete' | 'ok' for the From list: a row with a value
 	// but no sensor is incomplete; a group is incomplete when any of its
 	// rows is.
@@ -325,6 +343,57 @@
 			payload.conditions = tree;
 		}
 		return { payload: payload };
+	}
+
+	// Every sensor the operator typed (the retrieve fields and, when the
+	// conditions are part of the query, the condition rows - groups
+	// included) that resolves to no sensor - deduplicated, retrieve list
+	// first, in first-occurrence order. Empty when the builder names only
+	// real sensors (or none at all). The condition rows are only scanned
+	// for the "endpoints matching" target, mirroring buildQueryPayload
+	// (for "all endpoints" the rows are ignored by the query).
+	function invalidSensorNames(catalog) {
+		const out = [];
+		const getContainer = document.getElementById('get-list');
+		if (getContainer) {
+			for (const row of Array.from(getContainer.children)) {
+				if (!row.classList || !row.classList.contains('list-item')) { continue; }
+				const inp = row.querySelector('input');
+				const t = inp ? String(inp.value).trim() : '';
+				if (t === '') { continue; }
+				if (resolveSensorId(catalog, t) === null && out.indexOf(t) < 0) { out.push(t); }
+			}
+		}
+		const targets = document.getElementById('targets');
+		if (targets && targets.value === 'matching') {
+			const fromContainer = document.getElementById('from-list');
+			if (fromContainer) {
+				for (const n of findUnresolvedAll(collectCondBlocks(fromContainer, catalog))) {
+					if (out.indexOf(n) < 0) { out.push(n); }
+				}
+			}
+		}
+		return out;
+	}
+
+	// Whether the Submit button is enabled: at least one retrieve sensor,
+	// the condition rows complete when conditions are required, and no
+	// typed sensor (retrieve or condition) fails to resolve.
+	function submitEnabled(catalog) {
+		const getContainer = document.getElementById('get-list');
+		let count = 0;
+		if (getContainer) {
+			for (const row of Array.from(getContainer.children)) {
+				if (!row.classList || !row.classList.contains('list-item')) { continue; }
+				const inp = row.querySelector('input');
+				if (inp && String(inp.value).trim() !== '') { count++; }
+			}
+		}
+		const targets = document.getElementById('targets');
+		const all = !targets || targets.value === 'all';
+		const fromContainer = document.getElementById('from-list');
+		const cs = (all || !fromContainer) ? 'ok' : condRowsStatus(fromContainer);
+		return count > 0 && cs === 'ok' && invalidSensorNames(catalog).length === 0;
 	}
 
 	// The sensor autocomplete: one floating list, repositioned under the
@@ -518,26 +587,31 @@
 		initAutocomplete(catalog);
 
 		function updateSubmitState() {
-			const getContainer = document.getElementById('get-list');
-			let count = 0;
-			if (getContainer) {
-				for (const row of Array.from(getContainer.children)) {
-					if (!row.classList || !row.classList.contains('list-item')) { continue; }
-					const inp = row.querySelector('input');
-					if (inp && String(inp.value).trim() !== '') { count++; }
-				}
-			}
-			const targets = document.getElementById('targets');
-			const all = !targets || targets.value === 'all';
-			const fromContainer = document.getElementById('from-list');
-			const cs = (all || !fromContainer) ? 'ok' : condRowsStatus(fromContainer);
-			btn.disabled = !(count > 0 && cs === 'ok');
+			btn.disabled = !submitEnabled(catalog);
+		}
+
+		// Every query error is shown through the forced-focus overlay with an
+		// OK button that hides it and returns the operator to the form.
+		function showError(title, message) {
+			LuminumOverlay.show({
+				title: title,
+				message: message,
+				buttons: [{ label: 'OK', onclick: function () { LuminumOverlay.hide(); } }]
+			});
 		}
 
 		btn.addEventListener('click', function () {
+			// The button is disabled while any typed sensor fails to
+			// resolve; this is the backstop for a force-submitted form -
+			// every invalid sensor is named, not just the first.
+			const invalid = invalidSensorNames(catalog);
+			if (invalid.length > 0) {
+				showError('Invalid Sensor(s)', 'The following sensor(s) are not valid: ' + invalid.join(', '));
+				return;
+			}
 			const result = buildQueryPayload(catalog);
 			if (result.error) {
-				LuminumOverlay.show({ title: 'Query Error', message: result.error });
+				showError('Query Error', result.error);
 				return;
 			}
 			fetch('/api/commands.php', {
@@ -556,11 +630,11 @@
 				// page opens on the Results tab for this query.
 				if (r.ok) { window.location.href = '/modules.php?view=query&id=' + r.data.command; }
 				else {
-					LuminumOverlay.show({ title: 'Query Error', message: r.data.error || 'The query could not be submitted.' });
+					showError('Query Error', r.data.error || 'The query could not be submitted.');
 				}
 			})
 			.catch(function () {
-				LuminumOverlay.show({ title: 'Query Error', message: 'The query could not be submitted.' });
+				showError('Query Error', 'The query could not be submitted.');
 			});
 		});
 
@@ -584,7 +658,10 @@
 		condBlocksToTree: condBlocksToTree,
 		collectCondBlocks: collectCondBlocks,
 		findUnresolved: findUnresolved,
+		findUnresolvedAll: findUnresolvedAll,
 		condRowsStatus: condRowsStatus,
+		invalidSensorNames: invalidSensorNames,
+		submitEnabled: submitEnabled,
 		buildQueryPayload: buildQueryPayload,
 		init: init
 	};

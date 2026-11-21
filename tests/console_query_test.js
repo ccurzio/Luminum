@@ -335,6 +335,141 @@ ok("payload: a bool condition sends op '==' and the TRUE/FALSE value", (function
 		res.payload.conditions.value === "TRUE";
 })());
 
+// --- findUnresolvedAll / invalidSensorNames / submitEnabled -----------------
+ok("unresolvedAll: empty list -> []", eq(Q.findUnresolvedAll([]), []));
+ok("unresolvedAll: resolved rows -> []",
+	eq(Q.findUnresolvedAll([row("Hostname", "==", "a", null)]), []));
+ok("unresolvedAll: one unresolved row",
+	eq(Q.findUnresolvedAll([row("Nope", "==", "a", null)]), ["Nope"]));
+ok("unresolvedAll: an entirely empty row is not unresolved",
+	eq(Q.findUnresolvedAll([row("", "==", "", null)]), []));
+ok("unresolvedAll: every unresolved name, deduplicated, in order",
+	eq(Q.findUnresolvedAll([row("Nope", "==", "a", "AND"), row("Nope", "==", "b", "OR"), row("Missing", ">", "1", null)]),
+		["Nope", "Missing"]));
+ok("unresolvedAll: groups walked recursively",
+	eq(Q.findUnresolvedAll([
+		row("Hostname", "==", "a", "AND"),
+		{ kind: "group", blocks: [row("Nope", "==", "x", "OR"), row("CPU Load", ">", "1", null)], opAfter: null }
+	]), ["Nope"]));
+
+ok("invalid names: retrieve + condition rows, deduped, retrieve first", (function () {
+	const gl = new El("div");
+	gl.appendChild(getRow("Hostname"));
+	gl.appendChild(getRow("Nope"));
+	gl.appendChild(getRow("nope")); // distinct text, also unresolved
+	doc.byId["get-list"] = gl;
+	doc.byId["targets"] = { value: "matching" };
+	const fl = new El("div");
+	const g = new El("div", ["group-container"]);
+	g.appendChild(condRow("Missing", "equals", "x", "OR"));
+	g.appendChild(condRow("CPU Load", "greaterthan", "1", null));
+	fl.appendChild(g);
+	fl.appendChild(condRow("Nope", "equals", "y", null));
+	doc.byId["from-list"] = fl;
+	return eq(Q.invalidSensorNames(catalog), ["Nope", "nope", "Missing"]);
+})());
+ok("invalid names: a fully valid builder -> []", (function () {
+	const gl = new El("div");
+	gl.appendChild(getRow("Hostname"));
+	doc.byId["get-list"] = gl;
+	doc.byId["targets"] = { value: "matching" };
+	const fl = new El("div");
+	fl.appendChild(condRow("CPU Load", "greaterthan", "1", null));
+	doc.byId["from-list"] = fl;
+	return eq(Q.invalidSensorNames(catalog), []);
+})());
+ok("invalid names: empty fields are not invalid", (function () {
+	const gl = new El("div");
+	gl.appendChild(getRow(""));
+	doc.byId["get-list"] = gl;
+	doc.byId["targets"] = { value: "matching" };
+	const fl = new El("div");
+	fl.appendChild(condRow("", "equals", "", null));
+	doc.byId["from-list"] = fl;
+	return eq(Q.invalidSensorNames(catalog), []);
+})());
+ok("invalid names: all endpoints ignores the condition rows (the query does)", (function () {
+	const gl = new El("div");
+	gl.appendChild(getRow("Hostname"));
+	doc.byId["get-list"] = gl;
+	doc.byId["targets"] = { value: "all" };
+	const fl = new El("div");
+	fl.appendChild(condRow("Nope", "equals", "y", null));
+	doc.byId["from-list"] = fl;
+	return eq(Q.invalidSensorNames(catalog), []);
+})());
+ok("invalid names: all endpoints still reports an invalid retrieve sensor", (function () {
+	const gl = new El("div");
+	gl.appendChild(getRow("Nope"));
+	doc.byId["get-list"] = gl;
+	doc.byId["targets"] = { value: "all" };
+	const fl = new El("div");
+	fl.appendChild(condRow("CPU Load", "greaterthan", "1", null));
+	doc.byId["from-list"] = fl;
+	return eq(Q.invalidSensorNames(catalog), ["Nope"]);
+})());
+
+ok("submit: a valid matching form -> enabled", (function () {
+	const gl = new El("div");
+	gl.appendChild(getRow("Hostname"));
+	doc.byId["get-list"] = gl;
+	doc.byId["targets"] = { value: "matching" };
+	const fl = new El("div");
+	fl.appendChild(condRow("CPU Load", "greaterthan", "1", null));
+	doc.byId["from-list"] = fl;
+	return Q.submitEnabled(catalog) === true;
+})());
+ok("submit: an invalid retrieve sensor -> disabled", (function () {
+	const gl = new El("div");
+	gl.appendChild(getRow("Nope"));
+	doc.byId["get-list"] = gl;
+	doc.byId["targets"] = { value: "matching" };
+	const fl = new El("div");
+	fl.appendChild(condRow("CPU Load", "greaterthan", "1", null));
+	doc.byId["from-list"] = fl;
+	return Q.submitEnabled(catalog) === false;
+})());
+ok("submit: an invalid condition sensor (in a group) -> disabled", (function () {
+	const gl = new El("div");
+	gl.appendChild(getRow("Hostname"));
+	doc.byId["get-list"] = gl;
+	doc.byId["targets"] = { value: "matching" };
+	const fl = new El("div");
+	const g = new El("div", ["group-container"]);
+	g.appendChild(condRow("Nope", "equals", "x", null));
+	fl.appendChild(g);
+	doc.byId["from-list"] = fl;
+	return Q.submitEnabled(catalog) === false;
+})());
+ok("submit: no retrieve sensors -> disabled", (function () {
+	const gl = new El("div");
+	gl.appendChild(getRow(""));
+	doc.byId["get-list"] = gl;
+	doc.byId["targets"] = { value: "all" };
+	doc.byId["from-list"] = new El("div");
+	return Q.submitEnabled(catalog) === false;
+})());
+ok("submit: matching with an incomplete condition row -> disabled", (function () {
+	const gl = new El("div");
+	gl.appendChild(getRow("Hostname"));
+	doc.byId["get-list"] = gl;
+	doc.byId["targets"] = { value: "matching" };
+	const fl = new El("div");
+	fl.appendChild(condRow("", "equals", "x", null));
+	doc.byId["from-list"] = fl;
+	return Q.submitEnabled(catalog) === false;
+})());
+ok("submit: all endpoints with an invalid condition row -> enabled (rows ignored)", (function () {
+	const gl = new El("div");
+	gl.appendChild(getRow("Hostname"));
+	doc.byId["get-list"] = gl;
+	doc.byId["targets"] = { value: "all" };
+	const fl = new El("div");
+	fl.appendChild(condRow("Nope", "equals", "y", null));
+	doc.byId["from-list"] = fl;
+	return Q.submitEnabled(catalog) === true;
+})());
+
 // --- the page's insertLogicalOperators (extracted from modules/query.php) ---
 // The builder's inline JS is evaluated against the shim so the operator
 // placement - in particular that a group's trailing operator sits OUTSIDE

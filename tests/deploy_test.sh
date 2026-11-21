@@ -932,6 +932,19 @@ sleep 5
 check "non-matching query got no answer (client stayed silent)" \
     $([ "$(dbq "select count(*) from CLIENTS.QUERYRESULTS where QID='$QID_N';")" = "0" ]; echo $?)
 
+# The builder's client-side validation: the submit button is disabled while
+# any typed sensor fails to resolve, and a force-submitted form gets the
+# overlay warning naming every invalid sensor with an OK button (every other
+# query error carries one too).
+code=$(curl -k -s -o "$RUN/querybuilder.js" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/layout/querybuilder.js")
+check "console: query builder disables submit on invalid sensors" \
+    $([ "$code" = "200" ] && grep -q "submitEnabled" "$RUN/querybuilder.js" 2>/dev/null \
+        && grep -q "invalidSensorNames" "$RUN/querybuilder.js" 2>/dev/null; echo $?)
+check "console: query errors show the overlay with an OK button" \
+    $(grep -q "Invalid Sensor(s)" "$RUN/querybuilder.js" 2>/dev/null \
+        && grep -q "label: 'OK'" "$RUN/querybuilder.js" 2>/dev/null; echo $?)
+
 # --- per-OS sensor pairs (protocol 7.3): a client runs only its own pair ---
 # The config command carries all six type/script fields per sensor; the
 # client stores only the pair for its own OS and skips sensors the server
