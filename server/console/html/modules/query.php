@@ -86,10 +86,10 @@ $showsaved = !$showresults && isset($_GET['tab']) && $_GET['tab'] === 'saved';
 			     have no storage yet, so the table renders its empty state;
 			     rows (checkbox id="ID<n>", class "savedqueryrow") render
 			     here once saving exists. -->
-			<div style="display: block; width: 100%;">
+			<div style="padding: 5px 20px 20px 20px;">
 				<table style="margin-top: 10px;">
 				<tr><td colspan="4"><div style="position: absolute; padding-top: 7px; padding-left: 5px;"><span id="sqviscount">0</span> of <span id="sqtotcount">0</span> items <span id="sqselcount"></span></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="savedqueriesfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" disabled="disabled" maxlength="64"></div></td></tr>
-				<tr><td style="width: 15px;"><input type="checkbox" disabled="disabled"></td><td style="width: 300px;">Query Name</td><td style="width: 100px;">Author</td><td style="width: 100px;">Create Date</td></tr>
+				<tr><td style="width: 15px;"><input type="checkbox" disabled="disabled"></td><td>Query Name</td><td style="width: 100px;">Author</td><td style="width: 100px;">Create Date</td></tr>
 				<tr><td colspan="4" style="text-align: center; background-color: #494a69; font-weight: normal; font-style: italic;">No Results</td></tr>
 				<tr style="height: 35px;"><td colspan="4"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;"><i>Query Completed in 0.00 Seconds</i></div></td></tr>
 				</table>

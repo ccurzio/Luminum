@@ -231,8 +231,16 @@ ok("page: the Saved tab's placeholder text is gone", pageSrc.indexOf("No saved q
 ok("page: the Saved tab's top row shows displayed of total items",
 	pageSrc.indexOf('<span id="sqviscount">0</span> of <span id="sqtotcount">0</span> items <span id="sqselcount"></span>') >= 0);
 ok("page: the Saved tab's top row carries the filter box", pageSrc.indexOf('id="savedqueriesfilter"') >= 0);
+// The Query Name column carries no fixed width: it is the flexible column
+// that absorbs the table's 100% width (the Computer Name column's role on
+// the Client Status page), which keeps the 15px checkbox column from being
+// stretched by the auto table layout.
 ok("page: the Saved tab's columns are Query Name, Author, Create Date",
-	/>Query Name<\/td><td style="width: 100px;">Author<\/td><td style="width: 100px;">Create Date<\/td>/.test(pageSrc));
+	/<td>Query Name<\/td><td style="width: 100px;">Author<\/td><td style="width: 100px;">Create Date<\/td>/.test(pageSrc));
+// The table sits inside the blue content box with the standard module
+// padding around it (the tab's module-content is padding: 0 for the tab bar).
+ok("page: the Saved tab's table carries the standard module inset",
+	pageSrc.indexOf('<div style="padding: 5px 20px 20px 20px;">') >= 0);
 ok("page: the Saved tab renders the empty state", pageSrc.indexOf("No Results") >= 0);
 ok("page: the Saved tab's filter keeps the displayed count in step",
 	pageSrc.indexOf("LuminumTable.attachTextFilter('savedqueriesfilter'") >= 0 && pageSrc.indexOf("document.getElementById('sqviscount')") >= 0);

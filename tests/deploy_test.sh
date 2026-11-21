@@ -886,6 +886,13 @@ check "console: the Saved Queries tab carries the standard table" \
         && grep -q '>Query Name<' "$RUN/query-saved.html" 2>/dev/null \
         && grep -q '>Author<' "$RUN/query-saved.html" 2>/dev/null \
         && grep -q '>Create Date<' "$RUN/query-saved.html" 2>/dev/null; echo $?)
+# The table sits inside the blue content box with the standard module
+# padding, and the Query Name column is the flexible (width-less) column so
+# the auto table layout does not stretch the 15px checkbox column.
+check "console: the Saved Queries table carries the standard module inset" \
+    $(grep -q '<div style="padding: 5px 20px 20px 20px;">' "$RUN/query-saved.html" 2>/dev/null; echo $?)
+check "console: the Saved Queries table's Query Name column is the flexible column" \
+    $(grep -q '<td>Query Name</td>' "$RUN/query-saved.html" 2>/dev/null; echo $?)
 check "console: the Saved Queries tab shows the displayed-of-total count" \
     $(grep -q '<span id="sqviscount">0</span> of <span id="sqtotcount">0</span> items <span id="sqselcount"></span>' "$RUN/query-saved.html" 2>/dev/null; echo $?)
 check "console: the Saved Queries placeholder text is gone" \
