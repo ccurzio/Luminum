@@ -97,7 +97,7 @@ $showsaved = !$showresults && isset($_GET['tab']) && $_GET['tab'] === 'saved';
 		</div>
 	</div>
 	<div id="formbuttons" style="width: 100%; text-align: right; padding-top: 10px;">
-		<button id="resetform" class="formgo" style="margin-right: 0;">Reset Form</button> <button id="querygo" class="formgo" style="margin-left: 0;" disabled="disabled">Submit Query</button>
+		<button id="resetform" class="formgo" style="margin-right: 0;">Reset Form</button> <button id="querygo" class="formgo" style="margin-left: 0;" disabled="disabled">Run Query</button>
 	</div>
 
 </div>
