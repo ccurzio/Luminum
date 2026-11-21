@@ -160,6 +160,19 @@ if ($target !== 'all') {
 }
 $plat = $client !== null ? $client['OSPLATFORM'] : null;
 
+// Every sensor the query references (retrieve sensors + condition leaves)
+// must exist: a query naming a nonexistent sensor is rejected whole - every
+// missing ID reported at once - before anything is resolved or enqueued.
+$allids = luminum_query_sensor_ids($sensors, $condtree);
+$in = implode(',', array_map('intval', $allids));
+$result = api_query($db, "select ID from SENSORS where ID in ($in)", 'CONTENT');
+$exist = [];
+while ($erow = mysqli_fetch_assoc($result)) { $exist[] = (int)$erow['ID']; }
+$missing = luminum_missing_sensor_ids($sensors, $condtree, $exist);
+if (count($missing) > 0) {
+	json_error('No such sensor: ' . implode(', ', $missing), 404);
+}
+
 // Resolve one sensor for the query: it must exist and carry a script (for
 // the target client's platform, or for any platform on a broadcast); the
 // caller's params are checked against the sensor's declared fields and

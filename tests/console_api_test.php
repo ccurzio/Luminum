@@ -193,6 +193,32 @@ ok('condition sids: node, first-occurrence order, deduplicated',
 		'left' => ['logic' => 'AND', 'left' => ['sid' => 4, 'op' => '==', 'value' => 'a'], 'right' => $leaf],
 		'right' => ['sid' => 4, 'op' => '==', 'value' => 'b']]) === [4, 3]);
 
+// --- luminum_query_sensor_ids -------------------------------------------------
+$sensors2 = [['sid' => 7, 'params' => []], ['sid' => 9, 'params' => []]];
+ok('query sensor ids: retrieve sensors only',
+	luminum_query_sensor_ids($sensors2, null) === [7, 9]);
+ok('query sensor ids: condition leaves join, deduplicated against retrieve',
+	luminum_query_sensor_ids([['sid' => 3, 'params' => []]], $node) === [3, 4]);
+ok('query sensor ids: retrieve order first, then condition order',
+	luminum_query_sensor_ids($sensors2, ['logic' => 'OR',
+		'left' => ['sid' => 9, 'op' => '==', 'value' => 'a'],
+		'right' => ['sid' => 5, 'op' => '==', 'value' => 'b']]) === [7, 9, 5]);
+ok('query sensor ids: nested tree walked',
+	luminum_query_sensor_ids([['sid' => 1, 'params' => []]], ['logic' => 'AND',
+		'left' => ['logic' => 'OR', 'left' => ['sid' => 2, 'op' => '==', 'value' => 'a'], 'right' => ['sid' => 3, 'op' => '==', 'value' => 'b']],
+		'right' => ['sid' => 2, 'op' => '==', 'value' => 'c']]) === [1, 2, 3]);
+
+// --- luminum_missing_sensor_ids -----------------------------------------------
+ok('missing ids: none missing', luminum_missing_sensor_ids($sensors2, $node, [7, 9, 3, 4]) === []);
+ok('missing ids: a retrieve sensor', luminum_missing_sensor_ids($sensors2, null, [9]) === [7]);
+ok('missing ids: a condition leaf', luminum_missing_sensor_ids([['sid' => 7, 'params' => []]], $node, [7, 3]) === [4]);
+ok('missing ids: every missing ID reported, first-occurrence order',
+	luminum_missing_sensor_ids([['sid' => 9, 'params' => []], ['sid' => 7, 'params' => []]], $node, []) === [9, 7, 3, 4]);
+ok('missing ids: a shared retrieve+condition ID reported once',
+	luminum_missing_sensor_ids([['sid' => 3, 'params' => []]], $node, []) === [3, 4]);
+ok('missing ids: string existing IDs do not match (strict)',
+	luminum_missing_sensor_ids($sensors2, null, ['7', '9']) === [7, 9]);
+
 // --- luminum_sensor_has_script ----------------------------------------------
 $full = ['LSTYPE' => 'shell', 'LSCRIPT' => 'echo l', 'MSTYPE' => 'shell', 'MSCRIPT' => 'echo m', 'WSTYPE' => 'powershell', 'WSCRIPT' => 'echo w'];
 $linuxonly = ['LSTYPE' => 'shell', 'LSCRIPT' => 'echo l', 'MSTYPE' => null, 'MSCRIPT' => null, 'WSTYPE' => null, 'WSCRIPT' => null];

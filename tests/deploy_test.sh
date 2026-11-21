@@ -932,6 +932,34 @@ sleep 5
 check "non-matching query got no answer (client stayed silent)" \
     $([ "$(dbq "select count(*) from CLIENTS.QUERYRESULTS where QID='$QID_N';")" = "0" ]; echo $?)
 
+# Invalid sensors are rejected server-side: a query naming a nonexistent
+# sensor ID is never processed (no outbox rows) and the error names every
+# missing ID, not just the first.
+N_BEFORE=$(dbq "select count(*) from CLIENTS.COMMANDS;")
+body=$(python3 -c 'import json;print(json.dumps({"target":"all","action":"query","sensors":[{"sid":999999}]}))')
+code=$(curl -k -s -o "$RUN/query-badsid.json" -w '%{http_code}' -b "$RUN/cookies" \
+    -H 'Content-Type: application/json' -d "$body" \
+    "https://127.0.0.1:$WPORT/api/commands.php")
+check "api: query with a nonexistent sensor rejected (404)" $([ "$code" = "404" ]; echo $?) "got: $code"
+check "api: the error names the missing sensor" \
+    $(grep -q "No such sensor: 999999" "$RUN/query-badsid.json" 2>/dev/null; echo $?)
+body=$(python3 -c 'import json;print(json.dumps({"target":"all","action":"query","sensors":[{"sid":999999},{"sid":888888}],"conditions":{"sid":777777,"op":"==","value":"x"}}))')
+code=$(curl -k -s -o "$RUN/query-badsids.json" -w '%{http_code}' -b "$RUN/cookies" \
+    -H 'Content-Type: application/json' -d "$body" \
+    "https://127.0.0.1:$WPORT/api/commands.php")
+check "api: every missing sensor ID is reported at once" \
+    $([ "$code" = "404" ] && grep -q "No such sensor: 999999, 888888, 777777" "$RUN/query-badsids.json" 2>/dev/null; echo $?) "got: $code"
+check "rejected queries enqueued nothing" \
+    $([ "$(dbq "select count(*) from CLIENTS.COMMANDS;")" = "$N_BEFORE" ]; echo $?)
+# A valid retrieve sensor with a nonexistent condition sensor is rejected too.
+body=$(python3 -c 'import json,sys;print(json.dumps({"target":"all","action":"query","sensors":[{"sid":int(sys.argv[1])}],"conditions":{"sid":777777,"op":"==","value":"x"}}))' "$SENSOR_Q")
+code=$(curl -k -s -o "$RUN/query-badcond.json" -w '%{http_code}' -b "$RUN/cookies" \
+    -H 'Content-Type: application/json' -d "$body" \
+    "https://127.0.0.1:$WPORT/api/commands.php")
+check "api: a query with a nonexistent condition sensor rejected (404)" \
+    $([ "$code" = "404" ] && grep -q "No such sensor: 777777" "$RUN/query-badcond.json" 2>/dev/null; echo $?) "got: $code"
+check "rejected condition query enqueued nothing" \
+    $([ "$(dbq "select count(*) from CLIENTS.COMMANDS;")" = "$N_BEFORE" ]; echo $?)
 # The builder's client-side validation: the submit button is disabled while
 # any typed sensor fails to resolve, and a force-submitted form gets the
 # overlay warning naming every invalid sensor with an OK button (every other

@@ -157,6 +157,34 @@ function luminum_query_condition_sids($tree) {
 	return $out;
 }
 
+// The unique sensor IDs a validated query payload references - the retrieve
+// sensors plus the condition tree's leaves, deduplicated in
+// first-occurrence order. $sensors is the normalized list from
+// luminum_validate_query_sensors; $condtree the normalized tree (or null).
+function luminum_query_sensor_ids($sensors, $condtree) {
+	$out = [];
+	foreach (array_column($sensors, 'sid') as $id) {
+		if (!in_array($id, $out, true)) { $out[] = $id; }
+	}
+	if ($condtree !== null) {
+		foreach (luminum_query_condition_sids($condtree) as $id) {
+			if (!in_array($id, $out, true)) { $out[] = $id; }
+		}
+	}
+	return $out;
+}
+
+// Of the sensor IDs a query references, the ones with no SENSORS row - in
+// first-occurrence order. $existing is the set of IDs that do exist (ints).
+// An empty result means every referenced sensor exists.
+function luminum_missing_sensor_ids($sensors, $condtree, $existing) {
+	$missing = [];
+	foreach (luminum_query_sensor_ids($sensors, $condtree) as $id) {
+		if (!in_array($id, $existing, true)) { $missing[] = $id; }
+	}
+	return $missing;
+}
+
 // Whether a SENSORS row carries a usable script: for the given (type, script)
 // column pair (a specific platform), or for any platform when $cols is null
 // (a broadcast query - at least one platform must be able to run it).
