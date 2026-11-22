@@ -75,12 +75,14 @@ In order to be accountable to the community - but more importantly to myself - I
 | --     |Not Started    |Create Server Package       |Create .txz installation package for Luminum Server                                     |
 | --     |Not Started    |Core Content Package        |Create .txz installation package for Luminum Core Content                               |
 
+
 ### Virtual Appliances
 |        |Status         |Task                        |Description                                                                             |
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 | --     |Not Started    |Proxmox                     |Luminum Server virtual machine for Proxmox                                              |
 | --     |Not Started    |VirtualBox                  |Luminum Server virtual machine for VirtualBox                                           |
 | --     |Not Started    |VMWare                      |Luminum Server virtual machine for VMWare                                               |
+
 
 ### Docker
 |        |Status         |Task                        |Description                                                                             |
@@ -208,6 +210,8 @@ TBD
 | --     |Not Started    |Luminum Server Hardening    |Routines to automatically secure the Luminum Server installation                        |
 | --     |Not Started    |Server OS Hardening         |Routines to automatically secure the server operating system                            |
 | --     |Not Started    |Lumy Signature Verification |Routines to validate module signatures                                                  |
+|&#9654; |*In Progress*  |Input Validation            |User input validation across the complete system                                        |
+|&#9654; |*In Progress*  |CSRF Token                  |Token to prevent cross-site request forgery vulnerabilities                             |
 
 
 ### Communication
@@ -215,6 +219,7 @@ TBD
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#10003;|**Completed**  |MQTT Comms                  |Setup and configuration of the MQTT messaging channel                                   |
 |&#9654; |*In Progress*  |Direct Connect Comms        |Setup and configuration of the direct client<->server messaging channel                 |
+| --     |Not Started    |P2P Comms                   |Setup and configuration of the peer-to-peer file transfer channel
 |&#10003;|**Completed**  |Message Format              |Develop the specific formatting for client and server messages                          |
 |&#10003;|**Completed**  |Message Validation          |Validity checking of client/server messages based on signature verification             |
 | --     |Not Started    |Message Decompression       |Expand received messages that arrive compressed                                         |

@@ -17,7 +17,7 @@ Keep in mind that Luminum is still in early development, so its current function
 #### The current planned Lumy modules include:
 - **Query\*:** The core module of the system which allows administrators and users to retrieve data from endpoints
 - **Convey\*:** Automatically publish query result data in specified intervals to various logging, reporting, and communication systems
-- **Security:** Endpoint security management including firewall configuration, IDS/IPS, etc.
+- **Security:** Endpoint security management including firewall configuration, IDS/IPS, IoCs, etc.
 - **Delivery:** Deploys applications to endpoints and provides application installation management
 - **Discovery:** Performs network scanning from the server as well as endpoints to discover devices and services
 - **Efficiency:** Analyzes and logs various aspects of endpoint performance
@@ -25,6 +25,7 @@ Keep in mind that Luminum is still in early development, so its current function
 - **Inventory:** Allows administrators to compile a full inventory of both network-connected devices as well as software installed on those devices
 - **Policy:** Enforcement of endpoint security and system management policies.
 - **Notify:** Provides pop-up alerts to users with customizable notifications
+- **Mobility:** Mobile device support
 
 <sub>* Indicates a core module that is always installed</sub>
 <br>
@@ -39,6 +40,12 @@ For environments with segregated networks, a Luminum Page Server can be set up a
 Right now I'm working on this thing by myself, but I certainly welcome community support from anyone who wants to chip in. (Feel free to review the [To-Do List](https://github.com/ccurzio/Luminum/blob/main/ToDo.md) if you're wondering about the project's current development status.) There's no real timeline or roadmap beyond what's included here, however the goal is to provide a secure, complete, lightweight, and robust endpoint security and management solution that can scale from the smallest home networks up to the largest enterprise networks. 
 
 NOTE: For the first two years of Luminum's development, it was entirely me manually plugging away at code. Recently however, as this is such an enormous undertaking for one person to do in their free time I have since begun employing the use of AI to assist in development. Please note however that its usage is by way of a local/offline AI system; I won't be stealing anyone's drinking water or robbing communities of real estate to subsidize Luminum's development. I am and always have been a strong proponent of running as much in the way of software and services locally and independently as possible.
+
+## ScreenShots
+- <a href="https://github.com/ccurzio/Luminum/screenshots/clientstatus.png">Client Status</a>
+- <a href="https://github.com/ccurzio/Luminum/screenshots/querybuilder.png">Query Builder</a>
+- <a href="https://github.com/ccurzio/Luminum/screenshots/sensors.png">Sensors</a>
+- <a href="https://github.com/ccurzio/Luminum/screenshots/editsensor.png">Edit Sensor</a>
 
 ## About
 - **Luminum:** The name comes from both the chemical element Aluminum (Al) - a strong yet lightweight metal, as well as the concept of shining light into dark areas, or to "illuminate." Which is always what decent technology teams should want to do with their infrastructure. 
