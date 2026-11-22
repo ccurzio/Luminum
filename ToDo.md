@@ -1115,9 +1115,9 @@ TBD
 
 |        |Status         |OS |
 |--------|---------------|---|
-| --     |Not Started    |LIN|
-| --     |Not Started    |MAC|
-| --     |Not Started    |WIN|
+|&#10003;|**Completed**  |LIN|
+|&#10003;|**Completed**  |MAC|
+|&#10003;|**Completed**  |WIN|
 </li>
 
 <li>
@@ -1188,6 +1188,28 @@ TBD
 
 <li>
 
+#### IP Address
+
+|        |Status         |OS |
+|--------|---------------|---|
+|&#10003;|**Completed**  |LIN|
+|&#10003;|**Completed**  |MAC|
+|&#10003;|**Completed**  |WIN|
+</li>
+
+<li>
+
+#### In Subnet
+
+|        |Status         |OS |
+|--------|---------------|---|
+|&#10003;|**Completed**  |LIN|
+|&#10003;|**Completed**  |MAC|
+|&#10003;|**Completed**  |WIN|
+</li>
+
+<li>
+
 #### File Exists
 
 |        |Status         |OS |
@@ -1203,8 +1225,8 @@ TBD
 
 |        |Status         |OS |
 |--------|---------------|---|
-| --     |Not Started    |LIN|
-| --     |Not Started    |MAC|
+|&#10003;|**Completed**  |LIN|
+|&#10003;|**Completed**  |MAC|
 | --     |Not Started    |WIN|
 </li>
 
@@ -1214,9 +1236,9 @@ TBD
 
 |        |Status         |OS |
 |--------|---------------|---|
-| --     |Not Started    |LIN|
-| --     |Not Started    |MAC|
-| --     |Not Started    |WIN|
+|&#10003;|**Completed**  |LIN|
+|&#10003;|**Completed**  |MAC|
+|&#10003;|**Completed**  |WIN|
 </li>
 
 <li>
@@ -1236,7 +1258,7 @@ TBD
 |        |Status         |OS |
 |--------|---------------|---|
 |&#10003;|**Completed**  |LIN|
-| --     |Not Started    |MAC|
+|&#10003;|**Completed**  |MAC|
 |&#10003;|**Completed**  |WIN|
 </li>
 
@@ -1249,6 +1271,17 @@ TBD
 | --     |Not Started    |LIN|
 | --     |Not Started    |MAC|
 | --     |Not Started    |WIN|
+</li>
+
+<li>
+
+#### Last Logged-In User
+
+|        |Status         |OS |
+|--------|---------------|---|
+|&#10003;|**Completed**  |LIN|
+|&#10003;|**Completed**  |MAC|
+|&#10003;|**Completed**  |WIN|
 </li>
 
 <li>
