@@ -48,6 +48,20 @@ ok("headerHTML: custom header used raw",
 	LT.headerHTML({ columns: [{ label: "OS", header: 'Operating <em>System</em>' }] }) ===
 		"<tr><td>Operating <em>System</em></td></tr>");
 
+// --- colgroupHTML -----------------------------------------------------------
+ok("colgroupHTML: checkbox column pinned to the fixed width",
+	LT.colgroupHTML({ columns: [{ type: "checkbox" }, { label: "Name", key: "name" }] }) ===
+		'<colgroup><col style="width: 32px;"><col></colgroup>',
+	LT.colgroupHTML({ columns: [{ type: "checkbox" }, { label: "Name", key: "name" }] }));
+ok("colgroupHTML: a width column keeps its width",
+	LT.colgroupHTML({ columns: [{ label: "IP", key: "ip", width: "125px" }] }) ===
+		'<colgroup><col style="width: 125px;"></colgroup>',
+	LT.colgroupHTML({ columns: [{ label: "IP", key: "ip", width: "125px" }] }));
+ok("colgroupHTML: a column without a width is flexible (bare <col>)",
+	LT.colgroupHTML({ columns: [{ label: "A", key: "a" }, { label: "B", key: "b", width: "60px" }, { label: "C", key: "c" }] }) ===
+		'<colgroup><col><col style="width: 60px;"><col></colgroup>',
+	LT.colgroupHTML({ columns: [{ label: "A", key: "a" }, { label: "B", key: "b", width: "60px" }, { label: "C", key: "c" }] }));
+
 // --- rowHTML ----------------------------------------------------------------
 const baseRow = LT.rowHTML(cfg, rows[0], {});
 ok("rowHTML: tr carries luminum-row class + data-id",

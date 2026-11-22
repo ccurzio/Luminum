@@ -39,29 +39,32 @@
 	<p style="margin-top: 20px;">
 	<span style="font-size: 15px; font-weight: bold;">Filter by Operating System:</span>
 	</p>
-	<table style="margin-bottom: 40px;">
-	<tr><td style="width: 15px;"></td><td>Platform</td><td style="text-align: center;">Percentage</td><td style="text-align: center;">Count</td></tr>
-	<tr><td class="lfilter" style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filterlinux"></td><td class="lfilter" style="background-color: #494a69;">Linux</td><td class="lfilter" style="background-color: #494a69; text-align: center;"><span id="linuxpct">0</span>%</td><td class="lfilter" style="background-color: #494a69; text-align: center;"><span id="linuxcount">0</span></td></tr>
-	<tr><td class="mfilter" style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filtermac"></td><td class="mfilter" style="background-color: #494a69;">macOS</td><td class="mfilter" style="background-color: #494a69; text-align: center;"><span id="macospct">0</span>%</td><td class="mfilter" style="background-color: #494a69; text-align: center;"><span id="macoscount">0</span></td></tr>
-	<tr><td class="wfilter" style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filterwin"></td><td class="wfilter" style="background-color: #494a69;">Windows</td><td class="wfilter" style="background-color: #494a69; text-align: center;"><span id="winpct">0</span>%</td><td class="wfilter" style="background-color: #494a69; text-align: center;"><span id="wincount">0</span></td></tr>
+	<table style="margin-bottom: 40px; table-layout: fixed;">
+	<colgroup><col style="width: 32px;"><col><col style="width: 70px;"><col style="width: 55px;"></colgroup>
+	<tr><td></td><td>Platform</td><td style="text-align: center;">Percentage</td><td style="text-align: center;">Count</td></tr>
+	<tr><td class="lfilter" style="background-color: #494a69;"><input type="checkbox" id="filterlinux"></td><td class="lfilter" style="background-color: #494a69;">Linux</td><td class="lfilter" style="background-color: #494a69; text-align: center;"><span id="linuxpct">0</span>%</td><td class="lfilter" style="background-color: #494a69; text-align: center;"><span id="linuxcount">0</span></td></tr>
+	<tr><td class="mfilter" style="background-color: #494a69;"><input type="checkbox" id="filtermac"></td><td class="mfilter" style="background-color: #494a69;">macOS</td><td class="mfilter" style="background-color: #494a69; text-align: center;"><span id="macospct">0</span>%</td><td class="mfilter" style="background-color: #494a69; text-align: center;"><span id="macoscount">0</span></td></tr>
+	<tr><td class="wfilter" style="background-color: #494a69;"><input type="checkbox" id="filterwin"></td><td class="wfilter" style="background-color: #494a69;">Windows</td><td class="wfilter" style="background-color: #494a69; text-align: center;"><span id="winpct">0</span>%</td><td class="wfilter" style="background-color: #494a69; text-align: center;"><span id="wincount">0</span></td></tr>
 	</table>
 
 	<p style="margin-top: 20px;">
 	<span id="statfilter" style="font-size: 15px; font-weight: bold;">Filter by Status:</span>
 	</p>
-	<table style="margin-bottom: 40px;">
-	<tr><td style="width: 15px;"></td><td style="text-align: center;">Status</td><td style="text-align: center;">Percentage</td><td style="text-align: center;">Count</td></tr>
-	<tr><td class="gfilter" style="background-color: #494a69; width: 15px; text-align: center;"><input type="checkbox" id="filtergreen"></td><td class="gfilter" style="background-color: #494a69; text-align: center;"><img style="vertical-align: middle;" src="/icons/sysgreen.png"></td><td class="gfilter" style="background-color: #494a69; text-align: center;"><span id="greenpct">0</span>%</td><td class="gfilter" style="background-color: #494a69; text-align: center;"><span id="greencount">0</span></td></tr>
-	<tr><td class="yfilter" style="background-color: #494a69; width: 15px; text-align: center;"><input type="checkbox" id="filteryellow"></td><td class="yfilter" style="background-color: #494a69; text-align: center;"><img style="vertical-align: middle;" src="/icons/sysyellow.png"></td><td class="yfilter" style="background-color: #494a69; text-align: center;"><span id="yellowpct">0</span>%</td><td class="yfilter" style="background-color: #494a69; text-align: center;"><span id="yellowcount">0</span></td></tr>
-	<tr><td class="rfilter" style="background-color: #494a69; width: 15px; text-align: center;"><input type="checkbox" id="filterred"></td><td class="rfilter" style="background-color: #494a69; text-align: center;"><img style="vertical-align: middle;" src="/icons/sysred.png"></td><td class="rfilter" style="background-color: #494a69; text-align: center;"><span id="redpct">0</span>%</td><td class="rfilter" style="background-color: #494a69; text-align: center;"><span id="redcount">0</span></td></tr>
-	<tr><td class="ofilter" style="background-color: #494a69; width: 15px; text-align: center;"><input type="checkbox" id="filteroffline"></td><td class="ofilter" style="background-color: #494a69; text-align: center;"><img style="vertical-align: middle;" src="/icons/sysgray.png"></td><td class="ofilter" style="background-color: #494a69; text-align: center;"><span id="offlinepct">0</span>%</td><td class="ofilter" style="background-color: #494a69; text-align: center;"><span id="offcount">0</span></td></tr>
+	<table style="margin-bottom: 40px; table-layout: fixed;">
+	<colgroup><col style="width: 32px;"><col><col style="width: 70px;"><col style="width: 55px;"></colgroup>
+	<tr><td></td><td style="text-align: center;">Status</td><td style="text-align: center;">Percentage</td><td style="text-align: center;">Count</td></tr>
+	<tr><td class="gfilter" style="background-color: #494a69; text-align: center;"><input type="checkbox" id="filtergreen"></td><td class="gfilter" style="background-color: #494a69; text-align: center;"><img style="vertical-align: middle;" src="/icons/sysgreen.png"></td><td class="gfilter" style="background-color: #494a69; text-align: center;"><span id="greenpct">0</span>%</td><td class="gfilter" style="background-color: #494a69; text-align: center;"><span id="greencount">0</span></td></tr>
+	<tr><td class="yfilter" style="background-color: #494a69; text-align: center;"><input type="checkbox" id="filteryellow"></td><td class="yfilter" style="background-color: #494a69; text-align: center;"><img style="vertical-align: middle;" src="/icons/sysyellow.png"></td><td class="yfilter" style="background-color: #494a69; text-align: center;"><span id="yellowpct">0</span>%</td><td class="yfilter" style="background-color: #494a69; text-align: center;"><span id="yellowcount">0</span></td></tr>
+	<tr><td class="rfilter" style="background-color: #494a69; text-align: center;"><input type="checkbox" id="filterred"></td><td class="rfilter" style="background-color: #494a69; text-align: center;"><img style="vertical-align: middle;" src="/icons/sysred.png"></td><td class="rfilter" style="background-color: #494a69; text-align: center;"><span id="redpct">0</span>%</td><td class="rfilter" style="background-color: #494a69; text-align: center;"><span id="redcount">0</span></td></tr>
+	<tr><td class="ofilter" style="background-color: #494a69; text-align: center;"><input type="checkbox" id="filteroffline"></td><td class="ofilter" style="background-color: #494a69; text-align: center;"><img style="vertical-align: middle;" src="/icons/sysgray.png"></td><td class="ofilter" style="background-color: #494a69; text-align: center;"><span id="offlinepct">0</span>%</td><td class="ofilter" style="background-color: #494a69; text-align: center;"><span id="offcount">0</span></td></tr>
 	</table>
 
 	<p style="margin-top: 20px;">
 	<span id="verfilter" style="font-size: 15px; font-weight: bold;">Filter by Client Version:</span>
 	</p>
-	<table id="vertable">
-	<tr><td style="width: 15px;"></td><td>Version</td><td style="text-align: center;">Percentage</td><td style="text-align: center;">Count</td></tr>
+	<table id="vertable" style="table-layout: fixed;">
+	<colgroup><col style="width: 32px;"><col><col style="width: 70px;"><col style="width: 55px;"></colgroup>
+	<tr><td></td><td>Version</td><td style="text-align: center;">Percentage</td><td style="text-align: center;">Count</td></tr>
 	<tbody id="verrows"></tbody>
 	</table>
 	</div>
@@ -84,7 +87,7 @@ var cstatusConfig = {
 		  render: function (row) {
 			return '<img src="images/' + LuminumTable.escapeHTML(row.platform).toLowerCase() + '.png" style="width: 24px; height: 24px; margin-top: 2px;">';
 		  } },
-		{ key: 'os', label: 'Operating System', width: '150px' },
+		{ key: 'os', label: 'Operating System' },
 		{ key: 'clientver', label: 'Client Version', width: '120px' },
 		{ key: 'state', label: 'Status', width: '60px', align: 'center', padTop: '7px',
 		  render: function (row) {
@@ -183,7 +186,7 @@ function cstatusVerBreakdown(visible) {
 		var bg = checked ? '#686993' : '#494a69';
 		var pct = total > 0 ? Math.round((counts[v] / total) * 10000) / 100 : 0;
 		html += '<tr>' +
-			'<td class="vfilter" style="background-color: ' + bg + '; width: 15px; text-align: center;"><input type="checkbox" class="verchk" data-ver="' + LuminumTable.escapeHTML(v) + '"' + (checked ? ' checked' : '') + '></td>' +
+			'<td class="vfilter" style="background-color: ' + bg + '; text-align: center;"><input type="checkbox" class="verchk" data-ver="' + LuminumTable.escapeHTML(v) + '"' + (checked ? ' checked' : '') + '></td>' +
 			'<td class="vfilter" style="background-color: ' + bg + ';">' + LuminumTable.escapeHTML(v) + '</td>' +
 			'<td class="vfilter" style="background-color: ' + bg + '; text-align: center;">' + pct + '%</td>' +
 			'<td class="vfilter" style="background-color: ' + bg + '; text-align: center;">' + counts[v] + '</td>' +

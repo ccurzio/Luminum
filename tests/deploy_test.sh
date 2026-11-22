@@ -908,13 +908,16 @@ check "console: the Saved Queries tab carries the standard table" \
 # The selection column's header checkbox is a permanently disabled dummy:
 # the rows are radio buttons (one selection), so there is no select-all.
 check "console: the Saved tab's header selection is a disabled dummy checkbox" \
-    $(grep -q '<td style="width: 15px;"><input type="checkbox" disabled="disabled"></td><td>Name</td>' "$RUN/query-saved.html" 2>/dev/null; echo $?)
+    $(grep -q '<td><input type="checkbox" disabled="disabled"></td><td>Name</td>' "$RUN/query-saved.html" 2>/dev/null; echo $?)
 # The table sits inside the blue content box with the standard module
-# padding, and the Name and Structure columns are the flexible
-# (width-less) columns so the auto table layout does not stretch the 15px
-# checkbox column.
+# padding, and the checkbox column is pinned to a fixed 32px in the
+# colgroup (table-layout: fixed) so it does not stretch with the table;
+# the Name and Structure columns are the flexible (width-less) columns.
 check "console: the Saved Queries table carries the standard module inset" \
     $(grep -q '<div style="padding: 5px 20px 20px 20px;">' "$RUN/query-saved.html" 2>/dev/null; echo $?)
+check "console: the Saved Queries table pins its checkbox column in a colgroup" \
+    $(grep -q 'table-layout: fixed;' "$RUN/query-saved.html" 2>/dev/null \
+        && grep -q '<colgroup><col style="width: 32px;"><col><col>' "$RUN/query-saved.html" 2>/dev/null; echo $?)
 check "console: the Saved Queries table's Name column is a flexible column" \
     $(grep -q '<td>Name</td>' "$RUN/query-saved.html" 2>/dev/null; echo $?)
 check "console: the Saved Queries table's Structure column is a flexible column" \

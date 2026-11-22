@@ -14,14 +14,15 @@ $actioncount = 0;
 			<button id="reissue" class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Reissue Selected</button>
 			<button id="getinfo" class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Get Info</button>
 		</div>
-		<table id="ahtable" style="margin-top: 10px;">
+		<table id="ahtable" style="margin-top: 10px; table-layout: fixed;">
+		<colgroup><col style="width: 32px;"><col style="width: 30px;"><col><col style="width: 75px;"><col style="width: 100px;"><col style="width: 175px;"><col style="width: 175px;"><col style="width: 175px;"><col style="width: 100px;"></colgroup>
 		<tr><td colspan="9"><div style="position: absolute; padding-top: 5px; padding-left: 5px;"><img id="refresh" src="icons/refresh.png" style="cursor: pointer; width: 15px; height: 15px; vertical-align: top;" onclick="reloadTable()">&nbsp;&nbsp;<span id="viscount"><?php print $actioncount; ?></span> of <span id="totcount"><?php print $actioncount; ?></span> Items <span id="selcount"></span></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="actionhistoryfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($actioncount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
-		<tr><td style="width: 15px;">
+		<tr><td>
 		<?php
 		if ($actioncount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
 		else { print "<input type=\"checkbox\">"; }
 		?>
-		<td style="width: 30px;">Status</td><td style="width: 300px;">Name</td><td style="width: 75px;">Type</td><td style="width: 100px;">Issuer</td><td style="width: 175px;">Start Date</td><td style="width: 175px;">End Date</td><td style="width: 175px;">Last Modification</td><td style="width: 100px;">Modified By</tr>
+		</td><td>Status</td><td>Name</td><td>Type</td><td>Issuer</td><td>Start Date</td><td>End Date</td><td>Last Modification</td><td>Modified By</tr>
 		<tr><td colspan="9" style="text-align: center; background-color: #494a69; font-weight: normal; font-style: italic;">No Results</td></tr>
 		<tr style="height: 35px;"><td colspan="9"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;"><i>Query Completed in <?php print $duration; ?> Seconds</i></div></td></tr>
 		</table>

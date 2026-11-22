@@ -56,6 +56,31 @@
 		return '<tr>' + config.columns.map(headerCell).join('') + '</tr>';
 	}
 
+	// The checkbox column's pinned total width. The global `table { width:
+	// 100% }` rule makes every table fill its container, and under the
+	// default auto layout the leftover width is spread across all columns -
+	// so a 15px checkbox column stretches to 30-45px depending on the table
+	// width. Pinning it to a fixed width (checkbox + the cell's padding, no
+	// more) keeps the selection column the same size on every page.
+	var CHECKBOX_COL_WIDTH = '32px';
+
+	// Build the <col> elements for a column config. Under table-layout: fixed
+	// a <col> width is the column's total width; a column with no width is
+	// flexible and absorbs the table's leftover space (so the fixed columns,
+	// including the checkbox, hold their width).
+	function colgroupCols(config) {
+		return config.columns.map(function (col) {
+			if (col.type === 'checkbox') { return '<col style="width: ' + CHECKBOX_COL_WIDTH + ';">'; }
+			if (col.width) { return '<col style="width: ' + col.width + ';">'; }
+			return '<col>';
+		}).join('');
+	}
+
+	// The full <colgroup> for a column config (see colgroupCols).
+	function colgroupHTML(config) {
+		return '<colgroup>' + colgroupCols(config) + '</colgroup>';
+	}
+
 	// Render one <td> for a column. Columns with a render(row) function emit
 	// raw HTML (icons, etc.); plain columns escape the row value.
 	function cellHTML(col, row, bg) {
@@ -151,7 +176,17 @@
 
 	// Re-render the data rows of a <table> that contains a
 	// <tbody data-luminum-body>. The toolbar/footer rows are left untouched.
+	// Also pins the column widths: the table is switched to table-layout:
+	// fixed and a <colgroup> is (re)generated from the config so the checkbox
+	// column holds its fixed width instead of stretching with the table.
 	function render(tableEl, config, data, state) {
+		tableEl.style.tableLayout = 'fixed';
+		var cg = tableEl.querySelector('colgroup');
+		if (!cg) {
+			cg = document.createElement('colgroup');
+			tableEl.insertBefore(cg, tableEl.firstChild);
+		}
+		cg.innerHTML = colgroupCols(config);
 		var tbody = tableEl.querySelector('tbody[data-luminum-body]');
 		tbody.innerHTML = rowsHTML(config, filterRows(data.rows, config, state), state);
 	}
@@ -250,8 +285,10 @@
 	return {
 		ROW_BASE: ROW_BASE,
 		ROW_SELECTED: ROW_SELECTED,
+		CHECKBOX_COL_WIDTH: CHECKBOX_COL_WIDTH,
 		escapeHTML: escapeHTML,
 		headerHTML: headerHTML,
+		colgroupHTML: colgroupHTML,
 		rowHTML: rowHTML,
 		rowsHTML: rowsHTML,
 		stateBucket: stateBucket,

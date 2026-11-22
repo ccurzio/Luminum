@@ -153,7 +153,21 @@ $sensorcount = mysqli_num_rows($sensorquery);
 		print "<button id=\"getinfo\" class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\" disabled=\"disabled\">Get Info</button>\n";
 		print "</div>\n";
 		?>
-		<table style="margin-top: 10px;">
+		<table style="margin-top: 10px; table-layout: fixed;">
+		<!-- Column widths are pinned in the colgroup (table-layout: fixed) so
+		     the checkbox column stays a fixed 32px instead of stretching with
+		     the table; Name and Description are the flexible columns that
+		     share the leftover width. -->
+		<colgroup>
+			<col style="width: 32px;">
+			<col>
+			<col>
+			<col style="width: 120px;">
+			<col style="width: 100px;">
+			<col style="width: 150px;">
+			<col style="width: 150px;">
+			<col style="width: 150px;">
+		</colgroup>
 		<tr><td colspan="8"><div style="position: absolute; padding-top: 7px; padding-left: 5px;"><span id="viscount"><?php print $sensorcount; ?></span> of <span id="totcount"><?php print $sensorcount; ?></span> items <span id="selcount"></span></div><div style="float: right; text-align: right; padding-right: 5px;">Content Set: <select id="contentset" name="contentset" style="margin-left: 2px; margin-right: 30px; margin-top: 2px; width: 170px; height: 28px;" <?php if ($sensorcount == 0) { print "disabled=\"disabled\""; } ?>>
 			<option value="all">All</option>
 			<?php
@@ -162,12 +176,12 @@ $sensorcount = mysqli_num_rows($sensorquery);
 				}
 			?>
 		</select> Filter: <input type="text" id="sensorsfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($sensorcount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
-		<tr><td style="width: 15px;">
+		<tr><td>
 		<?php
 			if ($sensorcount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
 			else { print "<input id=\"selectall\" type=\"checkbox\" onclick=\"allToggle();\">"; }
 		?>
-		</td><td style="width: 100px;">Name</td><td style="width: 300px;">Description</td><td style="width: 50px; text-align: center;">Supports</td><td style="width: 50px;">Author</td><td style="width: 100px;">Create Date</td><td style="width: 100px;">Last Modification</td><td style="width: 100px;">Modified By</td></tr>
+		</td><td>Name</td><td>Description</td><td style="text-align: center;">Supports</td><td>Author</td><td>Create Date</td><td>Last Modification</td><td>Modified By</td></tr>
 		<?php
 		if ($sensorcount == 0) {
 			print "<tr><td colspan=\"8\" style=\"text-align: center; background-color: #494a69; font-weight: normal; font-style: italic;\">No Results</td></tr>\n";
@@ -180,7 +194,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 				if ($row["MAC"] == 1) { $compat .= "<img src=\"/images/macos.png\" alt=\"macOS\" style=\"width: 24px; height: 24px;\">"; }
 				if ($row["LIN"] == 1) { $compat .= "<img src=\"/images/linux.png\" alt=\"Linux\" style=\"width: 24px; height: 24px;\">"; }
 				if ($row["WIN"] == 1) { $compat .= "<img src=\"/images/windows.png\" alt=\"Windows\" style=\"width: 24px; height: 24px;\">"; }
-				print "<tr class=\"luminum-row\"><td id=\"" . $row["ID"] . "A\" style=\"width: 15px; background-color: #494a69;\"><input id=\"ID" . $row["ID"] . "\" class=\"sensorrow\" type=\"checkbox\" onclick=\"rowHighlight(" . $row["ID"] . "); allCheck();\"></td><td id=\"" . $row["ID"] . "B\" style=\"width: 50px; background-color: #494a69; font-weight: normal;\">" . $row["NAME"] . "</td><td id=\"" . $row["ID"] . "C\" style=\"width: 75px; background-color: #494a69; font-weight: normal;\">" . $row["DESCRIPTION"] . "</td><td id=\"" . $row["ID"] . "D\" style=\"background-color: #494a69; font-weight: normal; text-align: center;\">" . $compat . "</td><td id=\"" . $row["ID"] . "E\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["AUTHOR"] . "</td><td id=\"" . $row["ID"] . "F\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $row["CREATED"] . "</td>" . "<td id=\"" . $row["ID"] . "G\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $modified . "</td><td id=\"" . $row["ID"] . "H\" style=\"background-color: #494a69; font-weight: normal;\">" . $editor . "</td></tr>\n";
+				print "<tr class=\"luminum-row\"><td id=\"" . $row["ID"] . "A\" style=\"background-color: #494a69;\"><input id=\"ID" . $row["ID"] . "\" class=\"sensorrow\" type=\"checkbox\" onclick=\"rowHighlight(" . $row["ID"] . "); allCheck();\"></td><td id=\"" . $row["ID"] . "B\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["NAME"] . "</td><td id=\"" . $row["ID"] . "C\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["DESCRIPTION"] . "</td><td id=\"" . $row["ID"] . "D\" style=\"background-color: #494a69; font-weight: normal; text-align: center;\">" . $compat . "</td><td id=\"" . $row["ID"] . "E\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["AUTHOR"] . "</td><td id=\"" . $row["ID"] . "F\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["CREATED"] . "</td>" . "<td id=\"" . $row["ID"] . "G\" style=\"background-color: #494a69; font-weight: normal;\">" . $modified . "</td><td id=\"" . $row["ID"] . "H\" style=\"background-color: #494a69; font-weight: normal;\">" . $editor . "</td></tr>\n";
 				}
 			}
 		?>

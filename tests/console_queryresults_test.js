@@ -285,12 +285,15 @@ ok("page: the Saved tab's placeholder text is gone", pageSrc.indexOf("No saved q
 ok("page: the Saved tab's top row shows displayed of total items",
 	pageSrc.indexOf('<span id="sqviscount">0</span> of <span id="sqtotcount">0</span> items <span id="sqselcount"></span>') >= 0);
 ok("page: the Saved tab's top row carries the filter box", pageSrc.indexOf('id="savedqueriesfilter"') >= 0);
-// The Name and Structure columns carry no fixed width: they are the
-// flexible columns that absorb the table's 100% width (the Computer Name
-// column's role on the Client Status page), which keeps the 15px checkbox
-// column from being stretched by the auto table layout.
+// The table is table-layout: fixed with a colgroup: the checkbox column is
+// pinned to 32px (the console-wide standard), Author and Create Date keep
+// their 100px widths, and Name and Structure are the bare flexible columns
+// that absorb the table's 100% width.
 ok("page: the Saved tab's columns are Name, Structure, Author, Create Date",
-	/<td>Name<\/td><td>Structure<\/td><td style="width: 100px;">Author<\/td><td style="width: 100px;">Create Date<\/td>/.test(pageSrc));
+	/<td>Name<\/td><td>Structure<\/td><td>Author<\/td><td>Create Date<\/td>/.test(pageSrc));
+ok("page: the Saved tab's table pins its checkbox column in a colgroup",
+	pageSrc.indexOf('<table style="margin-top: 10px; table-layout: fixed;">') >= 0 &&
+	pageSrc.indexOf('<colgroup><col style="width: 32px;"><col><col><col style="width: 100px;"><col style="width: 100px;"></colgroup>') >= 0);
 ok("page: the Saved tab's rows span the five columns",
 	/<tr><td colspan="5" style="text-align: center; background-color: #494a69; font-weight: normal; font-style: italic;">No Results<\/td><\/tr>/.test(pageSrc));
 // The table sits inside the blue content box with the standard module
@@ -301,7 +304,7 @@ ok("page: the Saved tab renders the empty state", pageSrc.indexOf("No Results") 
 ok("page: the Saved tab's filter keeps the displayed count in step",
 	pageSrc.indexOf("LuminumTable.attachTextFilter('savedqueriesfilter'") >= 0 && pageSrc.indexOf("document.getElementById('sqviscount')") >= 0);
 ok("page: the Saved tab's header selection is a disabled dummy checkbox",
-	/<td style="width: 15px;"><input type="checkbox" disabled="disabled"><\/td><td>Name<\/td>/.test(pageSrc));
+	/<td><input type="checkbox" disabled="disabled"><\/td><td>Name<\/td>/.test(pageSrc));
 ok("page: the Saved tab's selection maintains the (1 Selected) suffix",
 	pageSrc.indexOf("document.getElementById(\"sqselcount\").textContent = document.querySelector('.savedqueryrow:checked') ? '(1 Selected)' : ''") >= 0);
 const headerSrc = fs.readFileSync(path.join(__dirname, "..", "server", "console", "html", "layout", "header.php"), "utf8");

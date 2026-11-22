@@ -23,13 +23,14 @@ $ugcount = mysqli_num_rows($ugquery);
 		<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Delete Selected</button>
 		<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Get Info</button>
 
-		<table style="margin-top: 10px; text-align: left;">
+		<table style="margin-top: 10px; text-align: left; table-layout: fixed;">
+		<colgroup><col style="width: 32px;"><col><col style="width: 50px;"><col style="width: 50px;"><col style="width: 175px;"><col style="width: 175px;"><col style="width: 50px;"></colgroup>
 		<tr><td colspan="7"><div style="position: absolute; padding-top: 5px; padding-left: 5px;">0 of <?php print $ugcount; ?> items</div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="ugroupsfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" maxlength="64" <?php if ($ugcount == 0) { print "disabled=\"disabled\""; } ?>></div></td></tr>
-		<tr><td style="width: 15px; text-align: center; padding: 0;"><?php
+		<tr><td style="text-align: center; padding: 0;"><?php
 			if ($ugcount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
 			else { print "<input id=\"selectall\" type=\"checkbox\" onclick=\"allToggle();\">"; }
 		?></td>
-		<td style="width: 400px;">Name</td><td style="width: 50px;">Members</td><td style="width: 50px;">Author</td><td style="width: 175px;">Create Date</td><td style="width: 175px;">Last Modification</td><td style="width: 50px;">Modified By</td></tr>
+		<td>Name</td><td>Members</td><td>Author</td><td>Create Date</td><td>Last Modification</td><td>Modified By</td></tr>
 		<?php
 			if ($ugcount == 0) {
 				print "<tr><td colspan=\"8\" style=\"text-align: center; background-color: #494a69; font-weight: normal; font-style: italic;\">No Results</td></tr>\n";

@@ -28,7 +28,8 @@ $pkgcount = mysqli_num_rows($pkgquery);
                 print "<button class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\" disabled=\"disabled\">Get Info</button>\n";
                 print "</div>\n";
                 ?>
-		<table style="margin-top: 10px;">
+		<table style="margin-top: 10px; table-layout: fixed;">
+		<colgroup><col style="width: 32px;"><col><col><col style="width: 50px;"><col style="width: 75px;"><col style="width: 100px;"><col style="width: 175px;"><col style="width: 175px;"><col style="width: 100px;"></colgroup>
 		<tr><td colspan="10"><div style="position: absolute; padding-top: 7px; padding-left: 5px;"><span id="viscount"><?php print $pkgcount; ?></span> of <span id="totcount"><?php print $pkgcount; ?></span> items <span id="selcount"></span></div>
 		<div style="float: right; text-align: right; padding-right: 5px;">Content Set: <select id="contentset" name="contentset" style="margin-left: 2px; margin-right: 30px; margin-top: 2px; width: 170px; height: 28px;" <?php if ($pkgcount == 0) { print "disabled=\"disabled\""; } ?>>
 			<option value="all">All</option>
@@ -43,7 +44,7 @@ $pkgcount = mysqli_num_rows($pkgquery);
 			if ($pkgcount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
 			else { print "<input type=\"checkbox\">"; }
 		?>
-		</td><td style="width: 200px;">Name</td><td>Description</td><td style="width: 50px; text-align: center;">Supports</td><td style="width: 75px;">Size</td><td style="width: 100px;">Author</td><td style="width: 175px;">Create Date</td><td style="width: 175px;">Last Modification</td><td style="width: 100px;">Modified By</td></tr>
+		</td><td>Name</td><td>Description</td><td style="text-align: center;">Supports</td><td>Size</td><td>Author</td><td>Create Date</td><td>Last Modification</td><td>Modified By</td></tr>
 		<?php
 
 		if ($pkgcount == 0) {
@@ -51,7 +52,7 @@ $pkgcount = mysqli_num_rows($pkgquery);
 			}
 		else {
 			while($row = mysqli_fetch_assoc($pkgquery)) {
-				print "<tr class=\"luminum-row\"><td id=\"" . $row["ID"] . "A\" style=\"width: 15px; background-color: #494a69;\"><input id=\"ID" . $row["ID"] . "\" type=\"checkbox\" onclick=\"rowHighlight(" . $row["ID"] . "); pkgAllCheck();\"></td><td id=\"" . $row["ID"] . "B\" style=\"width: 50px; background-color: #494a69; font-weight: normal;\">" . $row["NAME"] . "</td><td id=\"" . $row["ID"] . "C\" style=\"width: 75px; background-color: #494a69; font-weight: normal;\">" . $row["DESCRIPTION"] . "</td><td id=\"" . $row["ID"] . "D\" style=\"width: 120px; background-color: #494a69; font-weight: normal; text-align: center;\">" . "COMPAT" . "</td><td id=\"" . $row["ID"] . "E\" style=\"background-color: #494a69; font-weight: normal;\">" . "SIZE" . "</td><td id=\"" . $row["ID"] . "F\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $row["AUTHOR"] . "</td><td id=\"" . $row["ID"] . "G\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $row["CREATED"] . "</td>" . "<td id=\"" . $row["ID"] . "H\" style=\"width: 90px; background-color: #494a69; font-weight: normal;\">" . $row["MODIFIED"] . "</td><td id=\"" . $row["ID"] . "I\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["EDITOR"] . "</td></tr>\n";
+				print "<tr class=\"luminum-row\"><td id=\"" . $row["ID"] . "A\" style=\"background-color: #494a69;\"><input id=\"ID" . $row["ID"] . "\" type=\"checkbox\" onclick=\"rowHighlight(" . $row["ID"] . "); pkgAllCheck();\"></td><td id=\"" . $row["ID"] . "B\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["NAME"] . "</td><td id=\"" . $row["ID"] . "C\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["DESCRIPTION"] . "</td><td id=\"" . $row["ID"] . "D\" style=\"background-color: #494a69; font-weight: normal; text-align: center;\">" . "COMPAT" . "</td><td id=\"" . $row["ID"] . "E\" style=\"background-color: #494a69; font-weight: normal;\">" . "SIZE" . "</td><td id=\"" . $row["ID"] . "F\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["AUTHOR"] . "</td><td id=\"" . $row["ID"] . "G\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["CREATED"] . "</td>" . "<td id=\"" . $row["ID"] . "H\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["MODIFIED"] . "</td><td id=\"" . $row["ID"] . "I\" style=\"background-color: #494a69; font-weight: normal;\">" . $row["EDITOR"] . "</td></tr>\n";
 				}
 			}
 		?>
