@@ -229,7 +229,6 @@ TBD
 |--------|---------------|----------------------------|----------------------------------------------------------------------------------------|
 |&#10003;|**Completed**  |Network Listener            |The actual process that opens on a secure network interface to listen for connections   |
 |&#10003;|**Completed**  |Message Handling            |Routines that parse messages from the server and/or endpoints                           |
-|&#9654; |*In Progress*  |Client Certificate          |Attach a requirement for client certificates to the listener process                    |
 |&#10003;|**Completed**  |Lumy Scanning               |Include Lumys based on enabled/disabled state in configuration and file include presence|
 |&#10003;|**Completed**  |Client Onboarding           |Processing for newly-added clients on first report to the server                        |
 |&#10003;|**Completed**  |Client Deactivation         |Processing the removal of clients from the server                                       |
