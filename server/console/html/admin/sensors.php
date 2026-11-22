@@ -78,14 +78,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 		$nextrev = 1;
 		$revq = mysqli_query($db, "select COALESCE(MAX(REV), 0) from SENSORHISTORY where ID = $editid");
 		if ($revq && ($rrow = $revq->fetch_row()) !== null) { $nextrev = (int)$rrow[0] + 1; }
-		$curq = mysqli_query($db, "select NAME,DESCRIPTION,CSET,CATEGORY,TIMEOUT,MSTYPE,MSCRIPT,LSTYPE,LSCRIPT,WSTYPE,WSCRIPT,RTYPE,USECASE,CSPLIT,DELIMITER,WITHPARAMS from SENSORS where ID = $editid");
+		$curq = mysqli_query($db, "select NAME,DESCRIPTION,CSET,CATEGORY,TIMEOUT,MSTYPE,MSCRIPT,LSTYPE,LSCRIPT,WSTYPE,WSCRIPT,RTYPE,USECASE,CSPLIT,DELIMITER,OUTCOLS,WITHPARAMS from SENSORS where ID = $editid");
 		if ($curq && ($crow = $curq->fetch_assoc()) !== null) {
-			$revins = "insert into SENSORHISTORY (ID,REV,NAME,DESCRIPTION,CSET,CATEGORY,TIMEOUT,MSTYPE,MSCRIPT,LSTYPE,LSCRIPT,WSTYPE,WSCRIPT,RTYPE,USECASE,CSPLIT,DELIMITER,WITHPARAMS,TIMESTAMP,EDITOR) values ("
+			$revins = "insert into SENSORHISTORY (ID,REV,NAME,DESCRIPTION,CSET,CATEGORY,TIMEOUT,MSTYPE,MSCRIPT,LSTYPE,LSCRIPT,WSTYPE,WSCRIPT,RTYPE,USECASE,CSPLIT,DELIMITER,OUTCOLS,WITHPARAMS,TIMESTAMP,EDITOR) values ("
 				. $editid . "," . $nextrev . ",'" . $eg($crow['NAME']) . "','" . $eg($crow['DESCRIPTION']) . "'," . (int)$crow['CSET'] . ","
 				. ($crow['CATEGORY'] === null ? 'null' : (int)$crow['CATEGORY']) . ",'" . $eg($crow['TIMEOUT']) . "',"
 				. $sv($crow['MSTYPE']) . "," . $sv($crow['MSCRIPT']) . "," . $sv($crow['LSTYPE']) . "," . $sv($crow['LSCRIPT']) . ","
 				. $sv($crow['WSTYPE']) . "," . $sv($crow['WSCRIPT']) . ",'" . $eg($crow['RTYPE']) . "'," . (int)$crow['USECASE'] . ","
-				. (int)$crow['CSPLIT'] . "," . $sv($crow['DELIMITER']) . "," . (int)$crow['WITHPARAMS'] . ",now()," . (int)$urow['ID'] . ")";
+				. (int)$crow['CSPLIT'] . "," . $sv($crow['DELIMITER']) . "," . $sv($crow['OUTCOLS']) . "," . (int)$crow['WITHPARAMS'] . ",now()," . (int)$urow['ID'] . ")";
 			if (!mysqli_query($db, $revins)) {
 				header('Location: /index.php?view=sensors&action=' . $back . '&err=save');
 				exit;
@@ -95,7 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 			. ($s['CATEGORY'] === null ? 'null' : (int)$s['CATEGORY']) . ",TIMEOUT = '" . $eg($s['TIMEOUT']) . "',MSTYPE = " . $sv($s['MSTYPE'])
 			. ",MSCRIPT = " . $sv($s['MSCRIPT']) . ",LSTYPE = " . $sv($s['LSTYPE']) . ",LSCRIPT = " . $sv($s['LSCRIPT'])
 			. ",WSTYPE = " . $sv($s['WSTYPE']) . ",WSCRIPT = " . $sv($s['WSCRIPT']) . ",RTYPE = '" . $eg($s['RTYPE']) . "',USECASE = " . (int)$s['USECASE']
-			. ",CSPLIT = " . (int)$s['CSPLIT'] . ",DELIMITER = " . $sv($s['DELIMITER']) . ",WITHPARAMS = " . (int)$s['WITHPARAMS']
+			. ",CSPLIT = " . (int)$s['CSPLIT'] . ",DELIMITER = " . $sv($s['DELIMITER']) . ",OUTCOLS = " . $sv($s['OUTCOLS']) . ",WITHPARAMS = " . (int)$s['WITHPARAMS']
 			. ",MODIFIED = now(),EDITOR = " . (int)$urow['ID'] . " where ID = $editid";
 		if (!mysqli_query($db, $upd)) {
 			header('Location: /index.php?view=sensors&action=' . $back . '&err=save');
@@ -104,7 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 		header('Location: /index.php?view=sensors');
 		exit;
 	}
-	$ins = "insert into SENSORS (NAME,DESCRIPTION,CSET,CATEGORY,TIMEOUT,MSTYPE,MSCRIPT,LSTYPE,LSCRIPT,WSTYPE,WSCRIPT,RTYPE,USECASE,CSPLIT,DELIMITER,WITHPARAMS,AUTHOR,CREATED) values ("
+	$ins = "insert into SENSORS (NAME,DESCRIPTION,CSET,CATEGORY,TIMEOUT,MSTYPE,MSCRIPT,LSTYPE,LSCRIPT,WSTYPE,WSCRIPT,RTYPE,USECASE,CSPLIT,DELIMITER,OUTCOLS,WITHPARAMS,AUTHOR,CREATED) values ("
 		. "'" . $eg($s['NAME']) . "','" . $eg($s['DESCRIPTION']) . "'," . (int)$s['CSET'] . ","
 		. ($s['CATEGORY'] === null ? 'null' : (int)$s['CATEGORY']) . ","
 		. "'" . $eg($s['TIMEOUT']) . "',"
@@ -116,6 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 		. ($s['WSCRIPT'] === null ? 'null' : "'" . $eg($s['WSCRIPT']) . "'") . ","
 		. "'" . $eg($s['RTYPE']) . "'," . (int)$s['USECASE'] . "," . (int)$s['CSPLIT'] . ","
 		. ($s['DELIMITER'] === null ? 'null' : "'" . $eg($s['DELIMITER']) . "'") . ","
+		. ($s['OUTCOLS'] === null ? 'null' : "'" . $eg($s['OUTCOLS']) . "'") . ","
 		. (int)$s['WITHPARAMS'] . "," . (int)$urow['ID'] . ",now())";
 	if (!mysqli_query($db, $ins)) {
 		header('Location: /index.php?view=sensors&action=new&err=save');
@@ -214,7 +215,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 		if ($_GET["action"] == "edit") {
 			$sid = (isset($_GET["id"]) && preg_match('/^[1-9][0-9]*$/', $_GET["id"])) ? (int)$_GET["id"] : 0;
 			if ($sid !== 0) {
-				$sq = mysqli_query($db, "select ID,NAME,DESCRIPTION,CSET,CATEGORY,TIMEOUT,MSTYPE,MSCRIPT,LSTYPE,LSCRIPT,WSTYPE,WSCRIPT,RTYPE,USECASE,CSPLIT,DELIMITER,WITHPARAMS,MODIFIED from SENSORS where ID = $sid");
+				$sq = mysqli_query($db, "select ID,NAME,DESCRIPTION,CSET,CATEGORY,TIMEOUT,MSTYPE,MSCRIPT,LSTYPE,LSCRIPT,WSTYPE,WSCRIPT,RTYPE,USECASE,CSPLIT,DELIMITER,OUTCOLS,WITHPARAMS,MODIFIED from SENSORS where ID = $sid");
 				$sensor = ($sq && mysqli_num_rows($sq) > 0) ? $sq->fetch_assoc() : null;
 			}
 		}
@@ -243,6 +244,11 @@ $sensorcount = mysqli_num_rows($sensorquery);
 				'mstype' => $sensor['MSTYPE'], 'mscript' => $sensor['MSCRIPT'],
 				'wstype' => $sensor['WSTYPE'], 'wscript' => $sensor['WSCRIPT'],
 				'csplit' => (int)$sensor['CSPLIT'],
+				// The stored column names (the OUTCOLS value split back on
+				// the sensor's delimiter) for the form's column fields.
+				'outcols' => ((int)$sensor['CSPLIT'] === 1 && $sensor['OUTCOLS'] !== null && $sensor['DELIMITER'] !== null)
+					? explode($sensor['DELIMITER'], $sensor['OUTCOLS'])
+					: null,
 			];
 		}
 		// The sensor's prior revisions (newest first): each snapshot's
@@ -330,6 +336,13 @@ $sensorcount = mysqli_num_rows($sensorquery);
 				</select></td></tr>
 				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444; font-weight: normal;" colspan="2"><input type="checkbox" id="case" name="case"<?php print ($sensor !== null && (int)$sensor['USECASE'] === 1) ? ' checked="checked"' : ''; ?>><span style="cursor: normal; user-select: none;" onclick="caseToggle()"> Results are Case Sensitive</span> <div class="tooltip"><img src="/icons/tooltip.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Instructs the server to force case sensitive matching for the sensor output<br><br>Default: Disabled</span></div></td></tr>
 				<tr><td style="background-color: transparent; border: 0; color: #444; font-weight: normal;" colspan="2"><input type="checkbox" id="split" name="split" onclick="toggleSplit()"<?php print ($sensor !== null && (int)$sensor['CSPLIT'] === 1) ? ' checked="checked"' : ''; ?>><span style="cursor: normal; user-select: none;" onclick="csToggle()"> Split Results into Columns </span><div class="tooltip"><img src="/icons/tooltip.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Allows the server to split the sensor output and display the split segments in separate columns within a query response<br><br>Default: Disabled</span></div><span class="delform" style="margin-left: 50px; opacity: 0;">Delimeter: </span><span class="delform" style="opacity: 0; color: red;">*</span><input class="delform" id="delimeter" name="delimeter" type="text" style="opacity: 0; margin-left: 15px; width: 5px;" maxlength="1" value="<?php print ($sensor !== null && $sensor['DELIMITER'] !== null) ? htmlspecialchars($sensor['DELIMITER'], ENT_QUOTES) : '|'; ?>"></td></tr>
+				<!-- The output column names: the row appears when "Split Results
+				     into Columns" is checked. Each field allows only
+				     letters/numbers/spaces; the add button (the query
+				     builder's) inserts another field below, and the
+				     remove button drops one (removing a field down to one
+				     disables the split again). -->
+				<tr id="colrow" style="display: none;"><td style="background-color: transparent; border: 0; color: #444; font-weight: normal;" colspan="2"><div id="colfields"><div class="colfield" style="margin-bottom: 5px;"><input type="text" name="outcol[]" class="outcol" placeholder="Column Name" maxlength="64" style="width: 300px;"> <img src="/icons/remove.png" class="remove" style="vertical-align: middle; margin-bottom: 3px; margin-right: 3px;"> <img src="/icons/add.png" class="add" style="vertical-align: middle; margin-bottom: 3px;"></div></div></td></tr>
 				</table>
 
 			</div>
@@ -492,7 +505,48 @@ function toggleSplit() {
 	for (var i=0 ; i<len; i++) {
 		delements[i].style.opacity = ol;
 		}
+	// The output column name fields appear on the line below the checkbox.
+	document.getElementById("colrow").style.display = checkbox.checked ? "" : "none";
 	}
+
+// The output column name fields: the add button (the query builder's)
+// inserts another field below the clicked one, and the remove button drops
+// the field. Removing a field down to one disables the split again
+// (splitting needs at least two columns), so the checkbox is unchecked and
+// the row hidden.
+function addColField(btn) {
+	const container = document.getElementById("colfields");
+	const src = btn.closest(".colfield");
+	const field = src.cloneNode(true);
+	const input = field.querySelector(".outcol");
+	input.value = "";
+	src.after(field);
+	input.focus();
+	formCheck();
+	}
+
+function removeColField(btn) {
+	const container = document.getElementById("colfields");
+	btn.closest(".colfield").remove();
+	if (container.children.length <= 1) {
+		document.getElementById("split").checked = false;
+		toggleSplit();
+		}
+	formCheck();
+	}
+
+// The column field row's wiring (delegated - the fields are cloned at
+// runtime): the add/remove buttons, and the letters/numbers/spaces filter
+// on the name inputs.
+document.getElementById("colfields").addEventListener("click", function (e) {
+	if (e.target.classList.contains("add")) { addColField(e.target); }
+	else if (e.target.classList.contains("remove")) { removeColField(e.target); }
+	});
+document.getElementById("colfields").addEventListener("input", function (e) {
+	if (!e.target.classList.contains("outcol")) { return; }
+	e.target.value = e.target.value.replace(/[^A-Za-z0-9 ]/g, "");
+	formCheck();
+	});
 
 function switchTab(evt, configSect) {
 	var i, x, tablinks;
@@ -808,6 +862,12 @@ function formCheck() {
 	if (!/^[1-9][0-9]{0,2}$/.test(tval)) { ok = false; }
 	if (cset === '') { ok = false; }
 	if (split && delim.length !== 1) { ok = false; }
+	// Splitting needs at least two column names, every one required (the
+	// input filter already keeps them to letters/numbers/spaces).
+	if (split) {
+		const names = Array.from(document.querySelectorAll('#colfields .outcol')).map(i => i.value.trim());
+		if (names.length < 2 || names.some(n => n === '' || n.length > 64 || !/^[A-Za-z0-9 ]+$/.test(n))) { ok = false; }
+		}
 	if (!lEn && !mEn && !wEn) { ok = false; }
 	if (lEn && lsc.trim() === '') { ok = false; }
 	if (mEn && msc.trim() === '') { ok = false; }
@@ -840,6 +900,19 @@ if (editData) {
 	if (editData.wscript !== null) { initEditEditor('Windows', editData.wstype, editData.wscript); }
 	else { disableEditor('Windows'); }
 	if (editData.csplit) { toggleSplit(); }
+	if (editData.outcols && editData.outcols.length) {
+		// Pre-fill the column fields with the stored names (the first field
+		// is the markup's, the rest are cloned below it).
+		const container = document.getElementById('colfields');
+		editData.outcols.forEach(function (name, i) {
+			let field = container.children[i];
+			if (!field) {
+				field = container.lastElementChild.cloneNode(true);
+				container.appendChild(field);
+			}
+			field.querySelector('.outcol').value = name;
+			});
+		}
 	}
 else {
 	disableEditor('Linux');

@@ -29,6 +29,26 @@ function luminum_result_row($row) {
 	];
 }
 
+// Shape one SENSORS row (ID, NAME, CSPLIT, DELIMITER, OUTCOLS) as a
+// retrieve-sensor entry for the results API: the name the results page
+// titles the column with, and - for a CSPLIT sensor - the delimiter and
+// the named output columns (OUTCOLS split back on the delimiter) the page
+// uses to expand the sensor's output into sub-columns.
+function luminum_sensor_entry($row) {
+	$outcols = null;
+	if ((int)$row['CSPLIT'] === 1 && is_string($row['OUTCOLS']) && $row['OUTCOLS'] !== '') {
+		$delim = (is_string($row['DELIMITER']) && $row['DELIMITER'] !== '') ? $row['DELIMITER'] : '|';
+		$outcols = explode($delim, $row['OUTCOLS']);
+	}
+	return [
+		'sid' => (int)$row['ID'],
+		'name' => (is_string($row['NAME']) && $row['NAME'] !== '') ? $row['NAME'] : ('Sensor ' . $row['ID']),
+		'csplit' => (int)$row['CSPLIT'],
+		'delimiter' => $row['DELIMITER'],
+		'outcols' => $outcols,
+	];
+}
+
 // The retrieve sensor IDs named by a query command's DATA (the JSON format
 // produced by luminum_query_command_data); [] when unparseable.
 function luminum_query_data_sids($data) {

@@ -48,6 +48,50 @@ ok("headerHTML: custom header used raw",
 	LT.headerHTML({ columns: [{ label: "OS", header: 'Operating <em>System</em>' }] }) ===
 		"<tr><td>Operating <em>System</em></td></tr>");
 
+// A config with a sub-labeled column (the query results page's CSPLIT
+// sensor): the header is two tiers, the rows span one <tr> per sub-row.
+const subCfg = {
+	columns: [
+		{ type: "checkbox", width: "15px", inputClass: "qrrow", idPrefix: "ID", header: '<input id="qrselectall" type="checkbox">' },
+		{ label: "Computer Name", key: "s7", whiteSpace: "pre-wrap" },
+		{ label: "Installed Applications", key: "s9", sub: ["Name", "Version"], whiteSpace: "pre-wrap" },
+		{ label: "Count", key: "count", width: "60px", align: "center" }
+	],
+	searchKeys: ["s7", "s9"]
+};
+const subRow = {
+	id: 4, count: 2, s7: "host-1",
+	s9_0_0: "App One", s9_0_1: "1.0.1",
+	s9_1_0: "App Two", s9_1_1: "2.0",
+	span: 2
+};
+
+// --- physicalColumns --------------------------------------------------------
+ok("physicalColumns: a plain config expands to itself",
+	LT.physicalColumns(cfg).length === 2 &&
+		LT.physicalColumns(cfg).every((p, i) => p.subIndex === null && p.col === cfg.columns[i]));
+ok("physicalColumns: a sub column expands to one physical column per sub-label",
+	LT.physicalColumns(subCfg).length === 5 &&
+		LT.physicalColumns(subCfg)[2].subIndex === 0 &&
+		LT.physicalColumns(subCfg)[2].label === "Name" &&
+		LT.physicalColumns(subCfg)[3].subIndex === 1 &&
+		LT.physicalColumns(subCfg)[3].label === "Version");
+
+// --- headerHTML: two tiers --------------------------------------------------
+const twoTier = LT.headerHTML(subCfg);
+ok("headerHTML: two tiers when a column carries sub-labels",
+	(twoTier.match(/<tr>/g) || []).length === 2, twoTier);
+ok("headerHTML: the sub column's label spans its sub-columns",
+	twoTier.indexOf('<td colspan="2">Installed Applications</td>') !== -1, twoTier);
+ok("headerHTML: the sub-labels sit in the second tier",
+	/<tr><td>Name<\/td><td>Version<\/td><\/tr>/.test(twoTier), twoTier);
+ok("headerHTML: the other columns span both tiers",
+	twoTier.indexOf('rowspan="2"') !== -1 && (twoTier.match(/rowspan="2"/g) || []).length === 3, twoTier);
+ok("headerHTML: the checkbox header keeps its raw HTML",
+	twoTier.indexOf('id="qrselectall"') !== -1, twoTier);
+ok("headerHTML: a plain config stays a single tier",
+	(LT.headerHTML(cfg).match(/<tr>/g) || []).length === 1);
+
 // --- colgroupHTML -----------------------------------------------------------
 ok("colgroupHTML: checkbox column pinned to the fixed width",
 	LT.colgroupHTML({ columns: [{ type: "checkbox" }, { label: "Name", key: "name" }] }) ===
@@ -61,6 +105,10 @@ ok("colgroupHTML: a column without a width is flexible (bare <col>)",
 	LT.colgroupHTML({ columns: [{ label: "A", key: "a" }, { label: "B", key: "b", width: "60px" }, { label: "C", key: "c" }] }) ===
 		'<colgroup><col><col style="width: 60px;"><col></colgroup>',
 	LT.colgroupHTML({ columns: [{ label: "A", key: "a" }, { label: "B", key: "b", width: "60px" }, { label: "C", key: "c" }] }));
+ok("colgroupHTML: sub-columns are flexible, the rest keep their widths",
+	LT.colgroupHTML(subCfg) ===
+		'<colgroup><col style="width: 32px;"><col><col><col><col style="width: 60px;"></colgroup>',
+	LT.colgroupHTML(subCfg));
 
 // --- rowHTML ----------------------------------------------------------------
 const baseRow = LT.rowHTML(cfg, rows[0], {});
@@ -98,12 +146,42 @@ ok("rowHTML: whiteSpace flag lands in the cell style",
 ok("rowHTML: a column without whiteSpace gets none",
 	!baseRow.includes("white-space"));
 
+// A row with sub values renders one <tr> per sub-row: the sub values fill
+// the sub-columns line by line, and the checkbox, the plain column, and the
+// Count span the <tr>s with rowspan.
+const spanRow = LT.rowHTML(subCfg, subRow, {});
+const spanTrs = spanRow.match(/<tr[^>]*>[\s\S]*?<\/tr>/g) || [];
+ok("rowHTML: a span-2 row renders two <tr>s", spanTrs.length === 2, spanRow);
+ok("rowHTML: only the first <tr> carries the row class + data-id",
+	spanTrs[0].startsWith('<tr class="luminum-row" data-id="4">') &&
+		spanTrs[1].startsWith("<tr>"), spanRow);
+ok("rowHTML: the checkbox spans the sub-rows",
+	spanRow.indexOf('rowspan="2" id="4A"') !== -1, spanRow);
+ok("rowHTML: the plain column spans the sub-rows",
+	spanRow.indexOf('<td rowspan="2" style="background-color: #494a69; font-weight: normal;white-space: pre-wrap;">host-1</td>') !== -1, spanRow);
+ok("rowHTML: the Count cell spans the sub-rows",
+	spanRow.indexOf('<td rowspan="2" style="background-color: #494a69; font-weight: normal;width: 60px;text-align: center;">2</td>') !== -1, spanRow);
+ok("rowHTML: sub-row 0 carries line 0's segments",
+	spanTrs[0].includes(">App One</td>") && spanTrs[0].includes(">1.0.1</td>"), spanRow);
+ok("rowHTML: sub-row 1 carries line 1's segments",
+	spanTrs[1].includes(">App Two</td>") && spanTrs[1].includes(">2.0</td>"), spanRow);
+ok("rowHTML: a missing sub value renders an empty cell",
+	LT.rowHTML(subCfg, { id: 5, count: 1, s7: "h", s9_0_0: "Only", span: 1 }, {})
+		.includes(">Only</td><td style=\"background-color: #494a69; font-weight: normal;white-space: pre-wrap;\"></td>"));
+ok("rowHTML: a span-1 row in a sub config renders a single <tr>",
+	((LT.rowHTML(subCfg, { id: 6, count: 1, s7: "h", s9_0_0: "A", s9_0_1: "B", span: 1 }).match(/<tr[^>]*>/g) || []).length === 1));
+ok("rowHTML: the selected background reaches every sub-row",
+	((LT.rowHTML(subCfg, subRow, { selected: { 4: true } }).match(/<tr[^>]*>[\s\S]*?<\/tr>/g) || []))
+		.every((t) => t.includes("background-color: #686993")));
+
 // --- rowsHTML ---------------------------------------------------------------
 const empty = LT.rowsHTML(cfg, [], {});
 ok("rowsHTML: empty state colspan", empty.includes('colspan="2"'), empty);
 ok("rowsHTML: default empty message", empty.includes("No Results"), empty);
 const emptyCustom = LT.rowsHTML({ columns: plain, emptyMessage: "Nothing here" }, [], {});
 ok("rowsHTML: custom empty message", emptyCustom.includes("Nothing here"), emptyCustom);
+ok("rowsHTML: the empty state spans the physical columns",
+	LT.rowsHTML(subCfg, [], {}).includes('colspan="5"'), LT.rowsHTML(subCfg, [], {}));
 const all = LT.rowsHTML(cfg, rows, {});
 ok("rowsHTML: joins rows with newline",
 	all.split("\n").length === 2 && all.includes('data-id="1"') && all.includes('data-id="2"'));

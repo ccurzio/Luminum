@@ -18,6 +18,13 @@
 // by more than one endpoint (a duplicate row) - when every answer is
 // unique the count would be 1 in every row and the column carries nothing.
 //
+// A sensor with CSPLIT and named output columns (the SENSORS OUTCOLS
+// value, split on the sensor's DELIMITER) expands its column: the header
+// carries the column names as a second tier, and each line of the sensor's
+// output renders as its own <tr> with the line's delimiter-separated
+// segments in the sub-columns, while the row's other cells (the checkbox,
+// the non-split sensors, the Count) span the <tr>s.
+//
 // The rows appear as the answers arrive: while the query is running the
 // page polls every second and appends each new answer row to the table
 // (updating a shared row's Count in place) instead of re-rendering the
@@ -30,9 +37,9 @@
 // opened on an already-finished query shows the server-side duration
 // instead of ticking.
 //
-// The pure functions (cellValue, pivotResults, buildConfig, queryDone,
-// doneElapsed) are DOM-free so they can be unit-tested under Node. The DOM
-// helper (init) only runs in the browser.
+// The pure functions (cellValue, pivotResults, expandRow, buildConfig,
+// queryDone, doneElapsed) are DOM-free so they can be unit-tested under
+// Node. The DOM helper (init) only runs in the browser.
 //
 (function (root, factory) {
 	if (typeof module === 'object' && module.exports) {
@@ -95,12 +102,49 @@
 		});
 	}
 
+	// Expand a pivot row for the table: a sensor with CSPLIT and named
+	// output columns (outcols) renders one <tr> per line of its output,
+	// each line split on the sensor's delimiter into the sensor's
+	// sub-columns. The row's span is the largest line count across its
+	// split cells (1 when the query has no split sensor), the sub values
+	// are stored as row[<key>_<line>_<col>], and row[<key>_segs] carries
+	// the largest segment count (buildConfig names any segments past the
+	// stored column names generically).
+	function expandRow(row, sensors) {
+		var span = 1;
+		(sensors || []).forEach(function (s) {
+			if (!s.csplit || !s.outcols || !s.outcols.length) { return; }
+			var key = 's' + s.sid;
+			var v = row[key];
+			var delim = (s.delimiter !== null && s.delimiter !== undefined && s.delimiter !== '') ? s.delimiter : '|';
+			var lines = String(v === undefined || v === null ? '' : v).split('\n');
+			// A trailing newline (a script that ends its output with one)
+			// would add an empty last line; drop it.
+			if (lines.length > 1 && lines[lines.length - 1] === '') { lines.pop(); }
+			if (lines.length > span) { span = lines.length; }
+			var segs = 0;
+			lines.forEach(function (line, i) {
+				var parts = line.split(delim);
+				if (parts.length > segs) { segs = parts.length; }
+				parts.forEach(function (p, j) {
+					row[key + '_' + i + '_' + j] = p;
+				});
+			});
+			row[key + '_segs'] = segs;
+		});
+		row.span = span;
+		return row;
+	}
+
 	// The LuminumTable column config for a collapsed query: the select
 	// checkbox column first (like the other console tables), one column per
 	// requested sensor (titled with the sensor's name), and - only when at
 	// least one row is a duplicate (more than one endpoint returned the
 	// answer) - the Count column at the end (how many endpoints returned
-	// the row's answer). The filter searches the sensor cells (not the
+	// the row's answer). A CSPLIT sensor's column carries its stored column
+	// names as sub-labels (the header's second tier); a line with more
+	// segments than stored names gains generic "Column N" sub-labels so no
+	// data is dropped. The filter searches the sensor cells (not the
 	// count).
 	function buildConfig(q, rows) {
 		var rowCount = rows.length;
@@ -110,11 +154,23 @@
 		cols.push({ type: 'checkbox', width: '15px', inputClass: 'qrrow', idPrefix: 'ID',
 			header: '<input id="qrselectall" type="checkbox">' });
 		(q.sensors || []).forEach(function (s) {
-			// pre-wrap: a sensor's output is often multi-line formatted
-			// text, and the cell must render its newlines instead of
-			// collapsing them into spaces.
-			cols.push({ key: 's' + s.sid, label: s.name, whiteSpace: 'pre-wrap' });
-			keys.push('s' + s.sid);
+			var key = 's' + s.sid;
+			if (s.csplit && s.outcols && s.outcols.length) {
+				var sub = s.outcols.slice();
+				rows.forEach(function (row) {
+					var segs = row[key + '_segs'];
+					if (segs !== undefined && segs > sub.length) {
+						for (var n = sub.length; n < segs; n++) { sub.push('Column ' + (n + 1)); }
+					}
+				});
+				cols.push({ key: key, label: s.name, sub: sub, whiteSpace: 'pre-wrap' });
+			} else {
+				// pre-wrap: a sensor's output is often multi-line formatted
+				// text, and the cell must render its newlines instead of
+				// collapsing them into spaces.
+				cols.push({ key: key, label: s.name, whiteSpace: 'pre-wrap' });
+			}
+			keys.push(key);
 		});
 		if (hasDuplicate) {
 			cols.push({ key: 'count', label: 'Count', width: '60px', align: 'center' });
@@ -263,6 +319,7 @@
 			firstRender = false;
 
 			var newRows = pivotResults(q);
+			newRows.forEach(function (r) { expandRow(r, q.sensors); });
 			var newConfig = buildConfig(q, newRows);
 
 			// Incremental update: the pivot rows are append-only (a group's
@@ -271,13 +328,16 @@
 			// column set is unchanged and no filter is active, update the
 			// changed Count cells in place and append the new rows - the
 			// rows appear as the answers arrive, without a full repaint.
-			// A structural change (the Count column appearing) or an active
-			// filter falls back to the full re-render.
-			var structural = !config || config.columns.length !== newConfig.columns.length;
+			// A structural change (the Count column appearing, a split
+			// sensor gaining a generic sub-column) or an active filter
+			// falls back to the full re-render. The comparison is on the
+			// physical column count (a sub-column counts as one).
+			var structural = !config ||
+				LuminumTable.physicalColumns(config).length !== LuminumTable.physicalColumns(newConfig).length;
 			if (structural || state.text !== '') {
 				config = newConfig;
 				rows = newRows;
-				var ncol = config.columns.length;
+				var ncol = LuminumTable.physicalColumns(config).length;
 				topcell.colSpan = ncol;
 				footcell.colSpan = ncol;
 				document.getElementById('qrtable-head').innerHTML = LuminumTable.headerHTML(config);
@@ -361,6 +421,7 @@
 	return {
 		cellValue: cellValue,
 		pivotResults: pivotResults,
+		expandRow: expandRow,
 		buildConfig: buildConfig,
 		queryDone: queryDone,
 		doneElapsed: doneElapsed,

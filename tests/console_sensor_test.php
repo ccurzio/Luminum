@@ -60,6 +60,7 @@ ok("disabled windows stores null script", array_key_exists('WSCRIPT', $s) && $s[
 ok("usecase defaults off", ($s['USECASE'] ?? 1) === 0);
 ok("csplit defaults off", ($s['CSPLIT'] ?? 1) === 0);
 ok("delimiter null when unsplit", array_key_exists('DELIMITER', $s) && $s['DELIMITER'] === null);
+ok("outcols null when unsplit", array_key_exists('OUTCOLS', $s) && $s['OUTCOLS'] === null);
 ok("withparams defaults off", ($s['WITHPARAMS'] ?? 1) === 0);
 
 // --- timeout unit + range ----------------------------------------------------
@@ -124,13 +125,55 @@ ok("numeric category stored as int", $v['ok'] && $v['sensor']['CATEGORY'] === 7)
 // --- split / delimiter -------------------------------------------------------
 $p = base_post(); $p['split'] = 'on'; $p['delimeter'] = '|';
 $v = luminum_validate_sensor_create($p);
-ok("split with one-char delimiter accepted", $v['ok'] && $v['sensor']['CSPLIT'] === 1 && $v['sensor']['DELIMITER'] === '|');
+ok("split without column names rejected", $v['ok'] === false && $v['err'] === 'outcols');
 $p = base_post(); $p['split'] = 'on'; $p['delimeter'] = 'ab';
 $v = luminum_validate_sensor_create($p);
 ok("multi-char delimiter rejected", $v['ok'] === false && $v['err'] === 'delimiter');
 $p = base_post(); $p['split'] = 'on';
 $v = luminum_validate_sensor_create($p);
 ok("split without delimiter rejected", $v['ok'] === false && $v['err'] === 'delimiter');
+
+// --- outcols (the named output columns) ---------------------------------------
+$p = base_post();
+$p['split'] = 'on'; $p['delimeter'] = '|'; $p['outcol'] = ['Day', 'Month', 'Year'];
+$v = luminum_validate_sensor_create($p);
+ok("split with two-plus names accepted", $v['ok'] && $v['sensor']['CSPLIT'] === 1 && $v['sensor']['DELIMITER'] === '|');
+ok("outcols joined with the delimiter", ($v['sensor']['OUTCOLS'] ?? null) === 'Day|Month|Year', var_export($v['sensor']['OUTCOLS'] ?? null, true));
+$p = base_post();
+$p['split'] = 'on'; $p['delimeter'] = ','; $p['outcol'] = ['Name', 'Version'];
+$v = luminum_validate_sensor_create($p);
+ok("outcols joined with a non-pipe delimiter", ($v['sensor']['OUTCOLS'] ?? null) === 'Name,Version');
+$p = base_post();
+$p['split'] = 'on'; $p['delimeter'] = '|'; $p['outcol'] = [' Day ', 'Month'];
+$v = luminum_validate_sensor_create($p);
+ok("outcol names are trimmed", ($v['sensor']['OUTCOLS'] ?? null) === 'Day|Month');
+$p = base_post();
+$p['split'] = 'on'; $p['delimeter'] = '|'; $p['outcol'] = ['Only One'];
+$v = luminum_validate_sensor_create($p);
+ok("a single column name rejected (minimum two)", $v['ok'] === false && $v['err'] === 'outcols');
+$p = base_post();
+$p['split'] = 'on'; $p['delimeter'] = '|'; $p['outcol'] = ['Name', ''];
+$v = luminum_validate_sensor_create($p);
+ok("an empty column name rejected", $v['ok'] === false && $v['err'] === 'outcols');
+foreach (['Na|me', 'Na-me', 'Na.me', 'Na_me', 'Na/me', 'Na me extra!'] as $bad) {
+    $p = base_post();
+    $p['split'] = 'on'; $p['delimeter'] = '|'; $p['outcol'] = [$bad, 'Other'];
+    $v = luminum_validate_sensor_create($p);
+    ok("outcol name " . var_export($bad, true) . " rejected", $v['ok'] === false && $v['err'] === 'outcols');
+}
+$p = base_post();
+$p['split'] = 'on'; $p['delimeter'] = '|'; $p['outcol'] = [str_repeat('x', 65), 'Other'];
+$v = luminum_validate_sensor_create($p);
+ok("outcol name over 64 chars rejected", $v['ok'] === false && $v['err'] === 'outcols');
+$p = base_post();
+$p['split'] = 'on'; $p['delimeter'] = '|'; $p['outcol'] = ['Name', ['nested']];
+$v = luminum_validate_sensor_create($p);
+ok("non-string outcol entry rejected", $v['ok'] === false && $v['err'] === 'outcols');
+// Out of split, the outcol fields are ignored (OUTCOLS stays null).
+$p = base_post();
+$p['delimeter'] = '|'; $p['outcol'] = ['Name', 'Version'];
+$v = luminum_validate_sensor_create($p);
+ok("outcols ignored when split is off", $v['ok'] && $v['sensor']['CSPLIT'] === 0 && $v['sensor']['OUTCOLS'] === null);
 
 // --- options -----------------------------------------------------------------
 $p = base_post(); $p['case'] = 'on'; $p['useparams'] = 'on';
@@ -201,7 +244,7 @@ $v = luminum_validate_sensor_create($p);
 ok("array field rejected", $v['ok'] === false && $v['err'] === 'name');
 
 // --- error messages ----------------------------------------------------------
-foreach (['name', 'desc', 'timeout', 'rtype', 'cset', 'category', 'delimiter', 'os', 'dupname', 'save'] as $code) {
+foreach (['name', 'desc', 'timeout', 'rtype', 'cset', 'category', 'delimiter', 'outcols', 'os', 'dupname', 'save'] as $code) {
     $msg = luminum_sensor_error_message($code);
     ok("error message for '$code' is non-empty", is_string($msg) && $msg !== '');
 }

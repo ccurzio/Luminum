@@ -41,7 +41,7 @@ const LUMINUM_SENSOR_SCRIPT_MAX = 65536;
 // Validate the create-sensor POST (the form in admin/sensors.php).
 // Returns ['ok' => true, 'sensor' => <normalized fields>] on success or
 // ['ok' => false, 'err' => <code>] on the first failure. The codes are:
-//   name, desc, timeout, rtype, cset, category, delimiter, os
+//   name, desc, timeout, rtype, cset, category, delimiter, outcols, os
 // Database-backed checks (content set exists, category belongs to the set,
 // duplicate name) are the caller's job - they need a connection.
 //
@@ -49,6 +49,7 @@ const LUMINUM_SENSOR_SCRIPT_MAX = 65536;
 // insert: NAME, DESCRIPTION, CSET (int), CATEGORY (int|null), TIMEOUT
 // ("30S"/"2M"), MSTYPE/MSCRIPT, LSTYPE/LSCRIPT, WSTYPE/WSCRIPT (null for
 // disabled platforms), RTYPE, USECASE, CSPLIT, DELIMITER (null when
+// unsplit), OUTCOLS (the column names joined by DELIMITER, null when
 // unsplit), WITHPARAMS.
 function luminum_validate_sensor_create($post) {
 	$name = is_string($post['pkgname'] ?? null) ? trim($post['pkgname']) : '';
@@ -84,12 +85,35 @@ function luminum_validate_sensor_create($post) {
 	$usecase = isset($post['case']) ? 1 : 0;
 	$csplit = isset($post['split']) ? 1 : 0;
 	$delimiter = null;
+	$outcols = null;
 	if ($csplit === 1) {
 		$delim = is_string($post['delimeter'] ?? null) ? $post['delimeter'] : '';
 		if (strlen($delim) !== 1) {
 			return ['ok' => false, 'err' => 'delimiter'];
 		}
 		$delimiter = $delim;
+		// The column names (the form's repeated outcol fields): splitting
+		// needs at least two named columns, every name is required, and a
+		// name may contain only letters, numbers, and spaces (the delimiter
+		// can never appear in one, so the joined string splits back into
+		// exactly these names).
+		$raw = $post['outcol'] ?? null;
+		$list = is_array($raw) ? $raw : (is_string($raw) && $raw !== '' ? [$raw] : []);
+		$names = [];
+		foreach ($list as $n) {
+			if (!is_string($n)) {
+				return ['ok' => false, 'err' => 'outcols'];
+			}
+			$n = trim($n);
+			if ($n === '' || strlen($n) > 64 || !preg_match('/^[A-Za-z0-9 ]+$/', $n)) {
+				return ['ok' => false, 'err' => 'outcols'];
+			}
+			$names[] = $n;
+		}
+		if (count($names) < 2) {
+			return ['ok' => false, 'err' => 'outcols'];
+		}
+		$outcols = implode($delimiter, $names);
 	}
 	$withparams = isset($post['useparams']) ? 1 : 0;
 
@@ -138,6 +162,7 @@ function luminum_validate_sensor_create($post) {
 		'USECASE' => $usecase,
 		'CSPLIT' => $csplit,
 		'DELIMITER' => $delimiter,
+		'OUTCOLS' => $outcols,
 		'WITHPARAMS' => $withparams,
 	];
 	foreach ($cols as $i => $col) {
@@ -158,6 +183,7 @@ function luminum_sensor_error_message($code) {
 		'cset' => 'A valid content set is required.',
 		'category' => 'The selected category does not exist in the chosen content set.',
 		'delimiter' => 'The column delimiter must be exactly one character.',
+		'outcols' => 'Splitting results into columns requires at least two column names: every name is required and may contain only letters, numbers, and spaces.',
 		'os' => 'Enable at least one platform, and provide a valid type and a non-empty script for every enabled platform.',
 		'dupname' => 'A sensor with that name already exists.',
 		'save' => 'Saving the sensor failed.',

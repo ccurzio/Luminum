@@ -291,6 +291,9 @@ sub run {
 	unless (migrate_sensor_history($dbh, $log)) {
 		return $fail->("CONTENT.SENSORHISTORY migration failed");
 		}
+	unless (migrate_sensors($dbh, $log)) {
+		return $fail->("CONTENT.SENSORS migration failed");
+		}
 	unless (setup_dbuser($dbh, $dbuser, $dbpass)) {
 		return $fail->("database user setup failed");
 		}
@@ -1243,6 +1246,27 @@ sub migrate_commands {
 	$log->("  CLIENTS.COMMANDS: changed SID from int to tinytext");
 	return 1;
 	}
+
+# OUTCOLS (the named output columns of a CSPLIT sensor - the column names
+# joined by the sensor's DELIMITER) was added to SENSORS after the first
+# production installs. SENSORHISTORY carries the same column so revision
+# snapshots keep the names; add it to both on existing installs.
+#
+sub migrate_sensors {
+	my ($dbh, $log) = @_;
+	for my $table (qw(SENSORS SENSORHISTORY)) {
+		my ($exists) = map { $_->[0] }
+			@{ $dbh->selectall_arrayref(qq{select TABLE_NAME from information_schema.TABLES where TABLE_SCHEMA = 'CONTENT' and TABLE_NAME = '$table'}) || [] };
+		next unless defined $exists; # table absent: nothing to migrate
+		my ($have) = map { $_->[0] }
+			@{ $dbh->selectall_arrayref(qq{select COLUMN_NAME from information_schema.COLUMNS where TABLE_SCHEMA = 'CONTENT' and TABLE_NAME = '$table' and COLUMN_NAME = 'OUTCOLS'}) || [] };
+		next if defined $have;
+		my $rc = eval { $dbh->do("alter table CONTENT.$table add OUTCOLS tinytext DEFAULT NULL after DELIMITER"); 1 };
+		unless ($rc) { $log->("  CONTENT.$table migration failed for OUTCOLS: $@"); return 0; }
+		$log->("  CONTENT.$table: added missing column OUTCOLS");
+	}
+	return 1;
+}
 
 # SENSORHISTORY (the sensor revision snapshots) was added to schema.sql
 # without a key; the revision feature relies on one snapshot per

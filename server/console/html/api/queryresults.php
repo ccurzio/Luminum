@@ -47,13 +47,15 @@ while ($row = mysqli_fetch_assoc($result)) {
 	$queries[] = ['row' => $row, 'sids' => $sids];
 }
 
-// Sensor names for the retrieve lists (one lookup for all 50 queries).
-$names = [];
+// Sensor names (and the CSPLIT/DELIMITER/OUTCOLS the results page needs to
+// expand a split sensor's output into named sub-columns) for the retrieve
+// lists (one lookup for all 50 queries).
+$sensors = [];
 if (count($allsids) > 0) {
 	$in = implode(',', array_map('intval', $allsids));
-	$result = api_query($db, "select ID,NAME from SENSORS where ID in ($in)", 'CONTENT');
+	$result = api_query($db, "select ID,NAME,CSPLIT,DELIMITER,OUTCOLS from SENSORS where ID in ($in)", 'CONTENT');
 	while ($nrow = mysqli_fetch_assoc($result)) {
-		$names[(int)$nrow['ID']] = $nrow['NAME'];
+		$sensors[(int)$nrow['ID']] = $nrow;
 	}
 }
 
@@ -91,12 +93,15 @@ foreach ($queries as $q) {
 		$ts = (int)$rrow['TS_EPOCH'];
 		if ($ts > $last_ts) { $last_ts = $ts; }
 	}
-	// The retrieve sensors as {sid, name} pairs (the query's order): the
-	// results page builds one table column per entry and matches each
-	// result row to its column by sid.
+	// The retrieve sensors (the query's order): the results page builds one
+	// table column per entry and matches each result row to its column by
+	// sid. A sensor that no longer exists falls back to an ID-based label
+	// with no split metadata.
 	$sensor_list = [];
 	foreach ($q['sids'] as $sid) {
-		$sensor_list[] = ['sid' => $sid, 'name' => isset($names[$sid]) ? $names[$sid] : ('Sensor ' . $sid)];
+		$sensor_list[] = isset($sensors[$sid])
+			? luminum_sensor_entry($sensors[$sid])
+			: ['sid' => $sid, 'name' => 'Sensor ' . $sid, 'csplit' => 0, 'delimiter' => null, 'outcols' => null];
 	}
 	$dd = json_decode(is_string($row['DATA']) ? $row['DATA'] : '', true);
 	$out[] = [

@@ -481,6 +481,19 @@ AUTHOR_ID=$(dbq "select ID from AUTH.USERS where USERNAME='lumadmin';")
 code=$(curl -k -s -o "$RUN/sensor-new.html" -w '%{http_code}' -b "$RUN/cookies" \
     "https://127.0.0.1:$WPORT/index.php?view=sensors&action=new")
 check "console: sensor create form renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+# The "Split Results into Columns" checkbox reveals the output column name
+# fields on the line below: a "Column Name" textfield with the query
+# builder's add button (and a remove button), hidden until the checkbox is
+# checked (toggleSplit shows #colrow).
+check "console: the split checkbox reveals the column name fields" \
+    $(grep -q 'id="colrow" style="display: none;"' "$RUN/sensor-new.html" 2>/dev/null \
+        && grep -q 'placeholder="Column Name"' "$RUN/sensor-new.html" 2>/dev/null \
+        && grep -q 'name="outcol\[\]" class="outcol"' "$RUN/sensor-new.html" 2>/dev/null; echo $?)
+check "console: the column fields carry the query builder's add button and a remove button" \
+    $(grep -q 'src="/icons/add.png" class="add"' "$RUN/sensor-new.html" 2>/dev/null \
+        && grep -q 'src="/icons/remove.png" class="remove"' "$RUN/sensor-new.html" 2>/dev/null; echo $?)
+check "console: toggleSplit shows the column field row" \
+    $(grep -q 'document.getElementById("colrow").style.display = checkbox.checked ? "" : "none"' "$RUN/sensor-new.html" 2>/dev/null; echo $?)
 
 code=$(curl -k -s -D "$RUN/sensor-post.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
     --data-urlencode "pkgname=Deploy Test Sensor" \
@@ -499,10 +512,54 @@ check "console: POST redirected to the plain list (no saved flag)" \
     $(grep -qi "Location:.*view=sensors" "$RUN/sensor-post.hdr" 2>/dev/null \
         && ! grep -qi "saved=1" "$RUN/sensor-post.hdr" 2>/dev/null; echo $?)
 
-srow=$(dbq "select concat(NAME,'|',DESCRIPTION,'|',CSET,'|',TIMEOUT,'|',RTYPE,'|',LSTYPE,'|',LSCRIPT,'|',ifnull(MSCRIPT,'NULL'),'|',ifnull(WSCRIPT,'NULL'),'|',USECASE,'|',CSPLIT,'|',WITHPARAMS,'|',AUTHOR) from CONTENT.SENSORS where NAME='Deploy Test Sensor';")
+srow=$(dbq "select concat(NAME,'|',DESCRIPTION,'|',CSET,'|',TIMEOUT,'|',RTYPE,'|',LSTYPE,'|',LSCRIPT,'|',ifnull(MSCRIPT,'NULL'),'|',ifnull(WSCRIPT,'NULL'),'|',USECASE,'|',CSPLIT,'|',ifnull(OUTCOLS,'NULL'),'|',WITHPARAMS,'|',AUTHOR) from CONTENT.SENSORS where NAME='Deploy Test Sensor';")
 check "sensor row stored with the posted fields" \
-    $([ "$srow" = "Deploy Test Sensor|End-to-end sensor created by the deploy test|$CSET_ID|30S|text|shell|echo probe-output-42|NULL|NULL|0|0|0|$AUTHOR_ID" ]; echo $?) \
+    $([ "$srow" = "Deploy Test Sensor|End-to-end sensor created by the deploy test|$CSET_ID|30S|text|shell|echo probe-output-42|NULL|NULL|0|0|NULL|0|$AUTHOR_ID" ]; echo $?) \
     "got: $srow"
+
+# A CSPLIT sensor: the column names post as repeated outcol fields and are
+# stored joined by the delimiter in OUTCOLS.
+code=$(curl -k -s -D "$RUN/sensor-split-post.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "pkgname=Deploy Split Sensor" \
+    --data-urlencode "pkgdesc=Split-output sensor created by the deploy test" \
+    --data-urlencode "timeout=30" \
+    --data-urlencode "tint=sec" \
+    --data-urlencode "rtype=text" \
+    --data-urlencode "contentset=$CSET_ID" \
+    --data-urlencode "category=none" \
+    --data-urlencode "leselect=on" \
+    --data-urlencode "lstype=shell" \
+    --data-urlencode "lscript=printf 'app-one|1.0.1\napp-two|2.0\n'" \
+    --data-urlencode "split=on" \
+    --data-urlencode "delimeter=|" \
+    --data-urlencode "outcol[]=Name" \
+    --data-urlencode "outcol[]=Version" \
+    "https://127.0.0.1:$WPORT/admin/sensors.php")
+check "console: split sensor POST redirects (302)" $([ "$code" = "302" ]; echo $?) "got: $code"
+srow=$(dbq "select concat(CSPLIT,'|',ifnull(DELIMITER,'NULL'),'|',ifnull(OUTCOLS,'NULL'),'|',if(LSCRIPT like 'printf%app-one|1.0.1%app-two|2.0%','yes','no')) from CONTENT.SENSORS where NAME='Deploy Split Sensor';")
+check "split sensor stored with CSPLIT, DELIMITER, and the joined OUTCOLS" \
+    $([ "$srow" = "1|||Name|Version|yes" ]; echo $?) "got: $srow"
+# Splitting with fewer than two column names is rejected (no row stored).
+code=$(curl -k -s -D "$RUN/sensor-split-bad.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "pkgname=Deploy Split Bad Sensor" \
+    --data-urlencode "pkgdesc=Split sensor with one column name" \
+    --data-urlencode "timeout=30" \
+    --data-urlencode "tint=sec" \
+    --data-urlencode "rtype=text" \
+    --data-urlencode "contentset=$CSET_ID" \
+    --data-urlencode "category=none" \
+    --data-urlencode "leselect=on" \
+    --data-urlencode "lstype=shell" \
+    --data-urlencode "lscript=echo one" \
+    --data-urlencode "split=on" \
+    --data-urlencode "delimeter=|" \
+    --data-urlencode "outcol[]=Only" \
+    "https://127.0.0.1:$WPORT/admin/sensors.php")
+check "console: split sensor with one column name redirects to the form (302)" $([ "$code" = "302" ]; echo $?) "got: $code"
+check "the rejection points back to the form with err=outcols" \
+    $(grep -qi "Location:.*action=new&err=outcols" "$RUN/sensor-split-bad.hdr" 2>/dev/null; echo $?)
+check "the rejected split sensor inserted nothing" \
+    $([ "$(dbq "select count(*) from CONTENT.SENSORS where NAME='Deploy Split Bad Sensor';")" = "0" ]; echo $?)
 
 code=$(curl -k -s -o "$RUN/sensors.html" -w '%{http_code}' -b "$RUN/cookies" \
     "https://127.0.0.1:$WPORT/index.php?view=sensors")
@@ -1087,6 +1144,28 @@ check "Linux sensor row is OK with its output" \
 check "Mac-only sensor row is ERR UNKNOWN_SENSOR (skipped by the Linux client)" \
     $([ "$(dbq "select concat(STATUS,'|',ifnull(ERR,'NULL')) from CLIENTS.QUERYRESULTS where QID='$QID_M' and SENSORID='$SENSOR_M';")" = "ERR|UNKNOWN_SENSOR" ]; echo $?)
 
+# A query retrieving the CSPLIT sensor: the client answers with the full
+# multi-line output, and the results API carries the sensor's split
+# metadata (csplit/delimiter/outcols) the results page uses to expand the
+# output into named sub-columns.
+SENSOR_S=$(dbq "select ID from CONTENT.SENSORS where NAME='Deploy Split Sensor';")
+body=$(python3 -c 'import json,sys;print(json.dumps({"target":"all","action":"query","sensors":[{"sid":int(sys.argv[1])}],"conditions":{"sid":int(sys.argv[2]),"op":"==","value":"probe-output-42"}}))' "$SENSOR_S" "$SENSOR_Q")
+code=$(curl -k -s -o "$RUN/query-split.json" -w '%{http_code}' -b "$RUN/cookies" \
+    -H 'Content-Type: application/json' -d "$body" \
+    "https://127.0.0.1:$WPORT/api/commands.php")
+check "api: split-sensor broadcast query accepted (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+QID_S=$(python3 -c "import json;print(json.load(open('$RUN/query-split.json'))['qid'])")
+CMD_S=$(python3 -c "import json;print(json.load(open('$RUN/query-split.json'))['command'])")
+res_ok=1
+for i in $(seq 1 60); do
+    r=$(dbq "select concat(UID,'|',SENSORID,'|',STATUS) from CLIENTS.QUERYRESULTS where QID='$QID_S';")
+    [ -n "$r" ] && { res_ok=0; break; }
+    sleep 0.5
+done
+check "split-sensor query answered by the live client" "$res_ok" "no QUERYRESULTS row for $QID_S"
+check "the split sensor's answer carries both output lines" \
+    $([ "$(dbq "select if(OUTPUT like '%app-one|1.0.1%' and OUTPUT like '%app-two|2.0%','yes','no') from CLIENTS.QUERYRESULTS where QID='$QID_S';")" = "yes" ]; echo $?)
+
 # A condition on a sensor that is not defined for this OS evaluates false:
 # the Linux client cannot run the Mac-only condition sensor, so it stays
 # silent even though the value would match on a Mac.
@@ -1132,6 +1211,18 @@ check "api: queryresults carries the clock fields (deadline/online/answered)" \
         && grep -q '"target_online"' "$RUN/queryresults-id.json" 2>/dev/null \
         && grep -q '"answered"' "$RUN/queryresults-id.json" 2>/dev/null \
         && grep -q '"last_answer_ts"' "$RUN/queryresults-id.json" 2>/dev/null; echo $?)
+# The CSPLIT sensor's retrieve entry carries the split metadata the results
+# page expands the output with (the unsplit sensor's entry does not).
+code=$(curl -k -s -o "$RUN/queryresults-split.json" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/api/queryresults.php?id=$CMD_S")
+check "api: queryresults?id for the split query renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+check "api: the split sensor carries csplit/delimiter/outcols" \
+    $(grep -q '"csplit":1' "$RUN/queryresults-split.json" 2>/dev/null \
+        && grep -q '"delimiter":"|"' "$RUN/queryresults-split.json" 2>/dev/null \
+        && grep -q '"outcols":\["Name","Version"\]' "$RUN/queryresults-split.json" 2>/dev/null; echo $?)
+check "api: the unsplit sensor's retrieve entry carries no split metadata" \
+    $(grep -q '"csplit":0' "$RUN/queryresults-id.json" 2>/dev/null \
+        && grep -q '"outcols":null' "$RUN/queryresults-id.json" 2>/dev/null; echo $?)
 
 code=$(curl -k -s -o "$RUN/query-results.html" -w '%{http_code}' -b "$RUN/cookies" \
     "https://127.0.0.1:$WPORT/modules.php?view=query&id=$CMD_Q")
@@ -1163,6 +1254,13 @@ curl -k -s -o "$RUN/table.js" -b "$RUN/cookies" "https://127.0.0.1:$WPORT/layout
 check "console: query results pre-wrap the multi-line sensor output" \
     $([ "$code" = "200" ] && grep -q "whiteSpace: 'pre-wrap'" "$RUN/queryresults.js" 2>/dev/null \
         && grep -q 'col.whiteSpace' "$RUN/table.js" 2>/dev/null; echo $?)
+# A CSPLIT sensor's output expands into named sub-columns: the module
+# splits each output line on the sensor's delimiter (expandRow) and the
+# table renderer carries the two-tier header + the spanning rows.
+check "console: the results module expands CSPLIT output into sub-columns" \
+    $(grep -q "function expandRow" "$RUN/queryresults.js" 2>/dev/null \
+        && grep -q "sub: sub" "$RUN/queryresults.js" 2>/dev/null \
+        && grep -q "physicalColumns" "$RUN/table.js" 2>/dev/null; echo $?)
 
 # --- system information (Memory tab) -----------------------------------------
 # The Memory tab reads /proc/meminfo for the totals and dmidecode for the

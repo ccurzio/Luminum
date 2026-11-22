@@ -161,6 +161,75 @@ function res(uid, sensor, status, output, err) {
 	ok("pivot: rows keep first-appearance order", rows[0].s7 === "A" && rows[1].s7 === "B");
 })();
 
+// --- expandRow (the CSPLIT sensor's output lines -> sub-row values) ------------
+
+// A split sensor: each output line becomes a sub-row, each line's
+// delimiter-separated segments fill the sub-columns.
+(function () {
+	var row = { id: 0, count: 1, s9: "App One|1.0.1\nApp Two|2.0\nApp Three|7.2" };
+	Q.expandRow(row, [{ sid: 9, name: "Installed Applications", csplit: 1, delimiter: "|", outcols: ["Name", "Version"] }]);
+	ok("expand: the row spans one sub-row per output line", row.span === 3);
+	ok("expand: line 0's segments land in the sub values",
+		row.s9_0_0 === "App One" && row.s9_0_1 === "1.0.1");
+	ok("expand: line 2's segments land in the sub values",
+		row.s9_2_0 === "App Three" && row.s9_2_1 === "7.2");
+	ok("expand: the largest segment count is recorded", row.s9_segs === 2);
+	ok("expand: the raw cell is kept (the filter searches it)",
+		row.s9 === "App One|1.0.1\nApp Two|2.0\nApp Three|7.2");
+})();
+
+// A trailing newline (a script that ends its output with one) does not add
+// an empty last line.
+(function () {
+	var row = { id: 0, count: 1, s9: "A|1\nB|2\n" };
+	Q.expandRow(row, [{ sid: 9, name: "S", csplit: 1, delimiter: "|", outcols: ["N", "V"] }]);
+	ok("expand: a trailing newline is dropped", row.span === 2 && row.s9_1_0 === "B");
+})();
+
+// A non-split sensor leaves the row alone (span 1, no sub values).
+(function () {
+	var row = { id: 0, count: 1, s7: "TRUE" };
+	Q.expandRow(row, [{ sid: 7, name: "Is Windows", csplit: 0, delimiter: null, outcols: null }]);
+	ok("expand: a non-split sensor keeps span 1", row.span === 1);
+	ok("expand: no sub values are created", row.s7_0_0 === undefined && row.s7_segs === undefined);
+})();
+
+// A split sensor the endpoint never answered renders one empty line.
+(function () {
+	var row = { id: 0, count: 1, s9: "" };
+	Q.expandRow(row, [{ sid: 9, name: "S", csplit: 1, delimiter: "|", outcols: ["N", "V"] }]);
+	ok("expand: an empty answer is one line with an empty segment",
+		row.span === 1 && row.s9_0_0 === "" && row.s9_segs === 1);
+})();
+
+// A custom delimiter splits on the sensor's own character.
+(function () {
+	var row = { id: 0, count: 1, s9: "A,1\nB,2" };
+	Q.expandRow(row, [{ sid: 9, name: "S", csplit: 1, delimiter: ",", outcols: ["N", "V"] }]);
+	ok("expand: a comma delimiter splits on the comma",
+		row.s9_0_0 === "A" && row.s9_0_1 === "1" && row.s9_1_1 === "2");
+})();
+
+// Two split sensors with different line counts: the row spans the largest.
+(function () {
+	var row = { id: 0, count: 1, s7: "A|1\nB|2", s9: "X\nY\nZ" };
+	Q.expandRow(row, [
+		{ sid: 7, name: "S7", csplit: 1, delimiter: "|", outcols: ["N", "V"] },
+		{ sid: 9, name: "S9", csplit: 1, delimiter: "|", outcols: ["Only"] }
+	]);
+	ok("expand: the span is the largest line count across split cells", row.span === 3);
+	ok("expand: both sensors' sub values are present",
+		row.s7_1_0 === "B" && row.s9_2_0 === "Z");
+})();
+
+// A line with more segments than stored names records the extra count
+// (buildConfig names the extras generically).
+(function () {
+	var row = { id: 0, count: 1, s9: "A|1|extra\nB|2" };
+	Q.expandRow(row, [{ sid: 9, name: "S", csplit: 1, delimiter: "|", outcols: ["N", "V"] }]);
+	ok("expand: extra segments are recorded", row.s9_segs === 3 && row.s9_0_2 === "extra");
+})();
+
 // --- buildConfig ----------------------------------------------------------------
 
 (function () {
@@ -185,6 +254,51 @@ function res(uid, sensor, status, output, err) {
 	ok("config: the filter searches the sensor cells, not the count",
 		eq(cfg.searchKeys, ["s7", "s9"]));
 	ok("config: rows present -> 'No Results' empty message", cfg.emptyMessage === "No Results");
+})();
+
+// A CSPLIT sensor's column carries its stored column names as sub-labels
+// (the header's second tier); the filter still searches the raw cell.
+(function () {
+	var q = {
+		sensors: [
+			{ sid: 7, name: "Computer Name", csplit: 0, delimiter: null, outcols: null },
+			{ sid: 9, name: "Installed Applications", csplit: 1, delimiter: "|", outcols: ["Name", "Version"] }
+		]
+	};
+	var rows = [
+		{ id: 0, count: 1, s7: "host-1", s9: "App One|1.0.1\nApp Two|2.0", s9_0_0: "App One", s9_0_1: "1.0.1", s9_1_0: "App Two", s9_1_1: "2.0", s9_segs: 2, span: 2 }
+	];
+	var cfg = Q.buildConfig(q, rows);
+	ok("config: the split sensor's column carries its sub-labels",
+		cfg.columns[2].key === "s9" && eq(cfg.columns[2].sub, ["Name", "Version"]));
+	ok("config: the non-split sensor's column has no sub-labels", !cfg.columns[1].sub);
+	ok("config: the split sensor's column stays pre-wrapped", cfg.columns[2].whiteSpace === "pre-wrap");
+	ok("config: the filter searches the split sensor's raw cell",
+		eq(cfg.searchKeys, ["s7", "s9"]));
+})();
+
+// A line with more segments than stored names gains generic "Column N"
+// sub-labels so no data is dropped.
+(function () {
+	var q = { sensors: [{ sid: 9, name: "S", csplit: 1, delimiter: "|", outcols: ["N", "V"] }] };
+	var rows = [
+		{ id: 0, count: 1, s9: "A|1|extra", s9_segs: 3, span: 1 }
+	];
+	var cfg = Q.buildConfig(q, rows);
+	ok("config: extra segments gain generic Column N sub-labels",
+		eq(cfg.columns[1].sub, ["N", "V", "Column 3"]));
+	// No row exceeds the stored names -> no generic labels.
+	var cfg2 = Q.buildConfig(q, [{ id: 0, count: 1, s9: "A|1", s9_segs: 2, span: 1 }]);
+	ok("config: no generic labels when no line exceeds the names",
+		eq(cfg2.columns[1].sub, ["N", "V"]));
+})();
+
+// A CSPLIT sensor without stored names (pre-OUTCOLS installs) renders as a
+// plain column (no sub-labels to show).
+(function () {
+	var q = { sensors: [{ sid: 9, name: "S", csplit: 1, delimiter: "|", outcols: null }] };
+	var cfg = Q.buildConfig(q, [{ id: 0, count: 1, s9: "A|1", span: 1 }]);
+	ok("config: a split sensor without names is a plain column", !cfg.columns[1].sub);
 })();
 
 // The Count column appears only when at least one answer is shared by more

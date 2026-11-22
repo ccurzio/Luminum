@@ -48,12 +48,51 @@
 		if (col.align) { s += 'text-align: ' + col.align + ';'; }
 		var style = s ? ' style="' + s + '"' : '';
 		var inner = (col.header !== undefined) ? col.header : escapeHTML(col.label);
-		return '<td' + style + '>' + inner + '</td>';
+		var span = '';
+		if (col.colspan) { span += ' colspan="' + col.colspan + '"'; }
+		if (col.rowspan) { span += ' rowspan="' + col.rowspan + '"'; }
+		return '<td' + span + style + '>' + inner + '</td>';
 	}
 
-	// Render the header <tr> for a column config.
+	// The physical columns of a config: a column with `sub` (an array of
+	// sub-labels) expands into one physical column per sub-label, every
+	// other column is its own physical column. The header renders the
+	// sub-labels as a second tier below the column's label, and a row's
+	// sub values (row[<key>_<subRow>_<subCol>]) fill the sub-columns one
+	// line per <tr> while the row's other cells span the <tr>s (see
+	// rowHTML). Configs without sub columns expand to themselves, so the
+	// plain pages render exactly as before.
+	function physicalColumns(config) {
+		var phys = [];
+		config.columns.forEach(function (col) {
+			if (col.sub && col.sub.length) {
+				col.sub.forEach(function (label, j) {
+					phys.push({ col: col, subIndex: j, label: label });
+				});
+			} else {
+				phys.push({ col: col, subIndex: null, label: col.label });
+			}
+		});
+		return phys;
+	}
+
+	// Render the header <tr> (or the two-tier header when a column carries
+	// sub-labels) for a column config.
 	function headerHTML(config) {
-		return '<tr>' + config.columns.map(headerCell).join('') + '</tr>';
+		var cols = config.columns;
+		var hasSub = cols.some(function (c) { return c.sub && c.sub.length; });
+		if (!hasSub) { return '<tr>' + cols.map(headerCell).join('') + '</tr>'; }
+		var t1 = '<tr>';
+		var t2 = '<tr>';
+		cols.forEach(function (col) {
+			if (col.sub && col.sub.length) {
+				t1 += headerCell({ width: col.width, align: col.align, header: col.header, label: col.label, colspan: col.sub.length });
+				t2 += col.sub.map(function (l) { return headerCell({ label: l }); }).join('');
+			} else {
+				t1 += headerCell(Object.assign({}, col, { rowspan: 2 }));
+			}
+		});
+		return t1 + '</tr>' + t2 + '</tr>';
 	}
 
 	// The checkbox column's pinned total width. The global `table { width:
@@ -67,11 +106,13 @@
 	// Build the <col> elements for a column config. Under table-layout: fixed
 	// a <col> width is the column's total width; a column with no width is
 	// flexible and absorbs the table's leftover space (so the fixed columns,
-	// including the checkbox, hold their width).
+	// including the checkbox, hold their width). Sub-columns are always
+	// flexible: they share the width their parent column would have had.
 	function colgroupCols(config) {
-		return config.columns.map(function (col) {
+		return physicalColumns(config).map(function (p) {
+			var col = p.col;
 			if (col.type === 'checkbox') { return '<col style="width: ' + CHECKBOX_COL_WIDTH + ';">'; }
-			if (col.width) { return '<col style="width: ' + col.width + ';">'; }
+			if (p.subIndex === null && col.width) { return '<col style="width: ' + col.width + ';">'; }
 			return '<col>';
 		}).join('');
 	}
@@ -82,33 +123,65 @@
 	}
 
 	// Render one <td> for a column. Columns with a render(row) function emit
-	// raw HTML (icons, etc.); plain columns escape the row value.
-	function cellHTML(col, row, bg) {
+	// raw HTML (icons, etc.); plain columns escape the row value. rowspan
+	// spans the cell over the row's sub-<tr>s (see rowHTML).
+	function cellHTML(col, row, bg, rowspan) {
 		var inner = col.render ? col.render(row) : escapeHTML(row[col.key]);
-		return '<td style="' + cellStyle(col, bg) + '">' + inner + '</td>';
+		var span = rowspan ? ' rowspan="' + rowspan + '"' : '';
+		return '<td' + span + ' style="' + cellStyle(col, bg) + '">' + inner + '</td>';
 	}
 
-	// Render one data row. The checkbox column is special-cased.
+	// The checkbox cell for a row (the plain and the spanning variants).
+	function checkboxCell(col, row, bg, checked, rowspan) {
+		var span = rowspan ? ' rowspan="' + rowspan + '"' : '';
+		return '<td' + span + ' id="' + row.id + 'A" style="background-color: ' + bg + '; font-weight: normal;width: 15px;">' +
+			'<input class="' + (col.inputClass || 'row') + '" id="' + (col.idPrefix || 'ID') + row.id +
+			'" data-id="' + row.id + '" type="checkbox"' + (checked ? ' checked' : '') + '></td>';
+	}
+
+	// Render the data row(s) for a row. The checkbox column is
+	// special-cased. When the config carries sub columns, the row renders
+	// as row.span <tr>s: the sub values (row[<key>_<subRow>_<subCol>]) fill
+	// the sub-columns one line per <tr>, and every other cell (checkbox,
+	// plain, count) spans the <tr>s with rowspan. Rows without span and
+	// configs without sub columns render a single <tr> as before.
 	function rowHTML(config, row, state) {
 		state = state || {};
 		var selected = !!(state.selected && state.selected[row.id]);
 		var bg = selected ? ROW_SELECTED : ROW_BASE;
-		var cells = config.columns.map(function (col) {
-			if (col.type === 'checkbox') {
-				var checked = selected ? ' checked' : '';
-				return '<td id="' + row.id + 'A" style="background-color: ' + bg + '; font-weight: normal;width: 15px;">' +
-					'<input class="' + (col.inputClass || 'row') + '" id="' + (col.idPrefix || 'ID') + row.id +
-					'" data-id="' + row.id + '" type="checkbox"' + checked + '></td>';
-			}
-			return cellHTML(col, row, bg);
-		}).join('');
-		return '<tr class="luminum-row" data-id="' + row.id + '">' + cells + '</tr>';
+		var hasSub = config.columns.some(function (c) { return c.sub && c.sub.length; });
+		if (!hasSub) {
+			var cells = config.columns.map(function (col) {
+				if (col.type === 'checkbox') { return checkboxCell(col, row, bg, selected); }
+				return cellHTML(col, row, bg);
+			}).join('');
+			return '<tr class="luminum-row" data-id="' + row.id + '">' + cells + '</tr>';
+		}
+		var span = (row.span && row.span > 1) ? row.span : 1;
+		var phys = physicalColumns(config);
+		var html = '';
+		for (var r = 0; r < span; r++) {
+			var cells = '';
+			phys.forEach(function (p) {
+				var col = p.col;
+				if (p.subIndex !== null) {
+					cells += cellHTML({ key: col.key + '_' + r + '_' + p.subIndex, width: col.width, align: col.align, whiteSpace: col.whiteSpace }, row, bg);
+				} else if (r === 0) {
+					// A span-1 row has no sub-<tr>s to span.
+					var rs = span > 1 ? span : null;
+					if (col.type === 'checkbox') { cells += checkboxCell(col, row, bg, selected, rs); }
+					else { cells += cellHTML(col, row, bg, rs); }
+				}
+			});
+			html += '<tr' + (r === 0 ? ' class="luminum-row" data-id="' + row.id + '"' : '') + '>' + cells + '</tr>';
+		}
+		return html;
 	}
 
 	// Render the data rows for a set of rows, or the empty-state row.
 	function rowsHTML(config, rows, state) {
 		if (!rows.length) {
-			return '<tr><td colspan="' + config.columns.length +
+			return '<tr><td colspan="' + physicalColumns(config).length +
 				'" style="text-align: center; background-color: ' + ROW_BASE +
 				'; font-weight: normal; font-style: italic;">' +
 				escapeHTML(config.emptyMessage || 'No Results') + '</td></tr>';
@@ -287,6 +360,7 @@
 		ROW_SELECTED: ROW_SELECTED,
 		CHECKBOX_COL_WIDTH: CHECKBOX_COL_WIDTH,
 		escapeHTML: escapeHTML,
+		physicalColumns: physicalColumns,
 		headerHTML: headerHTML,
 		colgroupHTML: colgroupHTML,
 		rowHTML: rowHTML,
