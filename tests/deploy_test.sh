@@ -1261,6 +1261,12 @@ check "console: the results module expands CSPLIT output into sub-columns" \
     $(grep -q "function expandRow" "$RUN/queryresults.js" 2>/dev/null \
         && grep -q "sub: sub" "$RUN/queryresults.js" 2>/dev/null \
         && grep -q "physicalColumns" "$RUN/table.js" 2>/dev/null; echo $?)
+# A query whose only sensor is a CSPLIT sensor pivots on the sensor's output
+# lines (one row per unique line, the Count the endpoints carrying it)
+# instead of on the endpoints' full answers.
+check "console: a single split sensor pivots on its output lines" \
+    $(grep -q "function singleSplitSensor" "$RUN/queryresults.js" 2>/dev/null \
+        && grep -q "function pivotSplitLines" "$RUN/queryresults.js" 2>/dev/null; echo $?)
 
 # --- system information (Memory tab) -----------------------------------------
 # The Memory tab reads /proc/meminfo for the totals and dmidecode for the

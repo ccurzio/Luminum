@@ -25,6 +25,14 @@
 // segments in the sub-columns, while the row's other cells (the checkbox,
 // the non-split sensors, the Count) span the <tr>s.
 //
+// When that split sensor is the query's only sensor, the pivot itself
+// changes: the output is the data, so the results are not split by
+// endpoint. The rows are the sensor's unique output lines (one row per
+// line, the line's segments in the sub-columns, each row with its own
+// checkbox), and the Count is how many endpoints' output carried the line
+// (duplicates grouped). With more than one sensor the pivot stays
+// per-endpoint as above.
+//
 // The rows appear as the answers arrive: while the query is running the
 // page polls every second and appends each new answer row to the table
 // (updating a shared row's Count in place) instead of re-rendering the
@@ -57,15 +65,66 @@
 		return r.err !== null ? r.err : r.status;
 	}
 
+	// Split a sensor's output into lines: a trailing newline (a script that
+	// ends its output with one) does not add an empty last line.
+	function splitLines(v) {
+		var lines = String(v === undefined || v === null ? '' : v).split('\n');
+		if (lines.length > 1 && lines[lines.length - 1] === '') { lines.pop(); }
+		return lines;
+	}
+
+	// The query's sole sensor when it is a CSPLIT sensor with named output
+	// columns, else null: such a query pivots on the sensor's output lines
+	// (one row per unique line) instead of on the endpoints' full answers -
+	// the output is the data, so the endpoints are the duplicates to count.
+	function singleSplitSensor(sensors) {
+		if (sensors.length !== 1) { return null; }
+		var s = sensors[0];
+		if (s.csplit && s.outcols && s.outcols.length) { return s; }
+		return null;
+	}
+
+	// The pivot for a single-split query: one row per unique output line,
+	// the Count the number of endpoints whose output carried the line (an
+	// endpoint carrying the line twice counts once). The row's cell is the
+	// raw line - expandRow splits it into the sub values, and the filter
+	// searches it. Rows keep the order in which each line first appeared.
+	function pivotSplitLines(q, sensor) {
+		var key = 's' + sensor.sid;
+		var groups = {};
+		var order = [];
+		(q.results || []).forEach(function (r) {
+			var seen = {};
+			splitLines(cellValue(r)).forEach(function (line) {
+				if (seen[line]) { return; }
+				seen[line] = true;
+				if (!groups[line]) {
+					groups[line] = 0;
+					order.push(line);
+				}
+				groups[line]++;
+			});
+		});
+		return order.map(function (line, i) {
+			var row = { id: i, count: groups[line] };
+			row[key] = line;
+			return row;
+		});
+	}
+
 	// Collapse one query's flat per-sensor results into one row per unique
 	// answer: { id, s<sid>: <cell>, count }. The sensor cells follow the
 	// query's requested sensor order (q.sensors: [{sid, name}]); an endpoint
 	// that never answered a requested sensor gets an empty cell. An answer
 	// is the endpoint's values across every sensor column, so endpoints
 	// share a row only when they answered identically in all of them. Rows
-	// keep the order in which each answer first appeared.
+	// keep the order in which each answer first appeared. A query whose only
+	// sensor is a split sensor pivots on the output lines instead (see
+	// pivotSplitLines).
 	function pivotResults(q) {
 		var sensors = q.sensors || [];
+		var split = singleSplitSensor(sensors);
+		if (split) { return pivotSplitLines(q, split); }
 		var byUid = {};
 		var uidOrder = [];
 		(q.results || []).forEach(function (r) {
@@ -117,10 +176,7 @@
 			var key = 's' + s.sid;
 			var v = row[key];
 			var delim = (s.delimiter !== null && s.delimiter !== undefined && s.delimiter !== '') ? s.delimiter : '|';
-			var lines = String(v === undefined || v === null ? '' : v).split('\n');
-			// A trailing newline (a script that ends its output with one)
-			// would add an empty last line; drop it.
-			if (lines.length > 1 && lines[lines.length - 1] === '') { lines.pop(); }
+			var lines = splitLines(v);
 			if (lines.length > span) { span = lines.length; }
 			var segs = 0;
 			lines.forEach(function (line, i) {

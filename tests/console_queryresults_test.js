@@ -161,6 +161,154 @@ function res(uid, sensor, status, output, err) {
 	ok("pivot: rows keep first-appearance order", rows[0].s7 === "A" && rows[1].s7 === "B");
 })();
 
+// --- pivotResults, single split sensor (the output lines are the rows) ---------
+
+// A CSPLIT sensor as the query's only sensor: the results are not split by
+// endpoint - one row per unique output line, the Count the number of
+// endpoints whose output carried the line.
+(function () {
+	var split = { sid: 9, name: "Installed Applications", csplit: 1, delimiter: "|", outcols: ["Name", "Version"] };
+	var rows = Q.pivotResults({
+		sensors: [split],
+		results: [
+			res(1, 9, "OK", "App One|1.0.1\nApp Two|2.0", null),
+			res(2, 9, "OK", "App One|1.0.1\nApp Three|7.2", null),
+			res(3, 9, "OK", "App One|1.0.1\nApp Two|2.0", null)
+		]
+	});
+	ok("split pivot: one row per unique output line", rows.length === 3);
+	ok("split pivot: the shared line counts every endpoint carrying it",
+		rows[0].s9 === "App One|1.0.1" && rows[0].count === 3);
+	ok("split pivot: the other lines count their endpoints",
+		rows[1].s9 === "App Two|2.0" && rows[1].count === 2 &&
+		rows[2].s9 === "App Three|7.2" && rows[2].count === 1);
+})();
+
+// Rows keep the order in which each line first appeared (across endpoints).
+(function () {
+	var split = { sid: 9, name: "S", csplit: 1, delimiter: "|", outcols: ["N", "V"] };
+	var rows = Q.pivotResults({
+		sensors: [split],
+		results: [
+			res(1, 9, "OK", "B|2\nA|1", null),
+			res(2, 9, "OK", "C|3\nA|1", null)
+		]
+	});
+	ok("split pivot: rows keep first-appearance order",
+		rows[0].s9 === "B|2" && rows[1].s9 === "A|1" && rows[2].s9 === "C|3");
+})();
+
+// An endpoint carrying the same line twice counts once (the Count is
+// endpoints, not occurrences).
+(function () {
+	var split = { sid: 9, name: "S", csplit: 1, delimiter: "|", outcols: ["N", "V"] };
+	var rows = Q.pivotResults({
+		sensors: [split],
+		results: [
+			res(1, 9, "OK", "A|1\nA|1", null),
+			res(2, 9, "OK", "A|1", null)
+		]
+	});
+	ok("split pivot: a line repeated in one endpoint counts once",
+		rows.length === 1 && rows[0].count === 2);
+})();
+
+// A trailing newline adds no empty line.
+(function () {
+	var split = { sid: 9, name: "S", csplit: 1, delimiter: "|", outcols: ["N", "V"] };
+	var rows = Q.pivotResults({
+		sensors: [split],
+		results: [res(1, 9, "OK", "A|1\nB|2\n", null)]
+	});
+	ok("split pivot: a trailing newline adds no empty line",
+		rows.length === 2 && rows[1].s9 === "B|2");
+})();
+
+// The row's cell is the raw line (expandRow splits it into the sub values,
+// the filter searches it) regardless of the sensor's delimiter.
+(function () {
+	var split = { sid: 9, name: "S", csplit: 1, delimiter: ",", outcols: ["N", "V"] };
+	var rows = Q.pivotResults({
+		sensors: [split],
+		results: [res(1, 9, "OK", "A,1\nB,2", null)]
+	});
+	ok("split pivot: the row's cell is the raw line",
+		rows[0].s9 === "A,1" && rows[1].s9 === "B,2");
+})();
+
+// An ERR answer renders the error message as a single line, grouped like
+// any other.
+(function () {
+	var split = { sid: 9, name: "S", csplit: 1, delimiter: "|", outcols: ["N", "V"] };
+	var rows = Q.pivotResults({
+		sensors: [split],
+		results: [
+			res(1, 9, "ERR", null, "UNKNOWN_SENSOR"),
+			res(2, 9, "ERR", null, "UNKNOWN_SENSOR")
+		]
+	});
+	ok("split pivot: an ERR answer is one line, grouped like any other",
+		rows.length === 1 && rows[0].s9 === "UNKNOWN_SENSOR" && rows[0].count === 2);
+})();
+
+// A second sensor (even a non-split one) keeps the per-endpoint pivot - the
+// split sensor's cell stays the full multi-line output.
+(function () {
+	var rows = Q.pivotResults({
+		sensors: [
+			{ sid: 7, name: "Computer Name", csplit: 0, delimiter: null, outcols: null },
+			{ sid: 9, name: "S", csplit: 1, delimiter: "|", outcols: ["N", "V"] }
+		],
+		results: [
+			res(1, 7, "OK", "host-1", null), res(1, 9, "OK", "A|1\nB|2", null),
+			res(2, 7, "OK", "host-2", null), res(2, 9, "OK", "A|1\nB|2", null)
+		]
+	});
+	ok("split pivot: a second sensor keeps the per-endpoint pivot",
+		rows.length === 2 &&
+		rows[0].s7 === "host-1" && rows[0].s9 === "A|1\nB|2" && rows[0].count === 1 &&
+		rows[1].s7 === "host-2" && rows[1].s9 === "A|1\nB|2" && rows[1].count === 1);
+})();
+
+// A split sensor without stored names (pre-OUTCOLS installs) has no
+// sub-columns, so the per-endpoint pivot stays.
+(function () {
+	var rows = Q.pivotResults({
+		sensors: [{ sid: 9, name: "S", csplit: 1, delimiter: "|", outcols: null }],
+		results: [
+			res(1, 9, "OK", "A|1\nB|2", null),
+			res(2, 9, "OK", "A|1\nB|2", null)
+		]
+	});
+	ok("split pivot: a split sensor without names pivots on the full output",
+		rows.length === 1 && rows[0].s9 === "A|1\nB|2" && rows[0].count === 2);
+})();
+
+// End to end: the single-split rows expand to span 1 (each row its own
+// <tr> with its own checkbox, no rowspan) and the config carries the
+// sub-labels plus the Count column for the duplicates.
+(function () {
+	var split = { sid: 9, name: "Installed Applications", csplit: 1, delimiter: "|", outcols: ["Name", "Version"] };
+	var rows = Q.pivotResults({
+		sensors: [split],
+		results: [
+			res(1, 9, "OK", "App One|1.0.1\nApp Two|2.0", null),
+			res(2, 9, "OK", "App One|1.0.1", null)
+		]
+	});
+	rows.forEach(function (r) { Q.expandRow(r, [split]); });
+	ok("split pivot: each row expands to a single line (span 1)",
+		rows.every(function (r) { return r.span === 1; }));
+	ok("split pivot: the sub values carry the line's segments",
+		rows[0].s9_0_0 === "App One" && rows[0].s9_0_1 === "1.0.1" &&
+		rows[1].s9_0_0 === "App Two" && rows[1].s9_0_1 === "2.0");
+	var cfg = Q.buildConfig({ sensors: [split] }, rows);
+	ok("split pivot: the config keeps the sub-labels and the Count column",
+		eq(cfg.columns[1].sub, ["Name", "Version"]) && cfg.columns[2].key === "count");
+	ok("split pivot: the filter searches the raw line",
+		eq(cfg.searchKeys, ["s9"]));
+})();
+
 // --- expandRow (the CSPLIT sensor's output lines -> sub-row values) ------------
 
 // A split sensor: each output line becomes a sub-row, each line's
