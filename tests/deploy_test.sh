@@ -894,6 +894,10 @@ check "console: the Saved Queries tab carries the standard table" \
         && grep -q '>Structure<' "$RUN/query-saved.html" 2>/dev/null \
         && grep -q '>Author<' "$RUN/query-saved.html" 2>/dev/null \
         && grep -q '>Create Date<' "$RUN/query-saved.html" 2>/dev/null; echo $?)
+# The selection column's header checkbox is a permanently disabled dummy:
+# the rows are radio buttons (one selection), so there is no select-all.
+check "console: the Saved tab's header selection is a disabled dummy checkbox" \
+    $(grep -q '<td style="width: 15px;"><input type="checkbox" disabled="disabled"></td><td>Query Name</td>' "$RUN/query-saved.html" 2>/dev/null; echo $?)
 # The table sits inside the blue content box with the standard module
 # padding, and the Query Name and Structure columns are the flexible
 # (width-less) columns so the auto table layout does not stretch the 15px
@@ -1011,6 +1015,13 @@ check "console: the Copy to Builder wiring is served" \
     $(grep -q "luminumSensorCatalog" "$RUN/query.html" 2>/dev/null \
         && grep -q "function copyToBuilder" "$RUN/querybuilder.js" 2>/dev/null \
         && grep -q "data-payload" "$RUN/querybuilder.js" 2>/dev/null; echo $?)
+# Run Query processes only the visible tab: the served module carries the
+# tab-aware submit wiring (the active tab's validity drives the button, and
+# the Saved tab submits the selected row's data-payload).
+check "console: the Run Query tab wiring is served" \
+    $(grep -q "function activeTab" "$RUN/querybuilder.js" 2>/dev/null \
+        && grep -q "function savedSelection" "$RUN/querybuilder.js" 2>/dev/null \
+        && grep -q "function submitPayload" "$RUN/querybuilder.js" 2>/dev/null; echo $?)
 
 # --- per-OS sensor pairs (protocol 7.3): a client runs only its own pair ---
 # The config command carries all six type/script fields per sensor; the

@@ -18,18 +18,23 @@
 // text-based interpretation the Saved Queries table's Structure column
 // shows. Copy to Builder (the Saved Queries tab's form button) copies the
 // selected saved query back into the builder form and switches to the
-// Query Builder tab: the selected row's checkbox carries the query's JSON
-// payload in data-payload, condTreeToRows turns the condition tree back
-// into the builder's row sequence, and populateBuilder rebuilds the
-// retrieve rows, the target, and the condition rows.
+// Query Builder tab: the selected row's radio (the rows are one radio
+// group, so at most one is selected) carries the query's JSON payload in
+// data-payload, condTreeToRows turns the condition tree back into the
+// builder's row sequence, and populateBuilder rebuilds the retrieve rows,
+// the target, and the condition rows. Run Query processes only the visible
+// tab: on the Query Builder tab it submits the builder's form; on the
+// Saved Queries tab it is enabled only while a saved query is selected and
+// submits that query's data-payload, ignoring whatever the builder holds.
 //
 // The pure functions (findSensor, resolveSensorId, filterSensors,
 // opsForType, condBlocksToTree, condTreeToRows, findUnresolved,
 // findUnresolvedAll, queryStructure) are DOM-free so they can be
-// unit-tested under Node. The DOM helpers (applyOpsToSelect, applyRowType,
-// normalizeRows, collectCondBlocks, condRowsStatus, invalidSensorNames,
-// submitEnabled, buildQueryPayload, populateBuilder, copyToBuilder, init)
-// only run in the browser.
+// unit-tested under Node. The DOM helpers (activeTab, savedSelection,
+// applyOpsToSelect, applyRowType, normalizeRows, collectCondBlocks,
+// condRowsStatus, invalidSensorNames, submitEnabled, buildQueryPayload,
+// submitPayload, populateBuilder, copyToBuilder, init) only run in the
+// browser.
 //
 (function (root, factory) {
 	if (typeof module === 'object' && module.exports) {
@@ -544,20 +549,15 @@
 
 	// Copy the selected saved query into the builder form and switch to the
 	// Query Builder tab (the "Copy to Builder" button on the Saved Queries
-	// tab). Exactly one saved query must be selected: its row's checkbox
-	// (class "savedqueryrow") carries the query's JSON payload in
-	// data-payload (the /api/commands.php statement). Zero or multiple
-	// selections, or an unreadable payload, show an overlay and leave the
-	// builder untouched.
+	// tab). A saved query must be selected (the rows are one radio group,
+	// so at most one is): its row's radio (class "savedqueryrow") carries
+	// the query's JSON payload in data-payload (the /api/commands.php
+	// statement). No selection, or an unreadable payload, shows an overlay
+	// and leaves the builder untouched.
 	function copyToBuilder(catalog) {
-		const checked = Array.from(document.querySelectorAll('.savedqueryrow'))
-			.filter((cb) => cb.checked);
+		const checked = savedSelection();
 		if (checked.length === 0) {
 			showError('No Query Selected', 'Select a saved query to copy.');
-			return;
-		}
-		if (checked.length > 1) {
-			showError('Multiple Queries Selected', 'Select exactly one saved query to copy.');
 			return;
 		}
 		const raw = checked[0].getAttribute('data-payload');
@@ -614,10 +614,35 @@
 		return out;
 	}
 
-	// Whether the Submit button is enabled: at least one retrieve sensor,
-	// the condition rows complete when conditions are required, and no
-	// typed sensor (retrieve or condition) fails to resolve.
+	// The tab the Run Query button is on: the Saved Queries tab when its
+	// panel is the visible one (the page's switchTab drives the display),
+	// the Query Builder tab otherwise. The button processes only the
+	// visible tab.
+	function activeTab() {
+		const saved = document.getElementById('Saved');
+		if (saved && saved.style && saved.style.display !== 'none') { return 'Saved'; }
+		return 'Builder';
+	}
+
+	// The saved query row radio (class "savedqueryrow") that is checked -
+	// the Saved Queries tab's selection (the rows are one radio group, so
+	// at most one).
+	function savedSelection() {
+		return Array.from(document.querySelectorAll('.savedqueryrow'))
+			.filter((cb) => cb.checked);
+	}
+
+	// Whether the Run Query button is enabled - the button processes only
+	// the visible tab: on the Saved Queries tab a saved query must be
+	// selected (the rows are one radio group, so at most one is; the
+	// builder's contents are ignored), on the Query Builder tab at least
+	// one retrieve sensor is required, the condition rows complete when
+	// conditions are required, and no typed sensor (retrieve or condition)
+	// fails to resolve.
 	function submitEnabled(catalog) {
+		if (activeTab() === 'Saved') {
+			return savedSelection().length === 1;
+		}
 		const getContainer = document.getElementById('get-list');
 		let count = 0;
 		if (getContainer) {
@@ -818,10 +843,44 @@
 		document.addEventListener('click', onDocClick);
 	}
 
-	// Wire the Submit button and the live enable/disable state. The page's
-	// Sortable init replaces the list containers with clones and rows are
-	// added/removed at runtime, so the state is recomputed on document-level
-	// input/change/click events rather than per-field listeners.
+	// POST a ready query payload (the /api/commands.php statement - the
+	// builder's form or a saved query's data-payload) and follow the
+	// response: on success the page opens on the query's results, on
+	// failure the error overlay.
+	function submitPayload(payload) {
+		fetch('/api/commands.php', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(payload)
+		})
+		.then(function (resp) {
+			return resp.json().catch(function () { return {}; }).then(function (data) {
+				return { ok: resp.ok, data: data };
+			});
+		})
+		.then(function (r) {
+			// The results live on the query page itself: pass the query
+			// command's ID (the "command" value in the response) so the
+			// page opens on the Results tab for this query.
+			if (r.ok) { window.location.href = '/modules.php?view=query&id=' + r.data.command; }
+			else {
+				showError('Query Error', r.data.error || 'The query could not be submitted.');
+			}
+		})
+		.catch(function () {
+			showError('Query Error', 'The query could not be submitted.');
+		});
+	}
+
+	// Wire the Run Query button and the live enable/disable state. The
+	// button processes only the visible tab: on the Saved Queries tab it
+	// submits the selected saved query's data-payload (the builder's
+	// contents are ignored), on the Query Builder tab it submits the
+	// builder's form. The page's Sortable init replaces the list
+	// containers with clones and rows are added/removed at runtime, so the
+	// state is recomputed on document-level input/change/click events
+	// rather than per-field listeners - a tab switch is a click, so the
+	// button re-enables or disables as the operator moves between the tabs.
 	function init(catalog) {
 		const btn = document.getElementById('querygo');
 		if (!btn) { return; }
@@ -837,6 +896,27 @@
 		}
 
 		btn.addEventListener('click', function () {
+			if (activeTab() === 'Saved') {
+				// Run the selected saved query: its row's radio carries the
+				// query's JSON payload in data-payload - the builder's
+				// contents are ignored.
+				const checked = savedSelection();
+				if (checked.length === 0) {
+					showError('No Query Selected', 'Select a saved query to run.');
+					return;
+				}
+				const raw = checked[0].getAttribute('data-payload');
+				let payload = null;
+				if (raw) {
+					try { payload = JSON.parse(raw); } catch (e) { payload = null; }
+				}
+				if (!payload) {
+					showError('Run Failed', 'The selected saved query could not be read.');
+					return;
+				}
+				submitPayload(payload);
+				return;
+			}
 			// The button is disabled while any typed sensor fails to
 			// resolve; this is the backstop for a force-submitted form -
 			// every invalid sensor is named, not just the first.
@@ -850,28 +930,7 @@
 				showError('Query Error', result.error);
 				return;
 			}
-			fetch('/api/commands.php', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(result.payload)
-			})
-			.then(function (resp) {
-				return resp.json().catch(function () { return {}; }).then(function (data) {
-					return { ok: resp.ok, data: data };
-				});
-			})
-			.then(function (r) {
-				// The results live on the query page itself: pass the query
-				// command's ID (the "command" value in the response) so the
-				// page opens on the Results tab for this query.
-				if (r.ok) { window.location.href = '/modules.php?view=query&id=' + r.data.command; }
-				else {
-					showError('Query Error', r.data.error || 'The query could not be submitted.');
-				}
-			})
-			.catch(function () {
-				showError('Query Error', 'The query could not be submitted.');
-			});
+			submitPayload(result.payload);
 		});
 
 		document.addEventListener('input', updateSubmitState);
@@ -890,6 +949,8 @@
 		findSensor: findSensor,
 		resolveSensorId: resolveSensorId,
 		filterSensors: filterSensors,
+		activeTab: activeTab,
+		savedSelection: savedSelection,
 		applyOpsToSelect: applyOpsToSelect,
 		applyRowType: applyRowType,
 		normalizeRows: normalizeRows,

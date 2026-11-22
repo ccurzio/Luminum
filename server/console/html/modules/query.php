@@ -85,17 +85,21 @@ $showsaved = !$showresults && isset($_GET['tab']) && $_GET['tab'] === 'saved';
 		<div id="Saved" class="configtab" style="<?php print $showsaved ? '' : 'display: none;'; ?>">
 			<!-- The Saved Queries table: the console's standard table - the
 			     displayed-of-total count with the (N Selected) suffix, the
-			     right-hand filter box, the checkbox column, and the footer -
-			     the same structure as the main table pages. The Structure
-			     column renders the query's full text-based interpretation
-			     (LuminumQueryBuilder.queryStructure on the saved query's
-			     payload). Saved queries have no storage yet, so the
-			     table renders its empty state; rows (checkbox id="ID<n>",
-			     class "savedqueryrow", cells <n>A..E) render here once
-			     saving exists. Each row's checkbox carries the query's
-			     JSON payload (the /api/commands.php statement) in
-			     data-payload - Copy to Builder reads it to repopulate
-			     the builder form. -->
+			     right-hand filter box, the selection column, and the
+			     footer - the same structure as the main table pages. The
+			     Structure column renders the query's full text-based
+			     interpretation (LuminumQueryBuilder.queryStructure on the
+			     saved query's payload). Saved queries have no storage yet,
+			     so the table renders its empty state; rows (radio
+			     name="savedquery" id="ID<n>" class "savedqueryrow",
+			     onchange="sqRowHighlight(); sqSelCount();", cells
+			     <n>A..E) render here once saving exists - the radios form
+			     one group, so exactly one saved query can be selected.
+			     Each row's radio carries the query's JSON payload (the
+			     /api/commands.php statement) in data-payload - Copy to
+			     Builder reads it to repopulate the builder form. The
+			     header row's checkbox is a permanently disabled dummy:
+			     a radio group has no select-all. -->
 			<div style="padding: 5px 20px 20px 20px;">
 				<table style="margin-top: 10px;">
 				<tr><td colspan="5"><div style="position: absolute; padding-top: 7px; padding-left: 5px;"><span id="sqviscount">0</span> of <span id="sqtotcount">0</span> items <span id="sqselcount"></span></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="savedqueriesfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" disabled="disabled" maxlength="64"></div></td></tr>
@@ -108,7 +112,13 @@ $showsaved = !$showresults && isset($_GET['tab']) && $_GET['tab'] === 'saved';
 	</div>
 	<!-- The left form button follows the active tab: Reset Form on the
 	     Query Builder tab, Copy to Builder on the Saved Queries tab -
-	     switchTab swaps the label, and the initial label matches ?tab=saved. -->
+	     switchTab swaps the label, and the initial label matches ?tab=saved.
+	     Run Query processes only the visible tab: layout/querybuilder.js
+	     enables it per tab (a valid builder on the Query Builder tab,
+	     exactly one selected saved query on the Saved Queries tab) and
+	     submits only that tab's contents - a tab switch is a click, so the
+	     document-level state listener re-enables or disables it as the
+	     operator moves between the tabs. -->
 	<div id="formbuttons" style="width: 100%; text-align: right; padding-top: 10px;">
 		<button id="resetform" class="formgo" style="margin-right: 0;"><?php print $showsaved ? 'Copy to Builder' : 'Reset Form'; ?></button> <button id="querygo" class="formgo" style="margin-left: 0;" disabled="disabled">Run Query</button>
 	</div>
@@ -576,44 +586,30 @@ window.addEventListener('DOMContentLoaded', () => {
 <script>
 // The Saved Queries tab's table wiring - the same client-side behaviour as
 // the main table pages: the filter hides non-matching rows and keeps the
-// displayed count in step, and the checkbox column highlights the row and
-// maintains the (N Selected) suffix.
+// displayed count in step. The rows are radio buttons (one selection), so
+// there is no select-all - the header row's checkbox is a permanently
+// disabled dummy - and selecting a row highlights it and shows the
+// (1 Selected) suffix.
 LuminumTable.attachTextFilter('savedqueriesfilter', function (visible) {
 	document.getElementById('sqviscount').textContent = visible;
 	});
 
-function sqRowHighlight(idnum) {
-	var checkbox = document.getElementById("ID" + idnum);
-	var bgcolor = checkbox.checked == true ? "#686993" : "#494a69";
-	document.getElementById(idnum + "A").style.backgroundColor = bgcolor;
-	document.getElementById(idnum + "B").style.backgroundColor = bgcolor;
-	document.getElementById(idnum + "C").style.backgroundColor = bgcolor;
-	document.getElementById(idnum + "D").style.backgroundColor = bgcolor;
-	document.getElementById(idnum + "E").style.backgroundColor = bgcolor;
-	}
-
-function sqAllToggle() {
-	const allCheckbox = document.getElementById("sqselectall");
-	const checkboxes = document.querySelectorAll('input[class="savedqueryrow"]');
-	checkboxes.forEach(checkbox => {
-		checkbox.checked = allCheckbox.checked;
-		sqRowHighlight(removeLetters(checkbox.id));
+function sqRowHighlight() {
+	// The rows are one radio group, so the row being deselected never
+	// fires its own onchange: re-paint every row from its radio's state
+	document.querySelectorAll('input[class="savedqueryrow"]').forEach(radio => {
+		var rownum = radio.id.substring(2);
+		var bgcolor = radio.checked == true ? "#686993" : "#494a69";
+		document.getElementById(rownum + "A").style.backgroundColor = bgcolor;
+		document.getElementById(rownum + "B").style.backgroundColor = bgcolor;
+		document.getElementById(rownum + "C").style.backgroundColor = bgcolor;
+		document.getElementById(rownum + "D").style.backgroundColor = bgcolor;
+		document.getElementById(rownum + "E").style.backgroundColor = bgcolor;
 		});
-	sqAllCheck();
 	}
 
-function sqAllCheck() {
-	const checkboxes = document.querySelectorAll('input[class="savedqueryrow"]');
-	var checkTrigger = 0;
-	checkboxes.forEach(checkbox => { if (checkbox.checked == true) { checkTrigger++; } });
-	document.getElementById("sqselcount").textContent = checkTrigger > 0 ? '(' + checkTrigger + ' Selected)' : '';
-	if (checkboxes.length > 0 && checkTrigger == checkboxes.length) {
-		document.getElementById("sqselectall").checked = "checked";
-		} else { document.getElementById("sqselectall").checked = false; }
-	}
-
-function removeLetters(str) {
-	return str.replace(/[a-zA-Z]/g, '');
+function sqSelCount() {
+	document.getElementById("sqselcount").textContent = document.querySelector('.savedqueryrow:checked') ? '(1 Selected)' : '';
 	}
 </script>
 <?php } ?>

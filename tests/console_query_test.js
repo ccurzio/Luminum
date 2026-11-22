@@ -152,6 +152,10 @@ const doc = {
 	byId: {},
 	getElementById(id) { return (id in this.byId) ? this.byId[id] : null; },
 	createElement(tag) { return new El(tag); },
+	// Document-level listeners (the module's input/change/click submit-state
+	// updates and the autocomplete delegation) - fireDoc dispatches to them
+	_listeners: {},
+	addEventListener(type, fn) { (this._listeners[type] = this._listeners[type] || []).push(fn); },
 	// Walks every element ever created (the page's document-level
 	// delegation - attachHandlers, the module's click/input listeners -
 	// queries the whole document, not a container)
@@ -922,8 +926,9 @@ ok("structure: a null payload renders empty", Q.queryStructure(catalogR, null) =
 // --- Copy to Builder (copyToBuilder / populateBuilder) ----------------------
 // The Saved Queries tab's form button copies the selected saved query into
 // the builder form and switches to the Query Builder tab: the module reads
-// the selected row's checkbox (class "savedqueryrow", the query's JSON
-// payload in data-payload), resets the builder (the page's resetForm),
+// the selected row's radio (class "savedqueryrow", the query's JSON payload
+// in data-payload - the rows are one radio group, so at most one is
+// selected), resets the builder (the page's resetForm),
 // repopulates it (retrieve rows, the target, the condition rows - added
 // through the page's own addRow so the remove buttons, drag handles, and
 // handlers stay consistent), and clicks the Query Builder tab button.
@@ -988,6 +993,7 @@ function pristineBuilder() {
 }
 function savedRow(checked, payload) {
 	const cb = new El("input", ["savedqueryrow"]);
+	cb.setAttribute("type", "radio");
 	cb.checked = checked;
 	if (payload !== undefined) { cb.setAttribute("data-payload", payload); }
 	ALL_ELS.push(cb);
@@ -1008,16 +1014,6 @@ ok("copy: no query selected -> overlay, builder untouched", (function () {
 	Q.copyToBuilder(catalogR);
 	return overlayShown && overlayShown.title === "No Query Selected" &&
 		overlayShown.message === "Select a saved query to copy." &&
-		resetCalls === 0 && tabClicked === null;
-})());
-ok("copy: multiple queries selected -> overlay, builder untouched", (function () {
-	overlayShown = null; resetCalls = 0; tabClicked = null;
-	const b = pristineBuilder();
-	savedRow(true, "{}");
-	savedRow(true, "{}");
-	Q.copyToBuilder(catalogR);
-	return overlayShown && overlayShown.title === "Multiple Queries Selected" &&
-		overlayShown.message === "Select exactly one saved query to copy." &&
 		resetCalls === 0 && tabClicked === null;
 })());
 ok("copy: an unreadable payload -> overlay, builder untouched", (function () {
@@ -1081,6 +1077,150 @@ ok("copy: a query without conditions targets all endpoints", (function () {
 		fromRows.length === 1 &&
 		fromRows[0].querySelector("input").value === "" &&
 		resetCalls === 1 && tabClicked === "Query Builder";
+})());
+
+// --- Run Query (the button processes only the visible tab) -----------------
+// On the Saved Queries tab the button is enabled only while a saved query
+// is selected (the rows are one radio group, so at most one is) and
+// submits that query's data-payload (the builder's contents ignored); on
+// the Query Builder tab it submits the builder's form (the selection
+// ignored). The document-level click/change listeners recompute the state,
+// so a tab switch (a click) and a radio toggle (a change) move the button
+// with the active tab.
+const savedPanel = new El("div"); savedPanel.id = "Saved";
+doc.byId["Saved"] = savedPanel;
+const queryBtn = new El("button"); queryBtn.id = "querygo";
+doc.byId["querygo"] = queryBtn;
+let fetchCalls = [];
+global.fetch = function (url, opts) {
+	fetchCalls.push({ url: url, body: opts ? opts.body : null });
+	return Promise.resolve({ ok: true, json: () => Promise.resolve({ command: 42 }) });
+};
+window.location = {};
+function fireDoc(type) {
+	(doc._listeners[type] || []).slice().forEach((fn) => fn({}));
+}
+// A fresh init: the button and the document keep one listener set each
+// (repeated inits would otherwise stack click handlers on queryBtn)
+function initQuery() {
+	queryBtn._listeners = {};
+	doc._listeners = {};
+	Q.init(catalogR);
+}
+
+ok("tab: no Saved panel -> Builder", (function () {
+	delete doc.byId["Saved"];
+	return Q.activeTab() === "Builder";
+})());
+ok("tab: a hidden Saved panel -> Builder", (function () {
+	savedPanel.style.display = "none";
+	doc.byId["Saved"] = savedPanel;
+	return Q.activeTab() === "Builder";
+})());
+ok("tab: a visible Saved panel -> Saved", (function () {
+	savedPanel.style.display = "block";
+	return Q.activeTab() === "Saved";
+})());
+ok("savedSel: the checked saved query radio", (function () {
+	ALL_ELS.length = 0;
+	const a = new El("input", ["savedqueryrow"]); a.checked = false;
+	const b = new El("input", ["savedqueryrow"]); b.checked = true;
+	const other = new El("input", ["otherrow"]); other.checked = true;
+	const r = Q.savedSelection();
+	return r.length === 1 && r[0] === b;
+})());
+ok("submit: the Saved tab with no selection -> disabled (a valid builder is ignored)", (function () {
+	savedPanel.style.display = "block";
+	const gl = new El("div"); gl.appendChild(getRow("Hostname"));
+	doc.byId["get-list"] = gl;
+	doc.byId["targets"] = { value: "all" };
+	doc.byId["from-list"] = new El("div");
+	ALL_ELS.length = 0;
+	return Q.submitEnabled(catalogR) === false;
+})());
+ok("submit: the Saved tab with one selection -> enabled (an empty builder is ignored)", (function () {
+	savedPanel.style.display = "block";
+	const gl = new El("div"); gl.appendChild(getRow(""));
+	doc.byId["get-list"] = gl;
+	doc.byId["targets"] = { value: "all" };
+	doc.byId["from-list"] = new El("div");
+	ALL_ELS.length = 0;
+	const cb = new El("input", ["savedqueryrow"]); cb.checked = true;
+	return Q.submitEnabled(catalogR) === true;
+})());
+ok("submit: the Builder tab ignores the saved selection", (function () {
+	savedPanel.style.display = "none";
+	const gl = new El("div"); gl.appendChild(getRow("Hostname"));
+	doc.byId["get-list"] = gl;
+	doc.byId["targets"] = { value: "all" };
+	doc.byId["from-list"] = new El("div");
+	ALL_ELS.length = 0;
+	const cb = new El("input", ["savedqueryrow"]); cb.checked = true;
+	return Q.submitEnabled(catalogR) === true;
+})());
+
+ok("run: the Saved tab submits the selected saved query, ignoring the builder", (function () {
+	overlayShown = null; fetchCalls = [];
+	const b = pristineBuilder();
+	// an invalid builder that must be ignored
+	b.gl.querySelectorAll(".list-item")[0].querySelector("input").value = "Nope";
+	savedPanel.style.display = "block";
+	savedRow(true, JSON.stringify({ target: "all", action: "query", sensors: [{ sid: 3 }] }));
+	initQuery();
+	queryBtn.click();
+	return fetchCalls.length === 1 &&
+		fetchCalls[0].url === "/api/commands.php" &&
+		fetchCalls[0].body === JSON.stringify({ target: "all", action: "query", sensors: [{ sid: 3 }] });
+})());
+ok("run: the Saved tab with no selection -> overlay, nothing submitted", (function () {
+	overlayShown = null; fetchCalls = [];
+	pristineBuilder();
+	savedPanel.style.display = "block";
+	savedRow(false);
+	initQuery();
+	queryBtn.click();
+	return overlayShown && overlayShown.title === "No Query Selected" &&
+		overlayShown.message === "Select a saved query to run." &&
+		fetchCalls.length === 0;
+})());
+ok("run: the Saved tab with an unreadable payload -> overlay, nothing submitted", (function () {
+	overlayShown = null; fetchCalls = [];
+	pristineBuilder();
+	savedPanel.style.display = "block";
+	savedRow(true, "{not json");
+	initQuery();
+	queryBtn.click();
+	return overlayShown && overlayShown.title === "Run Failed" &&
+		overlayShown.message === "The selected saved query could not be read." &&
+		fetchCalls.length === 0;
+})());
+ok("run: the Query Builder tab submits the builder's form, ignoring the selection", (function () {
+	overlayShown = null; fetchCalls = [];
+	const b = pristineBuilder();
+	b.gl.querySelectorAll(".list-item")[0].querySelector("input").value = "Hostname";
+	doc.byId["targets"].value = "all";
+	savedPanel.style.display = "none";
+	// a checked saved query that must be ignored
+	savedRow(true, JSON.stringify({ target: "all", action: "query", sensors: [{ sid: 3 }] }));
+	initQuery();
+	queryBtn.click();
+	return fetchCalls.length === 1 &&
+		fetchCalls[0].body === JSON.stringify({ target: "all", action: "query", sensors: [{ sid: 1 }] });
+})());
+ok("run: the button follows the active tab's validity", (function () {
+	const b = pristineBuilder();
+	b.gl.querySelectorAll(".list-item")[0].querySelector("input").value = "Hostname";
+	doc.byId["targets"].value = "all";
+	savedPanel.style.display = "none";
+	initQuery();
+	const builderValid = queryBtn.disabled === false;
+	savedPanel.style.display = "block";
+	fireDoc("click"); // the tab switch
+	const savedNoSel = queryBtn.disabled === true;
+	savedRow(true, JSON.stringify({ target: "all", action: "query", sensors: [{ sid: 1 }] }));
+	fireDoc("change"); // the radio toggle
+	const savedOne = queryBtn.disabled === false;
+	return builderValid && savedNoSel && savedOne;
 })());
 
 // The page wires the button to the module and boots the catalog: the

@@ -264,10 +264,12 @@ ok("page: the form button dispatches on the active tab",
 // The Saved Queries tab carries the console's standard table (the old
 // "No saved queries yet." placeholder is gone): the displayed-of-total
 // count with the (N Selected) suffix span, the right-hand filter box, the
-// checkbox / Query Name / Structure / Author / Create Date columns, and the
-// empty state - saved queries have no storage yet, so the table renders 0
-// of 0. The Structure column renders the query's full text-based
-// interpretation (LuminumQueryBuilder.queryStructure).
+// selection / Query Name / Structure / Author / Create Date columns, and
+// the empty state - saved queries have no storage yet, so the table
+// renders 0 of 0. The selection column's header checkbox is a permanently
+// disabled dummy (the rows are radio buttons, one selection); the
+// Structure column renders the query's full text-based interpretation
+// (LuminumQueryBuilder.queryStructure).
 ok("page: the Saved tab's placeholder text is gone", pageSrc.indexOf("No saved queries yet.") < 0);
 ok("page: the Saved tab's top row shows displayed of total items",
 	pageSrc.indexOf('<span id="sqviscount">0</span> of <span id="sqtotcount">0</span> items <span id="sqselcount"></span>') >= 0);
@@ -287,8 +289,10 @@ ok("page: the Saved tab's table carries the standard module inset",
 ok("page: the Saved tab renders the empty state", pageSrc.indexOf("No Results") >= 0);
 ok("page: the Saved tab's filter keeps the displayed count in step",
 	pageSrc.indexOf("LuminumTable.attachTextFilter('savedqueriesfilter'") >= 0 && pageSrc.indexOf("document.getElementById('sqviscount')") >= 0);
-ok("page: the Saved tab's selection maintains the (N Selected) suffix",
-	pageSrc.indexOf("document.getElementById(\"sqselcount\").textContent = checkTrigger > 0 ? '(' + checkTrigger + ' Selected)' : ''") >= 0);
+ok("page: the Saved tab's header selection is a disabled dummy checkbox",
+	/<td style="width: 15px;"><input type="checkbox" disabled="disabled"><\/td><td>Query Name<\/td>/.test(pageSrc));
+ok("page: the Saved tab's selection maintains the (1 Selected) suffix",
+	pageSrc.indexOf("document.getElementById(\"sqselcount\").textContent = document.querySelector('.savedqueryrow:checked') ? '(1 Selected)' : ''") >= 0);
 const headerSrc = fs.readFileSync(path.join(__dirname, "..", "server", "console", "html", "layout", "header.php"), "utf8");
 ok("header: the Saved Queries link opens the query page's Saved tab",
 	headerSrc.indexOf('href=\\"/modules.php?view=query&tab=saved\\"') >= 0);
