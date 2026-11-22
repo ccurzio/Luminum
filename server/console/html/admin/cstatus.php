@@ -16,7 +16,7 @@
 			<tr><td colspan="8"><div style="position: absolute; padding-top: 5px; padding-left: 5px;"><img id="refresh" src="icons/refresh.png" style="cursor: pointer; width: 15px; height: 15px; vertical-align: top;" onclick="cstatusRefresh()">&nbsp;&nbsp;<span id="viscount">0</span> of <span id="totcount">0</span> Items <span id="selcount"></span></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="cstatusfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" maxlength="64"></div></td></tr>
 			<tbody id="cstable-head"></tbody>
 			<tbody data-luminum-body id="cstable-body"></tbody>
-			<tr style="height: 35px;"><td colspan="8"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;"><i>Query Completed in <span id="queryms">0.00</span> Seconds</i></div></td></tr>
+			<tr style="height: 35px;"><td colspan="8"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;"><i><span id="cstatusfootprefix">Processing Query...</span> <span id="queryms">0.00</span> Seconds</i></div></td></tr>
 			</table>
 		</div>
 	</div>
@@ -219,7 +219,6 @@ function cstatusApply() {
 	document.getElementById('viscount').textContent = visible.length;
 	document.getElementById('totcount').textContent = cstatusData.count;
 	document.getElementById('selcount').textContent = selCount > 0 ? '(' + selCount + ' Selected)' : '';
-	document.getElementById('queryms').textContent = cstatusData.query_ms;
 	cstatusButtons(selCount);
 	cstatusOSBreakdown(visible);
 	cstatusStateBreakdown(visible);
@@ -342,11 +341,36 @@ document.getElementById('fapply').addEventListener('click', function () {
 	cstatusApply();
 });
 
+// --- the footer clock --------------------------------------------------------
+// Starts when the page loads and ticks "Processing Query... X.XX Seconds"
+// (100 ms) until the first poll's database query completes, then reads
+// "Query Completed in X.XX Seconds" (the page-load-to-data duration). Later
+// polls keep the table live but leave the stopped clock alone.
+var cstatusT0 = Date.now();
+var cstatusClockRunning = true;
+var cstatusPrefixEl = document.getElementById('cstatusfootprefix');
+var cstatusMsEl = document.getElementById('queryms');
+
+function cstatusSetFooter(prefix, seconds) {
+	if (cstatusPrefixEl) { cstatusPrefixEl.textContent = prefix; }
+	if (cstatusMsEl) { cstatusMsEl.textContent = seconds.toFixed(2); }
+}
+function cstatusStopClock() {
+	if (!cstatusClockRunning) { return; }
+	cstatusClockRunning = false;
+	clearInterval(cstatusTicker);
+	cstatusSetFooter('Query Completed in', (Date.now() - cstatusT0) / 1000);
+}
+var cstatusTicker = setInterval(function () {
+	if (!cstatusClockRunning) { return; }
+	cstatusSetFooter('Processing Query...', (Date.now() - cstatusT0) / 1000);
+}, 100);
+
 // --- polling ----------------------------------------------------------------
 
 cstatusPoll = LuminumTable.poll('/api/clients.php', {
 	interval: 5000,
-	onData: function (data) { cstatusData = data; cstatusApply(); },
+	onData: function (data) { cstatusData = data; cstatusStopClock(); cstatusApply(); },
 	onError: function (err) { console.error('Client Status poll failed:', err); }
 });
 cstatusPoll.refresh();

@@ -436,6 +436,12 @@ check "console: Client Status top row is refresh + displayed of total Items" \
         && grep -q 'id="viscount"' "$RUN/cstatus.html" 2>/dev/null \
         && grep -q 'id="totcount"' "$RUN/cstatus.html" 2>/dev/null \
         && grep -q 'id="selcount"' "$RUN/cstatus.html" 2>/dev/null; echo $?)
+# The footer clock starts as "Processing Query... 0.00 Seconds" (the page
+# script flips the prefix to "Query Completed in" when the first poll's
+# database query completes).
+check "console: Client Status footer carries the processing clock" \
+    $(grep -q 'id="cstatusfootprefix"' "$RUN/cstatus.html" 2>/dev/null \
+        && grep -q 'Processing Query...' "$RUN/cstatus.html" 2>/dev/null; echo $?)
 check "console: check-in filter offers Check-in Interval(s)" \
     $(grep -q 'Check-in Interval(s)' "$RUN/cstatus.html" 2>/dev/null; echo $?)
 check "console: status filter checkboxes present" \
