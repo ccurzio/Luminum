@@ -33,6 +33,8 @@ Keep in mind that Luminum is still in early development, so its current function
 
 The server package is supported primarily under Debian Linux, however I am exploring support for additional distributions as well. I am also strongly considering creating a Docker container for the server-side application. The endpoint clients will run on a range of operating systems and platforms including Linux (Debian, CentOS/Red Hat, Slackware, etc.), macOS, and Windows. I'm tentatively looking at supporting OpenBSD and FreeBSD as well, though I have far less BSD experience (limited to FreeBSD) than Linux/Mac/Windows. Solaris support is planned for the longer term. AIX support is also being considered  (eventually probably possibly maybe hopefully) depending on the availability of a development environment, because AIX is getting left behind when it comes to security. 
 
+For environments with segregated networks, a Luminum Page Server can be set up as a single-point relay which caches packages and proxies communication between networks, eliminating the need for bulding separate discrete Luminum deployments.
+
 ## Development
 Right now I'm working on this thing by myself, but I certainly welcome community support from anyone who wants to chip in. (Feel free to review the [To-Do List](https://github.com/ccurzio/Luminum/blob/main/ToDo.md) if you're wondering about the project's current development status.) There's no real timeline or roadmap beyond what's included here, however the goal is to provide a secure, complete, lightweight, and robust endpoint security and management solution that can scale from the smallest home networks up to the largest enterprise networks. 
 
