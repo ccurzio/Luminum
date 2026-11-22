@@ -251,12 +251,19 @@ ok('query data: conditions field omitted when null',
 	$decoded === ['qid' => 'qid-1', 'sensors' => [['sid' => 7]]],
 	$data);
 
-// --- luminum_truncate_output -------------------------------------------------
-ok('truncate: short output untouched', luminum_truncate_output('hello') === 'hello');
-ok('truncate: at the cap untouched', luminum_truncate_output(str_repeat('a', 4096)) === str_repeat('a', 4096));
-$cut = luminum_truncate_output(str_repeat('a', 4100));
-ok('truncate: over the cap cut + marked', $cut === str_repeat('a', 4096) . '…', var_export(substr($cut, 4090), true));
-ok('truncate: null passes through', luminum_truncate_output(null) === null);
+// --- luminum_result_row output passthrough -----------------------------------
+// The results page renders the output in full (a split sensor's output
+// lines are the table's rows), so the API must serve it whole - a large
+// multi-line output (well past the old 4096-byte preview cap) arrives
+// byte-for-byte, and a null output (an ERR answer) stays null.
+$big = '';
+for ($i = 1; $i <= 300; $i++) { $big .= sprintf("app-%03d|1.0.%d\n", $i, $i); }
+ok('result row: a large output is served whole (no preview cap)',
+	luminum_result_row(['UID' => '1', 'HOSTNAME' => 'h', 'SENSORID' => '9', 'SENSORNAME' => 's',
+		'STATUS' => 'OK', 'OUTPUT' => $big, 'ERR' => null, 'TS' => 't'])['output'] === $big);
+ok('result row: a null output stays null',
+	luminum_result_row(['UID' => '1', 'HOSTNAME' => 'h', 'SENSORID' => '9', 'SENSORNAME' => 's',
+		'STATUS' => 'ERR', 'OUTPUT' => null, 'ERR' => 'TIMEOUT', 'TS' => 't'])['output'] === null);
 
 // --- luminum_result_row -------------------------------------------------------
 $rr = luminum_result_row([

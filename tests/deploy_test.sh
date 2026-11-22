@@ -529,7 +529,7 @@ code=$(curl -k -s -D "$RUN/sensor-split-post.hdr" -o /dev/null -w '%{http_code}'
     --data-urlencode "category=none" \
     --data-urlencode "leselect=on" \
     --data-urlencode "lstype=shell" \
-    --data-urlencode "lscript=printf 'app-one|1.0.1\napp-two|2.0\n'" \
+    --data-urlencode "lscript=printf 'app-one|1.0.1\napp-two|2.0\n'; for i in \$(seq 1 300); do printf 'filler-%03d|1.0\n' \$i; done" \
     --data-urlencode "split=on" \
     --data-urlencode "delimeter=|" \
     --data-urlencode "outcol[]=Name" \
@@ -1165,6 +1165,11 @@ done
 check "split-sensor query answered by the live client" "$res_ok" "no QUERYRESULTS row for $QID_S"
 check "the split sensor's answer carries both output lines" \
     $([ "$(dbq "select if(OUTPUT like '%app-one|1.0.1%' and OUTPUT like '%app-two|2.0%','yes','no') from CLIENTS.QUERYRESULTS where QID='$QID_S';")" = "yes" ]; echo $?)
+# The answer is well past the old 4096-byte API preview cap (the two named
+# lines + 300 filler lines ~ 4.5 KB): the full output, last line included,
+# is stored.
+check "the split sensor's full output is stored past the old preview cap" \
+    $([ "$(dbq "select if(OUTPUT like '%filler-300|1.0%' and length(OUTPUT) > 4096,'yes','no') from CLIENTS.QUERYRESULTS where QID='$QID_S';")" = "yes" ]; echo $?)
 
 # A condition on a sensor that is not defined for this OS evaluates false:
 # the Linux client cannot run the Mac-only condition sensor, so it stays
@@ -1220,6 +1225,10 @@ check "api: the split sensor carries csplit/delimiter/outcols" \
     $(grep -q '"csplit":1' "$RUN/queryresults-split.json" 2>/dev/null \
         && grep -q '"delimiter":"|"' "$RUN/queryresults-split.json" 2>/dev/null \
         && grep -q '"outcols":\["Name","Version"\]' "$RUN/queryresults-split.json" 2>/dev/null; echo $?)
+# The API serves the output whole: the last filler line (past the old
+# 4096-byte preview cap) is present in the JSON.
+check "api: the split sensor's output is served whole (no preview cap)" \
+    $(grep -q "filler-300|1.0" "$RUN/queryresults-split.json" 2>/dev/null; echo $?)
 check "api: the unsplit sensor's retrieve entry carries no split metadata" \
     $(grep -q '"csplit":0' "$RUN/queryresults-id.json" 2>/dev/null \
         && grep -q '"outcols":null' "$RUN/queryresults-id.json" 2>/dev/null; echo $?)

@@ -5,17 +5,12 @@
 // connection or session.
 //
 
-// Cap a result cell for the API: a sensor output can be as large as the
-// MQTT answer cap, and the results page only needs a preview.
-function luminum_truncate_output($s, $max = 4096) {
-	if (!is_string($s)) { return $s; }
-	if (strlen($s) <= $max) { return $s; }
-	return substr($s, 0, $max) . '…';
-}
-
 // Shape one QUERYRESULTS row for the results API. The client hostname and
 // sensor name come from the joins in queryresults.php; a client or sensor
-// that no longer exists falls back to an ID-based label.
+// that no longer exists falls back to an ID-based label. The output is
+// served whole: the results page renders it in full (a split sensor's
+// output lines are the table's rows), and its size is already bounded by
+// the MQTT answer cap (64 KiB per answer envelope).
 function luminum_result_row($row) {
 	return [
 		'uid' => (int)$row['UID'],
@@ -23,7 +18,7 @@ function luminum_result_row($row) {
 		'sensor' => (int)$row['SENSORID'],
 		'sensor_name' => (is_string($row['SENSORNAME']) && $row['SENSORNAME'] !== '') ? $row['SENSORNAME'] : ('Sensor ' . $row['SENSORID']),
 		'status' => $row['STATUS'],
-		'output' => luminum_truncate_output($row['OUTPUT']),
+		'output' => $row['OUTPUT'],
 		'err' => $row['ERR'],
 		'ts' => $row['TS'],
 	];
