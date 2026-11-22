@@ -42,10 +42,10 @@ Right now I'm working on this thing by myself, but I certainly welcome community
 NOTE: For the first two years of Luminum's development, it was entirely me manually plugging away at code. Recently however, as this is such an enormous undertaking for one person to do in their free time I have since begun employing the use of AI to assist in development. Please note however that its usage is by way of a local/offline AI system; I won't be stealing anyone's drinking water or robbing communities of real estate to subsidize Luminum's development. I am and always have been a strong proponent of running as much in the way of software and services locally and independently as possible.
 
 ## ScreenShots
-- <a href="https://github.com/ccurzio/Luminum/screenshots/clientstatus.png">Client Status</a>
-- <a href="https://github.com/ccurzio/Luminum/screenshots/querybuilder.png">Query Builder</a>
-- <a href="https://github.com/ccurzio/Luminum/screenshots/sensors.png">Sensors</a>
-- <a href="https://github.com/ccurzio/Luminum/screenshots/editsensor.png">Edit Sensor</a>
+- <a href="https://github.com/ccurzio/Luminum/blob/main/screenshots/clientstatus.png?raw=true">Client Status</a>
+- <a href="https://github.com/ccurzio/Luminum/blob/main/screenshots/querybuilder.png?raw=true">Query Builder</a>
+- <a href="https://github.com/ccurzio/Luminum/blob/main/screenshots/sensors.png?raw=true">Sensors</a>
+- <a href="https://github.com/ccurzio/Luminum/blob/main/screenshots/editsensor.png?raw=true">Edit Sensor</a>
 
 ## About
 - **Luminum:** The name comes from both the chemical element Aluminum (Al) - a strong yet lightweight metal, as well as the concept of shining light into dark areas, or to "illuminate." Which is always what decent technology teams should want to do with their infrastructure. 
