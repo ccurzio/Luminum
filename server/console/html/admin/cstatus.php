@@ -40,7 +40,7 @@
 	<span style="font-size: 15px; font-weight: bold;">Filter by Operating System:</span>
 	</p>
 	<table style="margin-bottom: 40px; table-layout: fixed;">
-	<colgroup><col style="width: 32px;"><col><col style="width: 70px;"><col style="width: 55px;"></colgroup>
+	<colgroup><col style="width: 32px;"><col><col style="width: 120px;"><col style="width: 70px;"></colgroup>
 	<tr><td></td><td>Platform</td><td style="text-align: center;">Percentage</td><td style="text-align: center;">Count</td></tr>
 	<tr><td class="lfilter" style="background-color: #494a69;"><input type="checkbox" id="filterlinux"></td><td class="lfilter" style="background-color: #494a69;">Linux</td><td class="lfilter" style="background-color: #494a69; text-align: center;"><span id="linuxpct">0</span>%</td><td class="lfilter" style="background-color: #494a69; text-align: center;"><span id="linuxcount">0</span></td></tr>
 	<tr><td class="mfilter" style="background-color: #494a69;"><input type="checkbox" id="filtermac"></td><td class="mfilter" style="background-color: #494a69;">macOS</td><td class="mfilter" style="background-color: #494a69; text-align: center;"><span id="macospct">0</span>%</td><td class="mfilter" style="background-color: #494a69; text-align: center;"><span id="macoscount">0</span></td></tr>
@@ -51,7 +51,7 @@
 	<span id="statfilter" style="font-size: 15px; font-weight: bold;">Filter by Status:</span>
 	</p>
 	<table style="margin-bottom: 40px; table-layout: fixed;">
-	<colgroup><col style="width: 32px;"><col><col style="width: 70px;"><col style="width: 55px;"></colgroup>
+	<colgroup><col style="width: 32px;"><col><col style="width: 120px;"><col style="width: 70px;"></colgroup>
 	<tr><td></td><td style="text-align: center;">Status</td><td style="text-align: center;">Percentage</td><td style="text-align: center;">Count</td></tr>
 	<tr><td class="gfilter" style="background-color: #494a69; text-align: center;"><input type="checkbox" id="filtergreen"></td><td class="gfilter" style="background-color: #494a69; text-align: center;"><img style="vertical-align: middle;" src="/icons/sysgreen.png"></td><td class="gfilter" style="background-color: #494a69; text-align: center;"><span id="greenpct">0</span>%</td><td class="gfilter" style="background-color: #494a69; text-align: center;"><span id="greencount">0</span></td></tr>
 	<tr><td class="yfilter" style="background-color: #494a69; text-align: center;"><input type="checkbox" id="filteryellow"></td><td class="yfilter" style="background-color: #494a69; text-align: center;"><img style="vertical-align: middle;" src="/icons/sysyellow.png"></td><td class="yfilter" style="background-color: #494a69; text-align: center;"><span id="yellowpct">0</span>%</td><td class="yfilter" style="background-color: #494a69; text-align: center;"><span id="yellowcount">0</span></td></tr>
@@ -63,7 +63,7 @@
 	<span id="verfilter" style="font-size: 15px; font-weight: bold;">Filter by Client Version:</span>
 	</p>
 	<table id="vertable" style="table-layout: fixed;">
-	<colgroup><col style="width: 32px;"><col><col style="width: 70px;"><col style="width: 55px;"></colgroup>
+	<colgroup><col style="width: 32px;"><col><col style="width: 120px;"><col style="width: 70px;"></colgroup>
 	<tr><td></td><td>Version</td><td style="text-align: center;">Percentage</td><td style="text-align: center;">Count</td></tr>
 	<tbody id="verrows"></tbody>
 	</table>
@@ -83,13 +83,13 @@ var cstatusConfig = {
 		  header: '<input id="selectall" type="checkbox">' },
 		{ key: 'hostname', label: 'Computer Name' },
 		{ key: 'ip', label: 'IP Address', width: '125px' },
-		{ key: 'platform', label: 'Platform', width: '50px', align: 'center',
+		{ key: 'platform', label: 'Platform', width: '75px', align: 'center',
 		  render: function (row) {
 			return '<img src="images/' + LuminumTable.escapeHTML(row.platform).toLowerCase() + '.png" style="width: 24px; height: 24px; margin-top: 2px;">';
 		  } },
 		{ key: 'os', label: 'Operating System' },
 		{ key: 'clientver', label: 'Client Version', width: '120px' },
-		{ key: 'state', label: 'Status', width: '60px', align: 'center', padTop: '7px',
+		{ key: 'state', label: 'Status', width: '75px', align: 'center', padTop: '7px',
 		  render: function (row) {
 			var icon = { green: 'sysgreen.png', yellow: 'sysyellow.png', red: 'sysred.png', offline: 'sysgray.png' }[LuminumTable.stateBucket(row.state)];
 			return '<img src="/icons/' + icon + '" title="' + LuminumTable.escapeHTML(row.state) + '">';

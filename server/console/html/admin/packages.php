@@ -29,8 +29,8 @@ $pkgcount = mysqli_num_rows($pkgquery);
                 print "</div>\n";
                 ?>
 		<table style="margin-top: 10px; table-layout: fixed;">
-		<colgroup><col style="width: 32px;"><col><col><col style="width: 50px;"><col style="width: 75px;"><col style="width: 100px;"><col style="width: 175px;"><col style="width: 175px;"><col style="width: 100px;"></colgroup>
-		<tr><td colspan="10"><div style="position: absolute; padding-top: 7px; padding-left: 5px;"><span id="viscount"><?php print $pkgcount; ?></span> of <span id="totcount"><?php print $pkgcount; ?></span> items <span id="selcount"></span></div>
+		<colgroup><col style="width: 32px;"><col><col><col style="width: 95px;"><col style="width: 75px;"><col style="width: 75px;"><col style="width: 120px;"><col style="width: 150px;"><col style="width: 120px;"></colgroup>
+		<tr><td colspan="9"><div style="position: absolute; padding-top: 7px; padding-left: 5px;"><span id="viscount"><?php print $pkgcount; ?></span> of <span id="totcount"><?php print $pkgcount; ?></span> items <span id="selcount"></span></div>
 		<div style="float: right; text-align: right; padding-right: 5px;">Content Set: <select id="contentset" name="contentset" style="margin-left: 2px; margin-right: 30px; margin-top: 2px; width: 170px; height: 28px;" <?php if ($pkgcount == 0) { print "disabled=\"disabled\""; } ?>>
 			<option value="all">All</option>
 			<?php
@@ -39,7 +39,7 @@ $pkgcount = mysqli_num_rows($pkgquery);
 				}
 			?>
 		</select> Filter: <input type="text" id="packagesfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($pkgcount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
-		<tr><td style="width: 15px;">
+		<tr><td>
 		<?php
 			if ($pkgcount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
 			else { print "<input type=\"checkbox\">"; }
@@ -48,7 +48,7 @@ $pkgcount = mysqli_num_rows($pkgquery);
 		<?php
 
 		if ($pkgcount == 0) {
-			print "<tr><td colspan=\"10\" style=\"text-align: center; background-color: #494a69; font-weight: normal; font-style: italic;\">No Results</td></tr>\n";
+			print "<tr><td colspan=\"9\" style=\"text-align: center; background-color: #494a69; font-weight: normal; font-style: italic;\">No Results</td></tr>\n";
 			}
 		else {
 			while($row = mysqli_fetch_assoc($pkgquery)) {
@@ -56,7 +56,7 @@ $pkgcount = mysqli_num_rows($pkgquery);
 				}
 			}
 		?>
-		<tr style="height: 35px;"><td colspan="10"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;"><i>Query Completed in <?php print $duration; ?> Seconds</i></div></td></tr>
+		<tr style="height: 35px;"><td colspan="9"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;"><i>Query Completed in <?php print $duration; ?> Seconds</i></div></td></tr>
 		</table>
 	</div>
 

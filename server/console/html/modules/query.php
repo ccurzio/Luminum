@@ -102,7 +102,7 @@ $showsaved = !$showresults && isset($_GET['tab']) && $_GET['tab'] === 'saved';
 			     a radio group has no select-all. -->
 			<div style="padding: 5px 20px 20px 20px;">
 				<table style="margin-top: 10px; table-layout: fixed;">
-				<colgroup><col style="width: 32px;"><col><col><col style="width: 100px;"><col style="width: 100px;"></colgroup>
+				<colgroup><col style="width: 32px;"><col><col><col style="width: 100px;"><col style="width: 120px;"></colgroup>
 				<tr><td colspan="5"><div style="position: absolute; padding-top: 7px; padding-left: 5px;"><span id="sqviscount">0</span> of <span id="sqtotcount">0</span> items <span id="sqselcount"></span></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="savedqueriesfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" disabled="disabled" maxlength="64"></div></td></tr>
 				<tr><td><input type="checkbox" disabled="disabled"></td><td>Name</td><td>Structure</td><td>Author</td><td>Create Date</td></tr>
 				<tr><td colspan="5" style="text-align: center; background-color: #494a69; font-weight: normal; font-style: italic;">No Results</td></tr>

@@ -26,7 +26,7 @@ else {
 			<button class="formgo" id="getinfo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Get Info</button>
 		</div>
 		<table style="margin-top: 10px; table-layout: fixed;">
-		<colgroup><col style="width: 32px;"><col style="width: 50px;"><col style="width: 75px;"><col style="width: 120px;"><col><col style="width: 90px;"><col style="width: 90px;"><col style="width: 150px;"><col style="width: 150px;"></colgroup>
+		<colgroup><col style="width: 32px;"><col style="width: 50px;"><col style="width: 85px;"><col style="width: 120px;"><col><col style="width: 90px;"><col style="width: 90px;"><col style="width: 150px;"><col style="width: 150px;"></colgroup>
 		<tr><td colspan="9"><div style="position: absolute; padding-top: 5px; padding-left: 5px;"> <span id="usercount">0</span> <span id="totusercount">of <?php print $usercount; ?> items</span></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="usersfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($usercount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
 		<tr><td><input type="checkbox" id="selectall" onclick="allToggle();"></td><td style="text-align: center;">UID</td><td style="text-align: center;">Enabled</td><td>Username</td><td>Full Name</td><td>Role</td><td>Type</td><td>Created</td><td>Last Login</td></tr>
 

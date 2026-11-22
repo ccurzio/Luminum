@@ -15,7 +15,7 @@ $actioncount = 0;
 			<button id="getinfo" class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Get Info</button>
 		</div>
 		<table id="ahtable" style="margin-top: 10px; table-layout: fixed;">
-		<colgroup><col style="width: 32px;"><col style="width: 30px;"><col><col style="width: 75px;"><col style="width: 100px;"><col style="width: 175px;"><col style="width: 175px;"><col style="width: 175px;"><col style="width: 100px;"></colgroup>
+		<colgroup><col style="width: 32px;"><col style="width: 75px;"><col><col style="width: 75px;"><col style="width: 100px;"><col style="width: 150px;"><col style="width: 150px;"><col style="width: 150px;"><col style="width: 120px;"></colgroup>
 		<tr><td colspan="9"><div style="position: absolute; padding-top: 5px; padding-left: 5px;"><img id="refresh" src="icons/refresh.png" style="cursor: pointer; width: 15px; height: 15px; vertical-align: top;" onclick="reloadTable()">&nbsp;&nbsp;<span id="viscount"><?php print $actioncount; ?></span> of <span id="totcount"><?php print $actioncount; ?></span> Items <span id="selcount"></span></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="actionhistoryfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($actioncount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
 		<tr><td>
 		<?php
