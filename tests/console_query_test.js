@@ -1092,6 +1092,8 @@ const queryBtn = new El("button"); queryBtn.id = "querygo";
 doc.byId["querygo"] = queryBtn;
 const resetBtn = new El("button"); resetBtn.id = "resetform";
 doc.byId["resetform"] = resetBtn;
+const delBtn = new El("button"); delBtn.id = "sqdelete";
+doc.byId["sqdelete"] = delBtn;
 let fetchCalls = [];
 global.fetch = function (url, opts) {
 	fetchCalls.push({ url: url, body: opts ? opts.body : null });
@@ -1240,6 +1242,16 @@ ok("form: Copy to Builder is disabled on the Saved tab until a query is selected
 	fireDoc("click"); // back to the Query Builder tab (Reset Form)
 	const backToBuilder = resetBtn.disabled === false;
 	return builderEnabled && savedNoSel && savedOne && backToBuilder;
+})());
+ok("form: Delete Selected is disabled until a saved query is selected", (function () {
+	const b = pristineBuilder();
+	savedPanel.style.display = "block";
+	initQuery();
+	const noSel = delBtn.disabled === true;
+	savedRow(true, JSON.stringify({ target: "all", action: "query", sensors: [{ sid: 1 }] }));
+	fireDoc("change"); // the radio toggle
+	const oneSel = delBtn.disabled === false;
+	return noSel && oneSel;
 })());
 
 // The page wires the button to the module and boots the catalog: the

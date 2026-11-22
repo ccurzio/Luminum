@@ -871,22 +871,26 @@
 		});
 	}
 
-	// Wire the Run Query button and the form button (Reset Form / Copy to
-	// Builder) to the live enable/disable state. Run Query processes only
-	// the visible tab: on the Saved Queries tab it submits the selected
-	// saved query's data-payload (the builder's contents are ignored), on
-	// the Query Builder tab it submits the builder's form. The form button
-	// is disabled on the Saved Queries tab until a saved query is selected
-	// (Copy to Builder has nothing to copy) and always enabled on the
-	// Query Builder tab (Reset Form). The page's Sortable init replaces the
-	// list containers with clones and rows are added/removed at runtime, so
-	// the state is recomputed on document-level input/change/click events
-	// rather than per-field listeners - a tab switch is a click, so the
-	// buttons re-enable or disable as the operator moves between the tabs.
+	// Wire the Run Query button, the form button (Reset Form / Copy to
+	// Builder), and the Delete Selected button to the live enable/disable
+	// state. Run Query processes only the visible tab: on the Saved Queries
+	// tab it submits the selected saved query's data-payload (the builder's
+	// contents are ignored), on the Query Builder tab it submits the
+	// builder's form. The form button is disabled on the Saved Queries tab
+	// until a saved query is selected (Copy to Builder has nothing to copy)
+	// and always enabled on the Query Builder tab (Reset Form). Delete
+	// Selected (Saved-tab-only) is disabled until a saved query is selected
+	// - the selection only exists on that tab, so no tab check is needed.
+	// The page's Sortable init replaces the list containers with clones and
+	// rows are added/removed at runtime, so the state is recomputed on
+	// document-level input/change/click events rather than per-field
+	// listeners - a tab switch is a click, so the buttons re-enable or
+	// disable as the operator moves between the tabs.
 	function init(catalog) {
 		const btn = document.getElementById('querygo');
 		if (!btn) { return; }
 		const resetBtn = document.getElementById('resetform');
+		const delBtn = document.getElementById('sqdelete');
 		initAutocomplete(catalog);
 		// The condition rows' operator dropdowns and value fields start
 		// disabled (the page's template row carries disabled="disabled"):
@@ -898,6 +902,9 @@
 			btn.disabled = !submitEnabled(catalog);
 			if (resetBtn) {
 				resetBtn.disabled = activeTab() === 'Saved' && savedSelection().length !== 1;
+			}
+			if (delBtn) {
+				delBtn.disabled = savedSelection().length !== 1;
 			}
 		}
 

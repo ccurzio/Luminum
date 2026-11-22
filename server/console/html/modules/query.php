@@ -103,7 +103,7 @@ $showsaved = !$showresults && isset($_GET['tab']) && $_GET['tab'] === 'saved';
 			<div style="padding: 5px 20px 20px 20px;">
 				<table style="margin-top: 10px;">
 				<tr><td colspan="5"><div style="position: absolute; padding-top: 7px; padding-left: 5px;"><span id="sqviscount">0</span> of <span id="sqtotcount">0</span> items <span id="sqselcount"></span></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="savedqueriesfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" disabled="disabled" maxlength="64"></div></td></tr>
-				<tr><td style="width: 15px;"><input type="checkbox" disabled="disabled"></td><td>Query Name</td><td>Structure</td><td style="width: 100px;">Author</td><td style="width: 100px;">Create Date</td></tr>
+				<tr><td style="width: 15px;"><input type="checkbox" disabled="disabled"></td><td>Name</td><td>Structure</td><td style="width: 100px;">Author</td><td style="width: 100px;">Create Date</td></tr>
 				<tr><td colspan="5" style="text-align: center; background-color: #494a69; font-weight: normal; font-style: italic;">No Results</td></tr>
 				<tr style="height: 35px;"><td colspan="5"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;"><i>Query Completed in 0.00 Seconds</i></div></td></tr>
 				</table>
@@ -115,14 +115,19 @@ $showsaved = !$showresults && isset($_GET['tab']) && $_GET['tab'] === 'saved';
 	     switchTab swaps the label, and the initial label matches ?tab=saved.
 	     Copy to Builder is disabled until a saved query is selected (the
 	     initial disabled state matches ?tab=saved; layout/querybuilder.js
-	     keeps it in step afterwards). Run Query processes only the visible
-	     tab: layout/querybuilder.js enables it per tab (a valid builder on
-	     the Query Builder tab, exactly one selected saved query on the
-	     Saved Queries tab) and submits only that tab's contents - a tab
-	     switch is a click, so the document-level state listener re-enables
-	     or disables it as the operator moves between the tabs. -->
+	     keeps it in step afterwards). Delete Selected sits to its left and
+	     is a Saved-tab-only button (switchTab hides it on the Query Builder
+	     tab, where it could never be enabled): disabled until a saved query
+	     is selected - the delete action itself waits for saved-query
+	     storage (ToDo: Query Loading - Not Started). Run Query processes
+	     only the visible tab: layout/querybuilder.js enables it per tab (a
+	     valid builder on the Query Builder tab, exactly one selected saved
+	     query on the Saved Queries tab) and submits only that tab's
+	     contents - a tab switch is a click, so the document-level state
+	     listener re-enables or disables it as the operator moves between
+	     the tabs. -->
 	<div id="formbuttons" style="width: 100%; text-align: right; padding-top: 10px;">
-		<button id="resetform" class="formgo" style="margin-right: 0;"<?php print $showsaved ? ' disabled="disabled"' : ''; ?>><?php print $showsaved ? 'Copy to Builder' : 'Reset Form'; ?></button> <button id="querygo" class="formgo" style="margin-left: 0;" disabled="disabled">Run Query</button>
+		<button id="sqdelete" class="formgo" style="<?php print $showsaved ? '' : 'display: none;'; ?>margin-right: 0;" disabled="disabled">Delete Selected</button> <button id="resetform" class="formgo" style="margin-right: 0;"<?php print $showsaved ? ' disabled="disabled"' : ''; ?>><?php print $showsaved ? 'Copy to Builder' : 'Reset Form'; ?></button> <button id="querygo" class="formgo" style="margin-left: 0;" disabled="disabled">Run Query</button>
 	</div>
 
 </div>
@@ -570,6 +575,8 @@ function switchTab(evt, configSect) {
 	// The form button follows the active tab: Reset Form on the Query
 	// Builder tab, Copy to Builder on the Saved Queries tab
 	document.getElementById("resetform").textContent = (configSect === "Saved") ? "Copy to Builder" : "Reset Form";
+	// Delete Selected is a Saved-tab-only button
+	document.getElementById("sqdelete").style.display = (configSect === "Saved") ? "" : "none";
 	}
 </script>
 

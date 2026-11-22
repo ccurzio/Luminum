@@ -886,30 +886,37 @@ check "console: the Saved tab's form button is Copy to Builder" \
 # selected yet); the module enables it when a row's radio is checked.
 check "console: the Saved tab's form button starts disabled" \
     $(grep -q 'disabled="disabled">Copy to Builder<' "$RUN/query-saved.html" 2>/dev/null; echo $?)
+# Delete Selected sits to the left of the form button: a Saved-tab-only
+# button (hidden on the Query Builder tab) that starts disabled and the
+# module enables it when a row's radio is checked.
+check "console: the Saved tab carries the Delete Selected button, starting disabled" \
+    $(grep -q 'disabled="disabled">Delete Selected</button> <button id="resetform"' "$RUN/query-saved.html" 2>/dev/null; echo $?)
+check "console: the builder tab hides the Delete Selected button" \
+    $(grep -q 'style="display: none;margin-right: 0;" disabled="disabled">Delete Selected<' "$RUN/query.html" 2>/dev/null; echo $?)
 # The Saved Queries tab carries the console's standard table (the old
 # "No saved queries yet." placeholder is gone): the displayed-of-total
-# count, the right-hand filter box, and the checkbox / Query Name /
+# count, the right-hand filter box, and the checkbox / Name /
 # Structure / Author / Create Date columns - saved queries have no storage
 # yet, so the table renders its empty state. The Structure column renders
 # the query's full text-based interpretation.
 check "console: the Saved Queries tab carries the standard table" \
     $(grep -q 'id="savedqueriesfilter"' "$RUN/query-saved.html" 2>/dev/null \
-        && grep -q '>Query Name<' "$RUN/query-saved.html" 2>/dev/null \
+        && grep -q '>Name<' "$RUN/query-saved.html" 2>/dev/null \
         && grep -q '>Structure<' "$RUN/query-saved.html" 2>/dev/null \
         && grep -q '>Author<' "$RUN/query-saved.html" 2>/dev/null \
         && grep -q '>Create Date<' "$RUN/query-saved.html" 2>/dev/null; echo $?)
 # The selection column's header checkbox is a permanently disabled dummy:
 # the rows are radio buttons (one selection), so there is no select-all.
 check "console: the Saved tab's header selection is a disabled dummy checkbox" \
-    $(grep -q '<td style="width: 15px;"><input type="checkbox" disabled="disabled"></td><td>Query Name</td>' "$RUN/query-saved.html" 2>/dev/null; echo $?)
+    $(grep -q '<td style="width: 15px;"><input type="checkbox" disabled="disabled"></td><td>Name</td>' "$RUN/query-saved.html" 2>/dev/null; echo $?)
 # The table sits inside the blue content box with the standard module
-# padding, and the Query Name and Structure columns are the flexible
+# padding, and the Name and Structure columns are the flexible
 # (width-less) columns so the auto table layout does not stretch the 15px
 # checkbox column.
 check "console: the Saved Queries table carries the standard module inset" \
     $(grep -q '<div style="padding: 5px 20px 20px 20px;">' "$RUN/query-saved.html" 2>/dev/null; echo $?)
-check "console: the Saved Queries table's Query Name column is a flexible column" \
-    $(grep -q '<td>Query Name</td>' "$RUN/query-saved.html" 2>/dev/null; echo $?)
+check "console: the Saved Queries table's Name column is a flexible column" \
+    $(grep -q '<td>Name</td>' "$RUN/query-saved.html" 2>/dev/null; echo $?)
 check "console: the Saved Queries table's Structure column is a flexible column" \
     $(grep -q '<td>Structure</td>' "$RUN/query-saved.html" 2>/dev/null; echo $?)
 check "console: the Saved Queries tab shows the displayed-of-total count" \

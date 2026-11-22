@@ -263,11 +263,19 @@ ok("page: switchTab swaps the form button label with the active tab",
 ok("page: the form button dispatches on the active tab",
 	pageSrc.indexOf("if (document.getElementById('Saved').style.display !== 'none')") >= 0 &&
 	pageSrc.indexOf("copyToBuilder();") >= 0);
+// Delete Selected sits to the left of the form button: a Saved-tab-only
+// button (hidden on the Query Builder tab, where it could never be
+// enabled) that starts disabled and the module enables once a saved query
+// is selected.
+ok("page: Delete Selected sits to the left of the form button, starts disabled",
+	/<button id="sqdelete" class="formgo" style="<\?php print \$showsaved \? '' : 'display: none;'; \?>margin-right: 0;" disabled="disabled">Delete Selected<\/button> <button id="resetform"/.test(pageSrc));
+ok("page: switchTab shows Delete Selected only on the Saved tab",
+	pageSrc.indexOf('document.getElementById("sqdelete").style.display = (configSect === "Saved") ? "" : "none"') >= 0);
 
 // The Saved Queries tab carries the console's standard table (the old
 // "No saved queries yet." placeholder is gone): the displayed-of-total
 // count with the (N Selected) suffix span, the right-hand filter box, the
-// selection / Query Name / Structure / Author / Create Date columns, and
+// selection / Name / Structure / Author / Create Date columns, and
 // the empty state - saved queries have no storage yet, so the table
 // renders 0 of 0. The selection column's header checkbox is a permanently
 // disabled dummy (the rows are radio buttons, one selection); the
@@ -277,12 +285,12 @@ ok("page: the Saved tab's placeholder text is gone", pageSrc.indexOf("No saved q
 ok("page: the Saved tab's top row shows displayed of total items",
 	pageSrc.indexOf('<span id="sqviscount">0</span> of <span id="sqtotcount">0</span> items <span id="sqselcount"></span>') >= 0);
 ok("page: the Saved tab's top row carries the filter box", pageSrc.indexOf('id="savedqueriesfilter"') >= 0);
-// The Query Name and Structure columns carry no fixed width: they are the
+// The Name and Structure columns carry no fixed width: they are the
 // flexible columns that absorb the table's 100% width (the Computer Name
 // column's role on the Client Status page), which keeps the 15px checkbox
 // column from being stretched by the auto table layout.
-ok("page: the Saved tab's columns are Query Name, Structure, Author, Create Date",
-	/<td>Query Name<\/td><td>Structure<\/td><td style="width: 100px;">Author<\/td><td style="width: 100px;">Create Date<\/td>/.test(pageSrc));
+ok("page: the Saved tab's columns are Name, Structure, Author, Create Date",
+	/<td>Name<\/td><td>Structure<\/td><td style="width: 100px;">Author<\/td><td style="width: 100px;">Create Date<\/td>/.test(pageSrc));
 ok("page: the Saved tab's rows span the five columns",
 	/<tr><td colspan="5" style="text-align: center; background-color: #494a69; font-weight: normal; font-style: italic;">No Results<\/td><\/tr>/.test(pageSrc));
 // The table sits inside the blue content box with the standard module
@@ -293,7 +301,7 @@ ok("page: the Saved tab renders the empty state", pageSrc.indexOf("No Results") 
 ok("page: the Saved tab's filter keeps the displayed count in step",
 	pageSrc.indexOf("LuminumTable.attachTextFilter('savedqueriesfilter'") >= 0 && pageSrc.indexOf("document.getElementById('sqviscount')") >= 0);
 ok("page: the Saved tab's header selection is a disabled dummy checkbox",
-	/<td style="width: 15px;"><input type="checkbox" disabled="disabled"><\/td><td>Query Name<\/td>/.test(pageSrc));
+	/<td style="width: 15px;"><input type="checkbox" disabled="disabled"><\/td><td>Name<\/td>/.test(pageSrc));
 ok("page: the Saved tab's selection maintains the (1 Selected) suffix",
 	pageSrc.indexOf("document.getElementById(\"sqselcount\").textContent = document.querySelector('.savedqueryrow:checked') ? '(1 Selected)' : ''") >= 0);
 const headerSrc = fs.readFileSync(path.join(__dirname, "..", "server", "console", "html", "layout", "header.php"), "utf8");
