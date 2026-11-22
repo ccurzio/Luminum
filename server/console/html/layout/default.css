@@ -622,6 +622,10 @@ h2::after {
 	padding: 20px;
 	box-shadow: 5px 5px 10px rgba(0,0,0,0.5);
 	text-align: center;
+	}
+
+#overlay-buttons {
+	text-align: right; /* Buttons sit at the right edge of the popup, not centered */
 	} 
 
 /* Show submenu on hover (desktop) */
