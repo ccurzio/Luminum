@@ -882,6 +882,10 @@ check "console: tab=saved opens the page on the Saved Queries tab" \
     $(grep -q 'tablink tabbarsel" style="border-right: 1px solid #07f;" onclick="switchTab(event, .Saved.)"' "$RUN/query-saved.html" 2>/dev/null; echo $?)
 check "console: the Saved tab's form button is Copy to Builder" \
     $(grep -q '>Copy to Builder<' "$RUN/query-saved.html" 2>/dev/null; echo $?)
+# Copy to Builder starts disabled on the Saved tab (no saved query is
+# selected yet); the module enables it when a row's radio is checked.
+check "console: the Saved tab's form button starts disabled" \
+    $(grep -q 'disabled="disabled">Copy to Builder<' "$RUN/query-saved.html" 2>/dev/null; echo $?)
 # The Saved Queries tab carries the console's standard table (the old
 # "No saved queries yet." placeholder is gone): the displayed-of-total
 # count, the right-hand filter box, and the checkbox / Query Name /

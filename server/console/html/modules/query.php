@@ -113,14 +113,16 @@ $showsaved = !$showresults && isset($_GET['tab']) && $_GET['tab'] === 'saved';
 	<!-- The left form button follows the active tab: Reset Form on the
 	     Query Builder tab, Copy to Builder on the Saved Queries tab -
 	     switchTab swaps the label, and the initial label matches ?tab=saved.
-	     Run Query processes only the visible tab: layout/querybuilder.js
-	     enables it per tab (a valid builder on the Query Builder tab,
-	     exactly one selected saved query on the Saved Queries tab) and
-	     submits only that tab's contents - a tab switch is a click, so the
-	     document-level state listener re-enables or disables it as the
-	     operator moves between the tabs. -->
+	     Copy to Builder is disabled until a saved query is selected (the
+	     initial disabled state matches ?tab=saved; layout/querybuilder.js
+	     keeps it in step afterwards). Run Query processes only the visible
+	     tab: layout/querybuilder.js enables it per tab (a valid builder on
+	     the Query Builder tab, exactly one selected saved query on the
+	     Saved Queries tab) and submits only that tab's contents - a tab
+	     switch is a click, so the document-level state listener re-enables
+	     or disables it as the operator moves between the tabs. -->
 	<div id="formbuttons" style="width: 100%; text-align: right; padding-top: 10px;">
-		<button id="resetform" class="formgo" style="margin-right: 0;"><?php print $showsaved ? 'Copy to Builder' : 'Reset Form'; ?></button> <button id="querygo" class="formgo" style="margin-left: 0;" disabled="disabled">Run Query</button>
+		<button id="resetform" class="formgo" style="margin-right: 0;"<?php print $showsaved ? ' disabled="disabled"' : ''; ?>><?php print $showsaved ? 'Copy to Builder' : 'Reset Form'; ?></button> <button id="querygo" class="formgo" style="margin-left: 0;" disabled="disabled">Run Query</button>
 	</div>
 
 </div>

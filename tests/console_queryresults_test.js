@@ -252,9 +252,12 @@ ok("page: ?tab=saved shows the Saved tab",
 // The left form button follows the active tab: Reset Form on the Query
 // Builder tab, Copy to Builder on the Saved Queries tab - switchTab swaps
 // the label, the click dispatches on the active tab, and the initial
-// label matches ?tab=saved.
+// label matches ?tab=saved. Copy to Builder starts disabled on the Saved
+// tab (no saved query is selected yet) and the module keeps it in step.
 ok("page: the form button's initial label matches ?tab=saved",
-	/<button id="resetform" class="formgo" style="margin-right: 0;"><\?php print \$showsaved \? 'Copy to Builder' : 'Reset Form'; \?><\/button>/.test(pageSrc));
+	/<button id="resetform" class="formgo" style="margin-right: 0;"<\?php print \$showsaved \? ' disabled="disabled"' : ''; \?>><\?php print \$showsaved \? 'Copy to Builder' : 'Reset Form'; \?><\/button>/.test(pageSrc));
+ok("page: the form button starts disabled on the Saved tab",
+	/<button id="resetform"[^>]*<\?php print \$showsaved \? ' disabled="disabled"' : ''; \?>/.test(pageSrc));
 ok("page: switchTab swaps the form button label with the active tab",
 	pageSrc.indexOf('document.getElementById("resetform").textContent = (configSect === "Saved") ? "Copy to Builder" : "Reset Form"') >= 0);
 ok("page: the form button dispatches on the active tab",

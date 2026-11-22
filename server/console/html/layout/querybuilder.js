@@ -22,7 +22,8 @@
 // group, so at most one is selected) carries the query's JSON payload in
 // data-payload, condTreeToRows turns the condition tree back into the
 // builder's row sequence, and populateBuilder rebuilds the retrieve rows,
-// the target, and the condition rows. Run Query processes only the visible
+// the target, and the condition rows - the button stays disabled while no
+// saved query is selected. Run Query processes only the visible
 // tab: on the Query Builder tab it submits the builder's form; on the
 // Saved Queries tab it is enabled only while a saved query is selected and
 // submits that query's data-payload, ignoring whatever the builder holds.
@@ -552,14 +553,12 @@
 	// tab). A saved query must be selected (the rows are one radio group,
 	// so at most one is): its row's radio (class "savedqueryrow") carries
 	// the query's JSON payload in data-payload (the /api/commands.php
-	// statement). No selection, or an unreadable payload, shows an overlay
-	// and leaves the builder untouched.
+	// statement). No selection leaves the builder untouched (the button is
+	// disabled while nothing is selected, so this is a backstop); an
+	// unreadable payload shows an overlay.
 	function copyToBuilder(catalog) {
 		const checked = savedSelection();
-		if (checked.length === 0) {
-			showError('No Query Selected', 'Select a saved query to copy.');
-			return;
-		}
+		if (checked.length === 0) { return; }
 		const raw = checked[0].getAttribute('data-payload');
 		let payload = null;
 		if (raw) {
@@ -872,18 +871,22 @@
 		});
 	}
 
-	// Wire the Run Query button and the live enable/disable state. The
-	// button processes only the visible tab: on the Saved Queries tab it
-	// submits the selected saved query's data-payload (the builder's
-	// contents are ignored), on the Query Builder tab it submits the
-	// builder's form. The page's Sortable init replaces the list
-	// containers with clones and rows are added/removed at runtime, so the
-	// state is recomputed on document-level input/change/click events
+	// Wire the Run Query button and the form button (Reset Form / Copy to
+	// Builder) to the live enable/disable state. Run Query processes only
+	// the visible tab: on the Saved Queries tab it submits the selected
+	// saved query's data-payload (the builder's contents are ignored), on
+	// the Query Builder tab it submits the builder's form. The form button
+	// is disabled on the Saved Queries tab until a saved query is selected
+	// (Copy to Builder has nothing to copy) and always enabled on the
+	// Query Builder tab (Reset Form). The page's Sortable init replaces the
+	// list containers with clones and rows are added/removed at runtime, so
+	// the state is recomputed on document-level input/change/click events
 	// rather than per-field listeners - a tab switch is a click, so the
-	// button re-enables or disables as the operator moves between the tabs.
+	// buttons re-enable or disable as the operator moves between the tabs.
 	function init(catalog) {
 		const btn = document.getElementById('querygo');
 		if (!btn) { return; }
+		const resetBtn = document.getElementById('resetform');
 		initAutocomplete(catalog);
 		// The condition rows' operator dropdowns and value fields start
 		// disabled (the page's template row carries disabled="disabled"):
@@ -893,6 +896,9 @@
 
 		function updateSubmitState() {
 			btn.disabled = !submitEnabled(catalog);
+			if (resetBtn) {
+				resetBtn.disabled = activeTab() === 'Saved' && savedSelection().length !== 1;
+			}
 		}
 
 		btn.addEventListener('click', function () {

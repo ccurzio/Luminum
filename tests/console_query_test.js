@@ -1007,13 +1007,12 @@ global.selectSuffix = selectSuffix; // the page's (eval'd) suffix/opacity update
 global.LuminumOverlay = { show: (o) => { overlayShown = o; }, hide: () => {} };
 global.__focused = null;
 
-ok("copy: no query selected -> overlay, builder untouched", (function () {
+ok("copy: no query selected -> no overlay, builder untouched (the button is disabled instead)", (function () {
 	overlayShown = null; resetCalls = 0; tabClicked = null;
 	const b = pristineBuilder();
 	savedRow(false);
 	Q.copyToBuilder(catalogR);
-	return overlayShown && overlayShown.title === "No Query Selected" &&
-		overlayShown.message === "Select a saved query to copy." &&
+	return overlayShown === null &&
 		resetCalls === 0 && tabClicked === null;
 })());
 ok("copy: an unreadable payload -> overlay, builder untouched", (function () {
@@ -1091,6 +1090,8 @@ const savedPanel = new El("div"); savedPanel.id = "Saved";
 doc.byId["Saved"] = savedPanel;
 const queryBtn = new El("button"); queryBtn.id = "querygo";
 doc.byId["querygo"] = queryBtn;
+const resetBtn = new El("button"); resetBtn.id = "resetform";
+doc.byId["resetform"] = resetBtn;
 let fetchCalls = [];
 global.fetch = function (url, opts) {
 	fetchCalls.push({ url: url, body: opts ? opts.body : null });
@@ -1221,6 +1222,24 @@ ok("run: the button follows the active tab's validity", (function () {
 	fireDoc("change"); // the radio toggle
 	const savedOne = queryBtn.disabled === false;
 	return builderValid && savedNoSel && savedOne;
+})());
+ok("form: Copy to Builder is disabled on the Saved tab until a query is selected", (function () {
+	const b = pristineBuilder();
+	b.gl.querySelectorAll(".list-item")[0].querySelector("input").value = "Hostname";
+	doc.byId["targets"].value = "all";
+	savedPanel.style.display = "none";
+	initQuery();
+	const builderEnabled = resetBtn.disabled === false;
+	savedPanel.style.display = "block";
+	fireDoc("click"); // the tab switch
+	const savedNoSel = resetBtn.disabled === true;
+	savedRow(true, JSON.stringify({ target: "all", action: "query", sensors: [{ sid: 1 }] }));
+	fireDoc("change"); // the radio toggle
+	const savedOne = resetBtn.disabled === false;
+	savedPanel.style.display = "none";
+	fireDoc("click"); // back to the Query Builder tab (Reset Form)
+	const backToBuilder = resetBtn.disabled === false;
+	return builderEnabled && savedNoSel && savedOne && backToBuilder;
 })());
 
 // The page wires the button to the module and boots the catalog: the
