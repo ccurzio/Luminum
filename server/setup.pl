@@ -81,6 +81,8 @@ my $certnonsel;
 my $certkeyprompt;
 my $certpassprompt;
 my $certcertprompt;
+my $startlabel;
+my $steptrans;
 
 if ($ENV{LANG} =~ /en_/ || $ENV{LANG} eq "") {
 	$lang = "EN";
@@ -125,6 +127,8 @@ if ($ENV{LANG} =~ /en_/ || $ENV{LANG} eq "") {
 	$certkeyprompt = "Path to existing private key";
 	$certpassprompt = "Key passphrase (blank if none)";
 	$certcertprompt = "Path to certificate";
+	$startlabel = "Starting...";
+	$steptrans = {};
 	}
 elsif ($ENV{LANG} =~ /de_/) {
 	$lang = "DE";
@@ -169,6 +173,22 @@ elsif ($ENV{LANG} =~ /de_/) {
 	$certkeyprompt = "Pfad zum vorhandenen privaten Schlüssel";
 	$certpassprompt = "Schlüsselkennwort (leer, wenn keines)";
 	$certcertprompt = "Pfad zum Zertifikat";
+	$startlabel = "Starte...";
+	$steptrans = {
+		"Checking dependencies..." => "Prüfe Abhängigkeiten...",
+		"Synchronizing server files..." => "Synchronisiere Serverdateien...",
+		"Setting up database..." => "Richte Datenbank ein...",
+		"Generating server certificate..." => "Erstelle Serverzertifikat...",
+		"Generating server certificate from existing key..." => "Erstelle Serverzertifikat aus vorhandenem Schlüssel...",
+		"Importing server certificate..." => "Importiere Serverzertifikat...",
+		"Provisioning MQTT broker..." => "Richte MQTT-Broker ein...",
+		"Generating server identity..." => "Erzeuge Serveridentität...",
+		"Writing configuration files..." => "Schreibe Konfigurationsdateien...",
+		"Seeding database configuration..." => "Lege Datenbankkonfiguration an...",
+		"Writing web console configuration..." => "Schreibe Web-Konsolenkonfiguration...",
+		"Installing service management..." => "Installiere Diensteverwaltung...",
+		"Starting and verifying services..." => "Starte und überprüfe Dienste...",
+		};
 	}
 elsif ($ENV{LANG} =~ /it_/) {
 	$lang = "IT";
@@ -213,6 +233,22 @@ elsif ($ENV{LANG} =~ /it_/) {
 	$certkeyprompt = "Percorso della chiave privata esistente";
 	$certpassprompt = "Passphrase della chiave (vuoto se assente)";
 	$certcertprompt = "Percorso del certificato";
+	$startlabel = "Avvio...";
+	$steptrans = {
+		"Checking dependencies..." => "Verifica delle dipendenze...",
+		"Synchronizing server files..." => "Sincronizzazione dei file del server...",
+		"Setting up database..." => "Configurazione del database...",
+		"Generating server certificate..." => "Generazione del certificato del server...",
+		"Generating server certificate from existing key..." => "Generazione del certificato del server dalla chiave esistente...",
+		"Importing server certificate..." => "Importazione del certificato del server...",
+		"Provisioning MQTT broker..." => "Configurazione del broker MQTT...",
+		"Generating server identity..." => "Generazione dell'identità del server...",
+		"Writing configuration files..." => "Scrittura dei file di configurazione...",
+		"Seeding database configuration..." => "Inizializzazione della configurazione del database...",
+		"Writing web console configuration..." => "Scrittura della configurazione della console web...",
+		"Installing service management..." => "Installazione della gestione dei servizi...",
+		"Starting and verifying services..." => "Avvio e verifica dei servizi...",
+		};
 	}
 elsif ($ENV{LANG} =~ /fr_/) {
 	$lang = "FR";
@@ -257,6 +293,22 @@ elsif ($ENV{LANG} =~ /fr_/) {
 	$certkeyprompt = "Chemin de la clé privée existante";
 	$certpassprompt = "Passphrase de la clé (vide si aucune)";
 	$certcertprompt = "Chemin du certificat";
+	$startlabel = "Démarrage...";
+	$steptrans = {
+		"Checking dependencies..." => "Vérification des dépendances...",
+		"Synchronizing server files..." => "Synchronisation des fichiers du serveur...",
+		"Setting up database..." => "Configuration de la base de données...",
+		"Generating server certificate..." => "Génération du certificat du serveur...",
+		"Generating server certificate from existing key..." => "Génération du certificat du serveur à partir de la clé existante...",
+		"Importing server certificate..." => "Importation du certificat du serveur...",
+		"Provisioning MQTT broker..." => "Configuration du broker MQTT...",
+		"Generating server identity..." => "Génération de l'identité du serveur...",
+		"Writing configuration files..." => "Écriture des fichiers de configuration...",
+		"Seeding database configuration..." => "Initialisation de la configuration de la base de données...",
+		"Writing web console configuration..." => "Écriture de la configuration de la console web...",
+		"Installing service management..." => "Installation de la gestion des services...",
+		"Starting and verifying services..." => "Démarrage et vérification des services...",
+		};
 	}
 elsif ($ENV{LANG} =~ /es_/) {
 	$lang = "ES";
@@ -301,6 +353,22 @@ elsif ($ENV{LANG} =~ /es_/) {
 	$certkeyprompt = "Camino a la clave privada existente";
 	$certpassprompt = "Passphrase de la clave (vacío si no tiene)";
 	$certcertprompt = "Camino al certificado";
+	$startlabel = "Inicio...";
+	$steptrans = {
+		"Checking dependencies..." => "Comprobando dependencias...",
+		"Synchronizing server files..." => "Sincronizando archivos del servidor...",
+		"Setting up database..." => "Configurando la base de datos...",
+		"Generating server certificate..." => "Generando certificado del servidor...",
+		"Generating server certificate from existing key..." => "Generando certificado del servidor desde la clave existente...",
+		"Importing server certificate..." => "Importando certificado del servidor...",
+		"Provisioning MQTT broker..." => "Configurando el broker MQTT...",
+		"Generating server identity..." => "Generando la identidad del servidor...",
+		"Writing configuration files..." => "Escribiendo archivos de configuración...",
+		"Seeding database configuration..." => "Inicializando la configuración de la base de datos...",
+		"Writing web console configuration..." => "Escribiendo la configuración de la consola web...",
+		"Installing service management..." => "Instalando la gestión de servicios...",
+		"Starting and verifying services..." => "Iniciando y verificando los servicios...",
+		};
 	}
 else {
 	$lang = "EN";
@@ -345,6 +413,8 @@ else {
 	$certkeyprompt = "Path to existing private key";
 	$certpassprompt = "Key passphrase (blank if none)";
 	$certcertprompt = "Path to certificate";
+	$startlabel = "Starting...";
+	$steptrans = {};
 	}
 
 # ---------------------------------------------------------------------------
@@ -360,6 +430,7 @@ my %opt = (
 	);
 my @valueopts = qw(shost laddr lport waddr wport dbpass dbsocket dbhost dbuser dbadmin dbadminpass adminuser adminpass adminemail perl5lib srcdir certmode keymode cert key keypass);
 
+my $root_given = 0;
 my $i = 0;
 while ($i < scalar(@ARGV)) {
 	my $arg = $ARGV[$i];
@@ -374,6 +445,7 @@ while ($i < scalar(@ARGV)) {
 			$i++;
 			unless ($i < scalar(@ARGV)) { die "Missing value for --$name\n"; }
 			$name = "install_root" if $name eq "install-root";
+			$root_given = 1 if $name eq "install_root";
 			$opt{$name} = $ARGV[$i];
 			}
 		else { die "Unknown option: --$name (see --help)\n"; }
@@ -381,11 +453,34 @@ while ($i < scalar(@ARGV)) {
 	elsif ($arg =~ /^--([a-z0-9-]+)=(.*)$/) {
 		my ($name, $val) = ($1, $2);
 		$name = "install_root" if $name eq "install-root";
-		if (grep(/^$name$/, @valueopts) || $name eq "install_root") { $opt{$name} = $val; }
+		if (grep(/^$name$/, @valueopts) || $name eq "install_root") {
+			$root_given = 1 if $name eq "install_root";
+			$opt{$name} = $val;
+			}
 		else { die "Unknown option: --$name (see --help)\n"; }
 		}
 	else { die "Unknown argument: $arg (see --help)\n"; }
 	$i++;
+	}
+
+# A previous install records itself in <etc>/luminum.conf (a symlink into
+# the install tree's luminum.conf record). When --install-root was not
+# given, default to the recorded install path so the existing-configuration
+# check and the parameter dialog find the install wherever it lives on the
+# server. LUMINUM_ETC redirects the record location (tests).
+my $etcdir = $ENV{LUMINUM_ETC} || "/etc";
+unless ($root_given) {
+	my $etcrec = "$etcdir/luminum.conf";
+	if (-f $etcrec && open(my $rh, "<", $etcrec)) {
+		while (<$rh>) {
+			if (/^INSTALLPATH = (.+?)\s*$/) {
+				my $p = $1;
+				$opt{install_root} = $p if -d $p;
+				last;
+				}
+			}
+		close($rh);
+		}
 	}
 
 # The installer writes system-wide state (the install tree, nginx and
@@ -406,7 +501,8 @@ Options:
   --yes              do not ask for final confirmation
   --no-start         install without starting services
   --textonly         use the text interface instead of curses
-  --install-root P   installation directory (default /opt/Luminum/LuminumServer)
+  --install-root P   installation directory (default /opt/Luminum/LuminumServer,
+                     or the path recorded by a previous install in /etc/luminum.conf)
   --shost NAME       server hostname (certificate name; required)
   --laddr ADDR       broker listener address (required)
   --lport N          broker listener port (default 10465)
@@ -1311,12 +1407,13 @@ $doInstall = sub {
 	# added after it (there is no focused widget in this dialog to be
 	# spliced to the top of the draw order).
 	$status->add('statuslabel', 'Label',
-		-text => "Running installation...",
+		-text => "Running installation",
+		-bold => 1,
 		-width => 40, -height => 1,
 		-x => 2, -y => 2,
 		);
 	$status->add('steplabel', 'Label',
-		-text => "Starting...",
+		-text => $startlabel,
 		-width => 40, -height => 1,
 		-x => 2, -y => 9,
 		);
@@ -1424,6 +1521,9 @@ $doInstall = sub {
 		my ($n, $total, $text) = @_;
 		$cur_n = $n;
 		$cur_total = $total;
+		# The step texts are the installer's English keys; the wizard
+		# displays them in the selected language.
+		$text = $steptrans->{$text} if exists $steptrans->{$text};
 		$steplabel->text($text);
 		if (defined fileno($tty)) {
 			POSIX::dup2(fileno($tty), 1);

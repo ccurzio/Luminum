@@ -359,6 +359,19 @@ CREATE TABLE IF NOT EXISTS `CONFIG` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
+-- Default rows for table `CONFIG`
+--
+-- PASSKEYS (PassKey login support, console Server Options) defaults to
+-- Disabled. CKEY carries no key, so the insert is guarded with NOT
+-- EXISTS to stay idempotent across installer re-runs - a value later
+-- changed in the console must survive.
+--
+
+INSERT INTO `CONFIG` (`CKEY`, `CVAL`)
+SELECT 'PASSKEYS', 'Disabled' FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM `CONFIG` WHERE `CKEY` = 'PASSKEYS');
+
+--
 -- Table structure for table `CPUHIST`
 --
 
