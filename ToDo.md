@@ -118,8 +118,8 @@ In order to be accountable to the community - but more importantly to myself - I
 | --     |Not Started    |PRIMARY        |                 |Config definition for the primary Luminum server                                        |
 | --     |Not Started    |SECONDARY      |None             |Config definition for the secondary Luminum server                                      |
 | --     |Not Started    |TERTIARY       |None             |Config definition for the tertiary Luminum server                                       |
-|&#10003;|**Completed**  |PNETCHECK      |www.google.com   |Config definition for the primary host for internet connectivity checking               |
-|&#10003;|**Completed**  |SNETCHECK      |None             |Config definition for the secondary host for internet connectivity checking             |
+|&#9654; |*In Progress*  |PNETCHECK      |ams-as3333-3     |Config definition for the primary host for internet connectivity checking               |
+|&#9654; |*In Progress*  |SNETCHECK      |fra-as203329     |Config definition for the secondary host for internet connectivity checking             |
 |&#10003;|**Completed**  |ENLUMYS        |                 |A comma-separated list of currently enabled Lumys                                       |
 |&#10003;|**Completed**  |TARGETCONF     |Enabled          |Action confirmation based on the number of targeted endpoints                           |
 |&#10003;|**Completed**  |TCONFTHRESHOLD |250              |Number of targeted endpoints to trigger action confirmation                             |
@@ -1227,7 +1227,7 @@ TBD
 |--------|---------------|---|
 |&#10003;|**Completed**  |LIN|
 |&#10003;|**Completed**  |MAC|
-| --     |Not Started    |WIN|
+|&#10003;|**Completed**  |WIN|
 </li>
 
 <li>
