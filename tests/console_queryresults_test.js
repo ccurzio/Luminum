@@ -216,6 +216,43 @@ function res(uid, sensor, status, output, err) {
 	ok("config: no rows yet -> 'No results yet' empty message", cfg.emptyMessage === "No results yet");
 })();
 
+// --- queryDone (the footer clock's stop condition) --------------------------------
+
+(function () {
+	var base = { status: 'SENT', deadline_ts: 1000, target_online: 3, answered: 1 };
+	ok("done: a running query with answers outstanding is not done",
+		Q.queryDone(base, 900 * 1000) === false);
+	ok("done: the deadline passing stops the clock",
+		Q.queryDone(base, 1000 * 1000) === true);
+	ok("done: one millisecond before the deadline, not done",
+		Q.queryDone(base, 999 * 1000) === false);
+	ok("done: the TIMEDOUT status stops the clock",
+		Q.queryDone(Object.assign({}, base, { status: 'TIMEDOUT' }), 500 * 1000) === true);
+	ok("done: every online endpoint answered stops the clock",
+		Q.queryDone(Object.assign({}, base, { answered: 3 }), 500 * 1000) === true);
+	ok("done: one answer short of the online endpoints, not done",
+		Q.queryDone(Object.assign({}, base, { answered: 2 }), 500 * 1000) === false);
+	ok("done: no online endpoints is not a vacuous completion",
+		Q.queryDone(Object.assign({}, base, { target_online: 0, answered: 0 }), 500 * 1000) === false);
+	ok("done: a PENDING query (no deadline published yet) is not done",
+		Q.queryDone({ status: 'PENDING', deadline_ts: null, target_online: 3, answered: 0 }, 500 * 1000) === false);
+})();
+
+// --- doneElapsed (the server-side duration of a finished query) -------------------
+
+(function () {
+	ok("elapsed: a timed-out query runs from SENT to the deadline",
+		Q.doneElapsed({ status: 'TIMEDOUT', sent_ts: 100, created_ts: 90, deadline_ts: 130, last_answer_ts: null }) === 30);
+	ok("elapsed: an answered query runs from SENT to the last answer",
+		Q.doneElapsed({ status: 'ACKED', sent_ts: 100, created_ts: 90, deadline_ts: 220, last_answer_ts: 112 }) === 12);
+	ok("elapsed: falls back to CREATED when SENT is null",
+		Q.doneElapsed({ status: 'ACKED', sent_ts: null, created_ts: 90, deadline_ts: 220, last_answer_ts: 112 }) === 22);
+	ok("elapsed: missing instants -> null",
+		Q.doneElapsed({ status: 'ACKED', sent_ts: null, created_ts: 90, deadline_ts: 220, last_answer_ts: null }) === null);
+	ok("elapsed: a timeout with no deadline -> null",
+		Q.doneElapsed({ status: 'TIMEDOUT', sent_ts: 100, created_ts: 90, deadline_ts: null, last_answer_ts: null }) === null);
+})();
+
 // --- the page wiring (static) -----------------------------------------------------
 
 const pageSrc = fs.readFileSync(path.join(__dirname, "..", "server", "console", "html", "modules", "query.php"), "utf8");
@@ -231,6 +268,10 @@ ok("page: the top row leads with the refresh button, then the count",
 	pageSrc.indexOf('id="qrrefresh"') >= 0 && pageSrc.indexOf('id="qrrefresh"') < pageSrc.indexOf('id="qrcount"'));
 ok("page: the top row shows displayed of total Items",
 	pageSrc.indexOf('<span id="qrcount">0</span> of <span id="qrtotal">0</span> Items') >= 0);
+// The footer clock starts as "Processing Query... 0.00 Seconds" (the
+// module flips the prefix to "Query Completed in" when the query finishes).
+ok("page: the footer clock starts as 'Processing Query...'",
+	pageSrc.indexOf('<span id="qrfootprefix">Processing Query...</span> <span id="queryms">0.00</span> Seconds') >= 0);
 
 // The results view has no tabs at all: the Results tab button is gone from
 // the query page, and the tab bar itself only renders in the builder branch.
@@ -327,6 +368,24 @@ ok("module: the select-all state survives the per-poll header re-render",
 	qrSrc.indexOf("document.getElementById('qrselectall')") >= 0);
 ok("module: the top row carries the (N Selected) suffix",
 	qrSrc.indexOf("document.getElementById('qrselcount')") >= 0 && qrSrc.indexOf("'(' + sel + ' Selected)'") >= 0);
+
+// The live behaviour: the running query polls every second (the finished
+// query slows to the console's standard five), the new answer rows are
+// appended to the table instead of a full re-render, and the footer clock
+// ticks "Processing Query..." until the stop condition, then reads
+// "Query Completed in".
+ok("module: the running query polls every second", qrSrc.indexOf('interval: 1000') >= 0);
+ok("module: the finished query slows to the five-second poll", qrSrc.indexOf('interval: 5000') >= 0);
+ok("module: new answer rows are appended, not re-rendered", qrSrc.indexOf("insertAdjacentHTML") >= 0);
+ok("module: the footer clock ticks 'Processing Query...' while running",
+	qrSrc.indexOf("'Processing Query...'") >= 0);
+ok("module: the footer clock stops as 'Query Completed in'",
+	qrSrc.indexOf("'Query Completed in'") >= 0);
+ok("module: the clock stops on the queryDone condition", qrSrc.indexOf("queryDone(q, Date.now())") >= 0);
+ok("module: the clock stops exactly on the published deadline",
+	qrSrc.indexOf("deadlineMs") >= 0 && qrSrc.indexOf("q.deadline_ts * 1000") >= 0);
+ok("module: an already-finished query shows the server-side duration",
+	qrSrc.indexOf("doneElapsed(q)") >= 0);
 
 if (failures > 0) {
 	console.log("----------------------------------------");

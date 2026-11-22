@@ -47,7 +47,7 @@ $showsaved = !$showresults && isset($_GET['tab']) && $_GET['tab'] === 'saved';
 			<tr><td id="qrtopcell" colspan="3"><div style="position: absolute; padding-top: 5px; padding-left: 5px;"><img id="qrrefresh" src="icons/refresh.png" style="cursor: pointer; width: 15px; height: 15px; vertical-align: top;" onclick="qrRefresh()">&nbsp;&nbsp;<span id="qrcount">0</span> of <span id="qrtotal">0</span> Items <span id="qrselcount"></span></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="qrfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" maxlength="64"></div></td></tr>
 			<tbody id="qrtable-head"></tbody>
 			<tbody data-luminum-body id="qrtable-body"></tbody>
-			<tr style="height: 35px;"><td id="qrfootcell" colspan="3"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;"><i>Query Completed in <span id="queryms">0.00</span> Seconds</i></div></td></tr>
+			<tr style="height: 35px;"><td id="qrfootcell" colspan="3"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;"><i><span id="qrfootprefix">Processing Query...</span> <span id="queryms">0.00</span> Seconds</i></div></td></tr>
 			</table>
 		</div>
 	</div>

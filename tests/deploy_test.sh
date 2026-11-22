@@ -1118,6 +1118,14 @@ check "api: queryresults?id carries only the named query and its output" \
     $(grep -q '"count":1' "$RUN/queryresults-id.json" 2>/dev/null \
         && grep -q "$QID_Q" "$RUN/queryresults-id.json" 2>/dev/null \
         && grep -q "probe-output-42" "$RUN/queryresults-id.json" 2>/dev/null; echo $?)
+# The footer clock's inputs: the command's deadline (set when the worker
+# published it), the online endpoints in the target, and the unique
+# endpoints that answered.
+check "api: queryresults carries the clock fields (deadline/online/answered)" \
+    $(grep -q '"deadline_ts"' "$RUN/queryresults-id.json" 2>/dev/null \
+        && grep -q '"target_online"' "$RUN/queryresults-id.json" 2>/dev/null \
+        && grep -q '"answered"' "$RUN/queryresults-id.json" 2>/dev/null \
+        && grep -q '"last_answer_ts"' "$RUN/queryresults-id.json" 2>/dev/null; echo $?)
 
 code=$(curl -k -s -o "$RUN/query-results.html" -w '%{http_code}' -b "$RUN/cookies" \
     "https://127.0.0.1:$WPORT/modules.php?view=query&id=$CMD_Q")
@@ -1130,6 +1138,11 @@ check "console: results table shell (count/filter row) present" \
     $(grep -q 'id="qrcount"' "$RUN/query-results.html" 2>/dev/null \
         && grep -q 'id="qrfilter"' "$RUN/query-results.html" 2>/dev/null \
         && grep -q 'id="qrtable-body"' "$RUN/query-results.html" 2>/dev/null; echo $?)
+# The footer clock starts as "Processing Query... 0.00 Seconds" (the
+# module flips the prefix to "Query Completed in" when the query finishes).
+check "console: the results footer carries the processing clock" \
+    $(grep -q 'id="qrfootprefix"' "$RUN/query-results.html" 2>/dev/null \
+        && grep -q 'Processing Query...' "$RUN/query-results.html" 2>/dev/null; echo $?)
 # The top row is the standard format: refresh button, displayed of
 # total Items, and the (N Selected) suffix span.
 check "console: results top row is refresh + displayed of total Items" \
