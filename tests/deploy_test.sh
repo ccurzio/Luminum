@@ -482,18 +482,20 @@ code=$(curl -k -s -o "$RUN/sensor-new.html" -w '%{http_code}' -b "$RUN/cookies" 
     "https://127.0.0.1:$WPORT/index.php?view=sensors&action=new")
 check "console: sensor create form renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
 # The "Split Results into Columns" checkbox reveals the output column name
-# fields on the line below: a "Column Name" textfield with the query
-# builder's add button (and a remove button), hidden until the checkbox is
-# checked (toggleSplit shows #colrow).
-check "console: the split checkbox reveals the column name fields" \
+# fields on the line below: two "Column Name" textfields (splitting needs
+# at least two columns), each with the query builder's add button (and a
+# remove button), hidden until the checkbox is checked (toggleSplit shows
+# #colrow and restores a second field after a remove-down-to-one).
+check "console: the split checkbox reveals two column name fields" \
     $(grep -q 'id="colrow" style="display: none;"' "$RUN/sensor-new.html" 2>/dev/null \
         && grep -q 'placeholder="Column Name"' "$RUN/sensor-new.html" 2>/dev/null \
-        && grep -q 'name="outcol\[\]" class="outcol"' "$RUN/sensor-new.html" 2>/dev/null; echo $?)
+        && [ "$(grep -o 'name="outcol\[\]" class="outcol"' "$RUN/sensor-new.html" 2>/dev/null | wc -l)" = "2" ]; echo $?)
 check "console: the column fields carry the query builder's add button and a remove button" \
     $(grep -q 'src="/icons/add.png" class="add"' "$RUN/sensor-new.html" 2>/dev/null \
         && grep -q 'src="/icons/remove.png" class="remove"' "$RUN/sensor-new.html" 2>/dev/null; echo $?)
-check "console: toggleSplit shows the column field row" \
-    $(grep -q 'document.getElementById("colrow").style.display = checkbox.checked ? "" : "none"' "$RUN/sensor-new.html" 2>/dev/null; echo $?)
+check "console: toggleSplit shows the column field row and restores two fields" \
+    $(grep -q 'document.getElementById("colrow").style.display = checkbox.checked ? "" : "none"' "$RUN/sensor-new.html" 2>/dev/null \
+        && grep -q 'while (container.children.length < 2)' "$RUN/sensor-new.html" 2>/dev/null; echo $?)
 
 code=$(curl -k -s -D "$RUN/sensor-post.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
     --data-urlencode "pkgname=Deploy Test Sensor" \

@@ -337,12 +337,14 @@ $sensorcount = mysqli_num_rows($sensorquery);
 				<tr><td style="padding-top: 30px; background-color: transparent; border: 0; color: #444; font-weight: normal;" colspan="2"><input type="checkbox" id="case" name="case"<?php print ($sensor !== null && (int)$sensor['USECASE'] === 1) ? ' checked="checked"' : ''; ?>><span style="cursor: normal; user-select: none;" onclick="caseToggle()"> Results are Case Sensitive</span> <div class="tooltip"><img src="/icons/tooltip.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Instructs the server to force case sensitive matching for the sensor output<br><br>Default: Disabled</span></div></td></tr>
 				<tr><td style="background-color: transparent; border: 0; color: #444; font-weight: normal;" colspan="2"><input type="checkbox" id="split" name="split" onclick="toggleSplit()"<?php print ($sensor !== null && (int)$sensor['CSPLIT'] === 1) ? ' checked="checked"' : ''; ?>><span style="cursor: normal; user-select: none;" onclick="csToggle()"> Split Results into Columns </span><div class="tooltip"><img src="/icons/tooltip.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"> <span class="tooltiptext">Allows the server to split the sensor output and display the split segments in separate columns within a query response<br><br>Default: Disabled</span></div><span class="delform" style="margin-left: 50px; opacity: 0;">Delimeter: </span><span class="delform" style="opacity: 0; color: red;">*</span><input class="delform" id="delimeter" name="delimeter" type="text" style="opacity: 0; margin-left: 15px; width: 5px;" maxlength="1" value="<?php print ($sensor !== null && $sensor['DELIMITER'] !== null) ? htmlspecialchars($sensor['DELIMITER'], ENT_QUOTES) : '|'; ?>"></td></tr>
 				<!-- The output column names: the row appears when "Split Results
-				     into Columns" is checked. Each field allows only
-				     letters/numbers/spaces; the add button (the query
-				     builder's) inserts another field below, and the
-				     remove button drops one (removing a field down to one
-				     disables the split again). -->
-				<tr id="colrow" style="display: none;"><td style="background-color: transparent; border: 0; color: #444; font-weight: normal;" colspan="2"><div id="colfields"><div class="colfield" style="margin-bottom: 5px;"><input type="text" name="outcol[]" class="outcol" placeholder="Column Name" maxlength="64" style="width: 300px;"> <img src="/icons/remove.png" class="remove" style="vertical-align: middle; margin-bottom: 3px; margin-right: 3px;"> <img src="/icons/add.png" class="add" style="vertical-align: middle; margin-bottom: 3px;"></div></div></td></tr>
+				     into Columns" is checked, carrying two fields
+				     (splitting needs at least two columns). Each
+				     field allows only letters/numbers/spaces; the
+				     add button (the query builder's) inserts another
+				     field below, and the remove button drops one
+				     (removing a field down to one disables the split
+				     again). -->
+				<tr id="colrow" style="display: none;"><td style="background-color: transparent; border: 0; color: #444; font-weight: normal;" colspan="2"><div id="colfields"><div class="colfield" style="margin-bottom: 5px;"><input type="text" name="outcol[]" class="outcol" placeholder="Column Name" maxlength="64" style="width: 300px;"> <img src="/icons/remove.png" class="remove" style="vertical-align: middle; margin-bottom: 3px; margin-right: 3px;"> <img src="/icons/add.png" class="add" style="vertical-align: middle; margin-bottom: 3px;"></div><div class="colfield" style="margin-bottom: 5px;"><input type="text" name="outcol[]" class="outcol" placeholder="Column Name" maxlength="64" style="width: 300px;"> <img src="/icons/remove.png" class="remove" style="vertical-align: middle; margin-bottom: 3px; margin-right: 3px;"> <img src="/icons/add.png" class="add" style="vertical-align: middle; margin-bottom: 3px;"></div></div></td></tr>
 				</table>
 
 			</div>
@@ -505,8 +507,18 @@ function toggleSplit() {
 	for (var i=0 ; i<len; i++) {
 		delements[i].style.opacity = ol;
 		}
-	// The output column name fields appear on the line below the checkbox.
+	// The output column name fields appear on the line below the checkbox,
+	// two of them (splitting needs at least two columns). Enabling after a
+	// remove-down-to-one restores the second field.
 	document.getElementById("colrow").style.display = checkbox.checked ? "" : "none";
+	if (checkbox.checked) {
+		const container = document.getElementById("colfields");
+		while (container.children.length < 2) {
+			const field = container.lastElementChild.cloneNode(true);
+			field.querySelector(".outcol").value = "";
+			container.appendChild(field);
+			}
+		}
 	}
 
 // The output column name fields: the add button (the query builder's)
@@ -901,8 +913,8 @@ if (editData) {
 	else { disableEditor('Windows'); }
 	if (editData.csplit) { toggleSplit(); }
 	if (editData.outcols && editData.outcols.length) {
-		// Pre-fill the column fields with the stored names (the first field
-		// is the markup's, the rest are cloned below it).
+		// Pre-fill the column fields with the stored names (the first two
+		// fields are the markup's, the rest are cloned below them).
 		const container = document.getElementById('colfields');
 		editData.outcols.forEach(function (name, i) {
 			let field = container.children[i];
