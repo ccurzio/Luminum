@@ -60,7 +60,7 @@ use ed25519_dalek::{Signer, Verifier, SigningKey, VerifyingKey, Signature};
 use sha2::{Digest, Sha256};
 use std::sync::{LazyLock, Mutex};
 
-const VER: &str = "0.0.3";
+const VER: &str = "0.0.4";
 const IPORT: u16 = 10704;
 const DPORT: u16 = 10465;
 const LPORT: u16 = 10461;
@@ -458,6 +458,56 @@ fn parse_cert(der: &[u8]) -> Option<CertInfo> {
 		sig_alg,
 		sig,
 	})
+}
+
+// The certificate's validity window (notBefore, notAfter) as Unix seconds.
+fn cert_validity(der: &[u8]) -> Option<(i64, i64)> {
+	let mut top = DerReader::new(der);
+	let mut cert = top.read_seq()?;
+	let (_t, _full, tbs_value) = cert.read_tlv()?;
+	let mut tbs = DerReader::new(tbs_value);
+	if tbs.peek_tag() == Some(0xa0) {
+		tbs.read_tlv()?; // skip [0] EXPLICIT version
+	}
+	tbs.read_tlv()?; // serialNumber
+	tbs.read_tlv()?; // signature (AlgorithmIdentifier)
+	tbs.read_tlv()?; // issuer
+	let (vtag, _vfull, vvalue) = tbs.read_tlv()?; // validity
+	if vtag != 0x30 {
+		return None;
+	}
+	let mut v = DerReader::new(vvalue);
+	let (t1, _f1, nb) = v.read_tlv()?;
+	let (t2, _f2, na) = v.read_tlv()?;
+	Some((der_time_to_epoch(t1, nb)?, der_time_to_epoch(t2, na)?))
+}
+
+// A UTCTime (0x17, YYMMDDHHMMSSZ) or GeneralizedTime (0x18,
+// YYYYMMDDHHMMSSZ) DER value as Unix seconds.
+fn der_time_to_epoch(tag: u8, value: &[u8]) -> Option<i64> {
+	let text = std::str::from_utf8(value).ok()?;
+	let (year, rest) = if tag == 0x17 {
+		let yy: i64 = text.get(0..2)?.parse().ok()?;
+		(if yy < 50 { 2000 + yy } else { 1900 + yy }, &text[2..])
+	} else if tag == 0x18 {
+		let year: i64 = text.get(0..4)?.parse().ok()?;
+		(year, &text[4..])
+	} else {
+		return None;
+	};
+	let month: i64 = rest.get(0..2)?.parse().ok()?;
+	let day: i64 = rest.get(2..4)?.parse().ok()?;
+	let hour: i64 = rest.get(4..6)?.parse().ok()?;
+	let minute: i64 = rest.get(6..8)?.parse().ok()?;
+	let second: i64 = rest.get(8..10)?.parse().ok()?;
+	// Days from civil (Howard Hinnant's algorithm), then epoch seconds.
+	let y = if month <= 2 { year - 1 } else { year };
+	let era = if y >= 0 { y } else { y - 399 } / 400;
+	let yoe = y - era * 400;
+	let doy = (153 * (if month > 2 { month - 3 } else { month + 9 }) + 2) / 5 + day - 1;
+	let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+	let days = era * 146097 + doe - 719468;
+	Some(days * 86400 + hour * 3600 + minute * 60 + second)
 }
 
 // The public key carried in a certificate's subjectPublicKeyInfo, in the
@@ -2084,6 +2134,30 @@ struct ProvisionFile {
 	certificates: ProvisionCerts,
 }
 
+// Validate a provisioning certificate before import: it must parse as an
+// X.509 certificate and must not be expired. An expired certificate leaves a
+// client that cannot connect (server cert) or register (signing cert), so the
+// import is refused rather than leaving a broken configuration behind. Returns
+// an error message when either check fails.
+fn check_cert_validity(label: &str, pem: &str) -> Result<(), String> {
+	let der = match pem_to_der(pem.as_bytes()) {
+		Some(d) => d,
+		None => return Err(format!("Provisioning file {} certificate is not a valid X.509 certificate.", label)),
+	};
+	let (_, not_after) = match cert_validity(&der) {
+		Some(w) => w,
+		None => return Err(format!("Provisioning file {} certificate is not a valid X.509 certificate.", label)),
+	};
+	let now = std::time::SystemTime::now()
+		.duration_since(std::time::UNIX_EPOCH)
+		.map(|d| d.as_secs() as i64)
+		.unwrap_or(0);
+	if not_after < now {
+		return Err(format!("Provisioning file {} certificate is expired.", label));
+	}
+	Ok(())
+}
+
 // Import a provisioning file in place of the interactive wizard. The file is
 // validated fully before anything is written, so a bad file leaves no partial
 // configuration behind. Exits the process on success (mirrors clientsetup).
@@ -2127,6 +2201,17 @@ fn clientimport(path: &str, debug: bool) {
 	let sign_ok = prov.certificates.signing.contains("BEGIN CERTIFICATE");
 	if !cert_ok || !sign_ok {
 		dbout(debug, 1, "Provisioning file is missing a valid server certificate and/or signing certificate.");
+		process::exit(1);
+	}
+	// An expired certificate leaves a client that cannot connect (server cert)
+	// or register (signing cert), so refuse to import rather than leave a
+	// broken configuration behind.
+	if let Err(msg) = check_cert_validity("server", &prov.certificates.server) {
+		dbout(debug, 1, &msg);
+		process::exit(1);
+	}
+	if let Err(msg) = check_cert_validity("signing", &prov.certificates.signing) {
+		dbout(debug, 1, &msg);
 		process::exit(1);
 	}
 
@@ -2655,5 +2740,69 @@ mod sensorpair_tests {
 		assert_eq!(normalize_newlines("echo hi\r\necho there"), "echo hi\r\necho there");
 		assert_eq!(normalize_newlines("echo hi\necho there"), "echo hi\r\necho there");
 		assert_eq!(normalize_newlines("a\rb\nc"), "a\r\nb\r\nc");
+	}
+}
+
+#[cfg(test)]
+mod provision_cert_tests {
+	use super::*;
+
+	// der_time_to_epoch: UTCTime and GeneralizedTime both parse to the same
+	// Unix seconds for the same instant.
+	#[test]
+	fn der_time_epoch_cases() {
+		// 2020-01-01 00:00:00 UTC (UTCTime, yy=20 -> 2020).
+		assert_eq!(der_time_to_epoch(0x17, b"200101000000Z"), Some(1577836800));
+		// 2021-01-01 00:00:00 UTC (UTCTime, yy=21 -> 2021).
+		assert_eq!(der_time_to_epoch(0x17, b"210101000000Z"), Some(1609459200));
+		// The same instant encoded as GeneralizedTime.
+		assert_eq!(der_time_to_epoch(0x18, b"20210101000000Z"), Some(1609459200));
+		// An unknown time tag is rejected.
+		assert_eq!(der_time_to_epoch(0x05, b"20210101000000Z"), None);
+	}
+
+	// The cert-generation tests need the openssl CLI; skip where it is absent
+	// (e.g. a Windows host without it).
+	fn openssl_available() -> bool {
+		Command::new("openssl").arg("version").output().map(|o| o.status.success()).unwrap_or(false)
+	}
+
+	fn openssl(args: &[&str]) -> String {
+		let out = Command::new("openssl").args(args).output().expect("openssl CLI is required");
+		assert!(out.status.success(), "openssl {} failed: {}", args.join(" "), String::from_utf8_lossy(&out.stderr));
+		String::from_utf8_lossy(&out.stdout).into_owned()
+	}
+
+	fn make_cert(d: &std::path::Path, name: &str, not_before: &str, not_after: &str) -> String {
+		let key = d.join(format!("{}.key", name));
+		let csr = d.join(format!("{}.csr", name));
+		let crt = d.join(format!("{}.crt", name));
+		openssl(&["req", "-newkey", "rsa:2048", "-nodes", "-keyout", &key.to_string_lossy(), "-out", &csr.to_string_lossy(), "-subj", "/CN=luminum-test"]);
+		openssl(&["x509", "-req", "-in", &csr.to_string_lossy(), "-signkey", &key.to_string_lossy(), "-not_before", not_before, "-not_after", not_after, "-out", &crt.to_string_lossy()]);
+		fs::read_to_string(&crt).expect("read generated cert")
+	}
+
+	#[test]
+	fn cert_validity_cases() {
+		if !openssl_available() { return; }
+		let d = std::env::temp_dir().join(format!(
+			"luminum-provcert-w-{}-{}",
+			std::process::id(),
+			std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|x| x.as_nanos()).unwrap_or(0)
+		));
+		fs::create_dir_all(&d).expect("create temp dir");
+
+		let valid = make_cert(&d, "valid", "20200101000000Z", "20990101000000Z");
+		assert_eq!(check_cert_validity("server", &valid), Ok(()), "valid certificate must pass");
+
+		let expired = make_cert(&d, "expired", "20200101000000Z", "20210101000000Z");
+		let err = check_cert_validity("signing", &expired).unwrap_err();
+		assert!(err.contains("expired"), "expired certificate must be reported as expired, got: {}", err);
+		assert!(err.contains("signing"), "the message must name the certificate, got: {}", err);
+
+		let err = check_cert_validity("server", "not a certificate").unwrap_err();
+		assert!(err.contains("not a valid X.509"), "a non-certificate must be reported as invalid, got: {}", err);
+
+		let _ = fs::remove_dir_all(&d);
 	}
 }

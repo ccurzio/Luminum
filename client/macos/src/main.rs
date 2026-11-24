@@ -50,7 +50,7 @@ use base64ct::Encoding;
 use ed25519_dalek::{Signer, Verifier, SigningKey, VerifyingKey, Signature};
 use sha2::{Digest, Sha256};
 
-const VER: &str = "0.0.3";
+const VER: &str = "0.0.4";
 const IPORT: u16 = 10704;
 const DPORT: u16 = 10465;
 const LPORT: u16 = 10461;
@@ -1975,6 +1975,34 @@ struct ProvisionFile {
 	certificates: ProvisionCerts,
 }
 
+// Validate a provisioning certificate before import: it must parse as an
+// X.509 certificate and must not be expired. An expired certificate leaves a
+// client that cannot connect (server cert) or register (signing cert), so the
+// import is refused rather than leaving a broken configuration behind. Returns
+// an error message when either check fails.
+fn check_cert_validity(label: &str, pem: &str) -> Result<(), String> {
+	let der = match pem_to_der(pem.as_bytes()) {
+		Ok(d) => d,
+		Err(_) => return Err(format!("Provisioning file {} certificate is not a valid X.509 certificate.", label)),
+	};
+	let (tbs, _sigalg, _sig) = match cert_parts(&der) {
+		Some(c) => c,
+		None => return Err(format!("Provisioning file {} certificate is not a valid X.509 certificate.", label)),
+	};
+	let (_, not_after) = match tbs_validity(tbs) {
+		Some(w) => w,
+		None => return Err(format!("Provisioning file {} certificate is not a valid X.509 certificate.", label)),
+	};
+	let now = std::time::SystemTime::now()
+		.duration_since(std::time::UNIX_EPOCH)
+		.map(|d| d.as_secs() as i64)
+		.unwrap_or(0);
+	if not_after < now {
+		return Err(format!("Provisioning file {} certificate is expired.", label));
+	}
+	Ok(())
+}
+
 // Import a provisioning file in place of the interactive wizard. The file is
 // validated fully before anything is written, so a bad file leaves no partial
 // configuration behind. Exits the process on success (mirrors clientsetup).
@@ -2018,6 +2046,17 @@ fn clientimport(path: &str, debug: bool) {
 	let sign_ok = prov.certificates.signing.contains("BEGIN CERTIFICATE");
 	if !cert_ok || !sign_ok {
 		dbout(debug, 1, "Provisioning file is missing a valid server certificate and/or signing certificate.");
+		process::exit(1);
+	}
+	// An expired certificate leaves a client that cannot connect (server cert)
+	// or register (signing cert), so refuse to import rather than leave a
+	// broken configuration behind.
+	if let Err(msg) = check_cert_validity("server", &prov.certificates.server) {
+		dbout(debug, 1, &msg);
+		process::exit(1);
+	}
+	if let Err(msg) = check_cert_validity("signing", &prov.certificates.signing) {
+		dbout(debug, 1, &msg);
 		process::exit(1);
 	}
 
@@ -2431,5 +2470,77 @@ mod sensorpair_tests {
 		assert_eq!(normalize_newlines("if true\r\nthen echo hi\r\nfi"), "if true\nthen echo hi\nfi");
 		assert_eq!(normalize_newlines("a\rb\nc"), "a\nb\nc");
 		assert_eq!(normalize_newlines("a\nb\nc"), "a\nb\nc");
+	}
+}
+
+#[cfg(test)]
+mod provision_cert_tests {
+	use super::*;
+	use std::path::PathBuf;
+
+	// Run the openssl CLI (present on macOS and in the dev container); return
+	// its stdout, failing the test on a nonzero exit.
+	fn openssl(args: &[&str]) -> String {
+		let out = Command::new("openssl")
+			.args(args)
+			.output()
+			.expect("openssl CLI is required for this test");
+		assert!(
+			out.status.success(),
+			"openssl {} failed: {}",
+			args.join(" "),
+			String::from_utf8_lossy(&out.stderr)
+		);
+		String::from_utf8_lossy(&out.stdout).into_owned()
+	}
+
+	// A self-signed certificate with an explicit validity window (OpenSSL 3.x
+	// -not_before/-not_after); returns its PEM.
+	fn make_cert(d: &PathBuf, name: &str, not_before: &str, not_after: &str) -> String {
+		let key = d.join(format!("{}.key", name));
+		let csr = d.join(format!("{}.csr", name));
+		let crt = d.join(format!("{}.crt", name));
+		openssl(&[
+			"req", "-newkey", "rsa:2048", "-nodes",
+			"-keyout", &key.to_string_lossy(),
+			"-out", &csr.to_string_lossy(),
+			"-subj", "/CN=luminum-test",
+		]);
+		openssl(&[
+			"x509", "-req", "-in", &csr.to_string_lossy(),
+			"-signkey", &key.to_string_lossy(),
+			"-not_before", not_before, "-not_after", not_after,
+			"-out", &crt.to_string_lossy(),
+		]);
+		fs::read_to_string(&crt).expect("read generated cert")
+	}
+
+	#[test]
+	fn cert_validity_cases() {
+		let d = std::env::temp_dir().join(format!(
+			"luminum-provcert-{}-{}",
+			std::process::id(),
+			std::time::SystemTime::now()
+				.duration_since(std::time::UNIX_EPOCH)
+				.map(|x| x.as_nanos())
+				.unwrap_or(0)
+		));
+		fs::create_dir_all(&d).expect("create temp dir");
+
+		// A currently-valid certificate passes.
+		let valid = make_cert(&d, "valid", "20200101000000Z", "20990101000000Z");
+		assert_eq!(check_cert_validity("server", &valid), Ok(()), "valid certificate must pass");
+
+		// An expired certificate is rejected with an expiry message naming it.
+		let expired = make_cert(&d, "expired", "20200101000000Z", "20210101000000Z");
+		let err = check_cert_validity("signing", &expired).unwrap_err();
+		assert!(err.contains("expired"), "expired certificate must be reported as expired, got: {}", err);
+		assert!(err.contains("signing"), "the message must name the certificate, got: {}", err);
+
+		// A non-certificate is rejected as invalid.
+		let err = check_cert_validity("server", "not a certificate").unwrap_err();
+		assert!(err.contains("not a valid X.509"), "a non-certificate must be reported as invalid, got: {}", err);
+
+		let _ = fs::remove_dir_all(&d);
 	}
 }
