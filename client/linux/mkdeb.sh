@@ -20,6 +20,8 @@
 #   /opt/Luminum/LuminumClient/logs/                client-stdout.log
 #   /opt/Luminum/LuminumClient/run/                 client.pid
 #   /opt/Luminum/LuminumClient/modules/<lumy>/      Lumy module binaries
+#   /opt/Luminum/LuminumClient/Packages/            package content
+#   /opt/Luminum/LuminumClient/Downloads/           download content
 #   /etc/systemd/system/luminum-client.service      service unit
 #
 # Maintainer scripts:
@@ -94,6 +96,7 @@ ROOT=/opt/Luminum/LuminumClient
 
 mkdir -p "$PKG/DEBIAN" \
 	"$PKG$ROOT/bin" "$PKG$ROOT/config" "$PKG$ROOT/logs" "$PKG$ROOT/run" "$PKG$ROOT/modules" \
+	"$PKG$ROOT/Packages" "$PKG$ROOT/Downloads" \
 	"$PKG/etc/systemd/system" || fail "cannot create the staging tree"
 
 # client binary
@@ -101,8 +104,10 @@ install -m 0755 "$CLIENT_BIN" "$PKG$ROOT/LuminumClient" || fail "cannot stage th
 
 # runtime dirs (.keep is the Debian convention for "keep this otherwise-empty
 # directory" so the install layout is explicit even before the client runs)
-touch "$PKG$ROOT/config/.keep" "$PKG$ROOT/logs/.keep" "$PKG$ROOT/run/.keep" "$PKG$ROOT/modules/.keep"
-chmod 0644 "$PKG$ROOT/config/.keep" "$PKG$ROOT/logs/.keep" "$PKG$ROOT/run/.keep" "$PKG$ROOT/modules/.keep"
+touch "$PKG$ROOT/config/.keep" "$PKG$ROOT/logs/.keep" "$PKG$ROOT/run/.keep" "$PKG$ROOT/modules/.keep" \
+	"$PKG$ROOT/Packages/.keep" "$PKG$ROOT/Downloads/.keep"
+chmod 0644 "$PKG$ROOT/config/.keep" "$PKG$ROOT/logs/.keep" "$PKG$ROOT/run/.keep" "$PKG$ROOT/modules/.keep" \
+	"$PKG$ROOT/Packages/.keep" "$PKG$ROOT/Downloads/.keep"
 
 # start/stop scripts (mirror install.sh; LUMINUM_HOME pinned to the install root)
 cat > "$PKG$ROOT/bin/start-client" <<EOF
