@@ -14,6 +14,9 @@
 #     row are published in ID order, both are ACKED (the answer by data.qid),
 #     and the per-sensor result is stored in QUERYRESULTS
 #   - an unanswered query is marked TIMEDOUT at its deadline (not republished)
+#   - a console-queued deregistration (DEREGS PENDING row) is processed by
+#     the worker: CSTATE=DEACT, the client's secret leaves the password_file,
+#     the row is marked DONE, and other clients are untouched
 #   - the offline LWT on client death flips STATUS.CSTATE to OFFLINE
 #   - the startup missing-client sweep (protocol 7.5) marks a stale offline
 #     client MISSING per MISSINGAFTER, skips deactivated and recently-seen
@@ -294,7 +297,7 @@ cp "$CERTDIR/ca.pem" "$HOME_TEST/config/server.crt"
 cat > "$SCRATCH/worker.pl" <<'EOF'
 use strict; use warnings;
 use Luminum::MQTT;
-my ($seedfile, $sid, $host, $port, $ca, $user, $secret, $dbname, $dbsock, $cmdtimeout, $depltimeout, $sysdb) = @ARGV;
+my ($seedfile, $sid, $host, $port, $ca, $user, $secret, $dbname, $dbsock, $cmdtimeout, $depltimeout, $sysdb, $passwdfile, $pidfile) = @ARGV;
 open(my $sf, "<", $seedfile) or die "seed: $!"; binmode($sf); read($sf, my $seed, 32); close($sf);
 Luminum::MQTT::worker(
     sid => $sid, host => $host, port => $port, ca => $ca,
@@ -303,6 +306,7 @@ Luminum::MQTT::worker(
     sysdb_name => $sysdb,
     poll_secs => 1,
     cmd_timeout => $cmdtimeout, depl_timeout => $depltimeout,
+    passwd_file => $passwdfile, pid_file => $pidfile,
     log => sub { print "[worker] $_[0]\n"; },
 );
 EOF
@@ -310,6 +314,7 @@ EOF
 PERL5LIB="$PERL_LIBS" perl "$SCRATCH/worker.pl" \
     "$CERTDIR/srv.seed" "$SID" 127.0.0.1 "$PORT" "$CERTDIR/ca.pem" \
     "$SERVER_USER" "$SERVER_SECRET" "$DBNAME" "$DBSOCK" 5 30 "$DBNAME" \
+    "$SCRATCH/passwd" "$SCRATCH/mosquitto.pid" \
     > "$SCRATCH/worker.log" 2>&1 &
 WORKER_PID=$!
 sleep 1
@@ -494,6 +499,28 @@ PERL5LIB="$PERL_LIBS" perl -e '
     Luminum::MQTT::on_deactivate($uid,passwd_file=>$file,pid_file=>$pid);
 ' 43 "$SCRATCH/passwd" "$SCRATCH/mosquitto.pid"
 check "on_deactivate removed the client from the password_file" "$(! grep -q '^43:' "$SCRATCH/passwd"; echo $?)"
+
+# --- console-queued deregistration (protocol 6.1, core/unregister) -----------
+# The console's Deregister action inserts a PENDING DEREGS row; the worker
+# performs the deactivation (STATUS.CSTATE = 'DEACT' + password_file removal
+# + broker reload) and marks the row DONE. The scratch database has no
+# DEREGS table, so this also exercises the worker's _ensure_schema. UID 47
+# is a spare endpoint (in the password_file, CSTATE OK); the live client
+# (42) must be untouched.
+dbq "insert into STATUS (ID,HOSTNAME,IPV4,OSPLATFORM,OSRELEASE,CLIENTVER,CSTATE,REGDATE,LASTSEEN) values (47,'dereg-host','127.0.0.1','Linux','6.1','0.0.1','OK',now(),now());"
+mosquitto_passwd -b "$SCRATCH/passwd" 47 "deregsecret47"
+dbq "insert into DEREGS (UID,REQUESTED,STATUS) values (47,now(),'PENDING');"
+DREG=1
+for i in $(seq 1 40); do
+    st=$(dbq "select STATUS from DEREGS where UID=47;")
+    [ "$st" = "DONE" ] && { DREG=0; break; }
+    sleep 0.5
+done
+check "dereg: queued row processed to DONE" "$DREG" "final status: $(dbq "select STATUS from DEREGS where UID=47;") see $SCRATCH/worker.log"
+check "dereg: DONE row carries a DONE timestamp" $([ -n "$(dbq "select DONE from DEREGS where UID=47;")" ]; echo $?)
+check "dereg: STATUS.CSTATE set to DEACT" $([ "$(dbq "select CSTATE from STATUS where ID=47;")" = "DEACT" ]; echo $?) "cstate: $(dbq "select CSTATE from STATUS where ID=47;")"
+check "dereg: client removed from the password_file" "$(! grep -q '^47:' "$SCRATCH/passwd"; echo $?)"
+check "dereg: the live client was not touched" $([ "$(dbq "select CSTATE from STATUS where ID=$UID_TEST;")" = "OK" ]; echo $?) "cstate: $(dbq "select CSTATE from STATUS where ID=$UID_TEST;")"
 
 # --- LWT: kill the client, expect STATUS.CSTATE=OFFLINE ----------------------
 kill -9 "$CLIENT_PID" 2>/dev/null

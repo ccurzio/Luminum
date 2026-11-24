@@ -475,6 +475,28 @@ CREATE TABLE IF NOT EXISTS `COMMANDS` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
+-- Table structure for table `DEREGS`
+--
+-- Queue of console-initiated endpoint deregistrations (protocol 6.1, the
+-- core/unregister deactivation). The console's Deregister action inserts a
+-- PENDING row; the broker's MQTT worker performs the deactivation -
+-- STATUS.CSTATE = 'DEACT' plus removal of the client's secret from the
+-- mosquitto password_file (the web console cannot maintain that file) - and
+-- marks the row DONE. A client-initiated unregister over the bootstrap
+-- channel performs the same deactivation directly in the broker.
+--
+
+CREATE TABLE IF NOT EXISTS `DEREGS` (
+  `ID` int(20) NOT NULL AUTO_INCREMENT,
+  `UID` int(20) NOT NULL,
+  `REQUESTED` datetime NOT NULL,
+  `STATUS` tinytext NOT NULL DEFAULT 'PENDING',
+  `DONE` datetime DEFAULT NULL,
+  PRIMARY KEY (`ID`),
+  KEY `IDX_DEREGS_STATUS` (`STATUS`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
 -- Table structure for table `QUERYRESULTS`
 --
 -- Sensor results from a client's answer to a query command (protocol 6.1,

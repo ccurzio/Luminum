@@ -337,6 +337,7 @@ sub startmqtt {
 			dbname => "CLIENTS", dbuser => $dbuser, dbpass => $dbpass, dbsock => $dbsock, dbhost => $dbhost,
 			poll_secs => 1,
 			cmd_timeout => $CMDTIMEOUT, depl_timeout => $DEPLTIMEOUT,
+			passwd_file => $MQTTPASSWD, pid_file => $MQTTPIDFILE,
 			log => sub { Broker::debugout(0, "[mqtt] $_[0]"); },
 			);
 		exit 0;

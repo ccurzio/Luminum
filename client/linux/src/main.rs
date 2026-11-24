@@ -51,7 +51,7 @@ use base64ct::Encoding;
 use ed25519_dalek::{Signer, Verifier, SigningKey, VerifyingKey, Signature};
 use sha2::{Digest, Sha256};
 
-const VER: &str = "0.0.1";
+const VER: &str = "0.0.2";
 const IPORT: u16 = 10704;
 const DPORT: u16 = 10465;
 const LPORT: u16 = 10461;
@@ -533,6 +533,103 @@ fn register_with_server(debug: bool, ccfg: &HashMap<String, String>) {
 			}
 		}
 		Err(err) => dbout(debug, 2, &format!("Unable to send registration to server: {}", err)),
+	}
+}
+
+// One-shot variant of server_send for CLI flows (deregistration): a single
+// connection attempt instead of the startup retry loop - a one-shot command
+// reports an unreachable server instead of retrying for 30 seconds at a time
+// until interrupted.
+fn server_send_once(server_host: &str, server_port: &str, cert_path: &str, message: &Envelope) -> Result<Envelope, Box<dyn Error>> {
+	let server_addr_str = format!("{}:{}", server_host, server_port);
+	let server_addr = server_addr_str.to_socket_addrs()?.next().ok_or("No addresses found for hostname")?;
+	let sconn = TcpStream::connect(server_addr).map_err(|err| format!("Connection to Luminum server failed: {}", err))?;
+	let cert_buffer = fs::read(cert_path)?;
+	let mut builder = TlsConnector::builder();
+	builder.add_root_certificate(native_tls::Certificate::from_pem(&cert_buffer)?);
+	let connector = builder.build()?;
+	let mut server_stream = connector.connect(server_host, sconn)?;
+	frame_write(&mut server_stream, message)?;
+	let response = frame_read(&mut server_stream)?;
+	Ok(response)
+}
+
+// Deregistration (protocol §6.1, core/unregister): the sanctioned uninstall
+// flow. Sends a signed unregister request over the bootstrap channel; the
+// server deactivates the endpoint's record (CSTATE = 'DEACT') and revokes
+// its MQTT credentials. On a verified OK - or ERR DEACTIVATED, meaning the
+// server has already deregistered this endpoint - the local configuration
+// database is removed: the next installation starts fresh (new keypair, new
+// UUID, new endpoint record). Any other outcome keeps the configuration so
+// the operator can retry. The stored keypair is read, never regenerated: a
+// client whose keypair is lost cannot authenticate a deregistration.
+fn deregister_with_server(debug: bool) {
+	let ccfg = parse_clientconfig(debug);
+	let uid = match ccfg.get("UID") {
+		Some(u) => u.clone(),
+		None => {
+			dbout(debug, 1, "Endpoint is not registered with the Luminum server. Nothing to deregister.");
+			process::exit(1);
+		}
+	};
+	let seed = match ccfg.get("CLPPRV") {
+		Some(prv) => match base64ct::Base64::decode_vec(prv) {
+			Ok(raw) if raw.len() == 32 => {
+				let mut seed = [0u8; 32];
+				seed.copy_from_slice(&raw);
+				seed
+			}
+			_ => {
+				dbout(debug, 1, "Stored client keypair is invalid; cannot authenticate the deregistration.");
+				process::exit(1);
+			}
+		},
+		None => {
+			dbout(debug, 1, "No client signing keypair on file; cannot authenticate the deregistration.");
+			process::exit(1);
+		}
+	};
+
+	let mut msg = new_envelope("client", &uid, "core", "unregister", "noreg", None);
+	sign_envelope(&mut msg, &seed);
+	let server_host = ccfg.get("SHOST").unwrap();
+	let server_port = ccfg.get("SPORT").unwrap();
+
+	match server_send_once(server_host, server_port, &crt_path(), &msg) {
+		Ok(response) => {
+			if response.action != "unregister" {
+				dbout(debug, 1, "Unexpected response to deregistration request.");
+				process::exit(1);
+			}
+			// The response must be signed by the validated server signing
+			// key (bootstrap trust anchor, protocol §7.1).
+			let anchor = match server_signing_key(debug) {
+				Some(k) => k,
+				None => process::exit(1),
+			};
+			if !verify_envelope(&response, &anchor) {
+				dbout(debug, 1, "MSG_AUTH_FAIL: deregistration response signature verification failed.");
+				process::exit(1);
+			}
+			let already = response.status == "ERR" && response.err.as_deref() == Some("DEACTIVATED");
+			if response.status != "OK" && !already {
+				dbout(debug, 1, &format!("Deregistration failed: {} {}", response.status, response.err.unwrap_or_default()));
+				process::exit(1);
+			}
+			// Server-side deactivation confirmed: remove the local
+			// configuration (keypair, UUID, registration, credentials).
+			if let Err(err) = fs::remove_file(cfg_path()) {
+				dbout(debug, 1, &format!("Deregistered on the server, but the local configuration could not be removed: {}", err));
+				dbout(debug, 1, "Remove the configuration database manually to complete the uninstall.");
+				process::exit(1);
+			}
+			dbout(debug, 3, "Endpoint deregistered. Local configuration removed.");
+			dbout(debug, 4, "The next installation will register as a new endpoint.");
+		}
+		Err(err) => {
+			dbout(debug, 1, &format!("Unable to send deregistration to server: {}", err));
+			process::exit(1);
+		}
 	}
 }
 
@@ -1746,11 +1843,16 @@ async fn main() {
 			.long("import")
 			.help("Import a provisioning file (config.ini) instead of the wizard")
 			.takes_value(true))
+		.arg(Arg::with_name("deregister")
+			.long("deregister")
+			.help("Deregister this endpoint from the server and remove the local configuration")
+			.takes_value(false))
 		.get_matches();
 
 	let setup = matches.is_present("setup");
 	let debug = matches.is_present("debug");
 	let import = matches.value_of("import");
+	let deregister = matches.is_present("deregister");
 
 	// Break handler
 	let running = Arc::new(AtomicBool::new(true));
@@ -1781,6 +1883,14 @@ async fn main() {
 			dbout(debug, 1, "Client configuration already exists. Aborting.");
 			process::exit(1);
 		}
+	} else if deregister {
+		dbout(debug, 4, "Starting endpoint deregistration...");
+		if fs::metadata(cfg_path()).is_err() {
+			dbout(debug, 1, "Client configuration not found. Nothing to deregister.");
+			process::exit(1);
+		}
+		deregister_with_server(debug);
+		process::exit(0);
 	}
 
 	// Client startup

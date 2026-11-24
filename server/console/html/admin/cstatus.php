@@ -12,7 +12,14 @@
 	<div class="module-content" style="display: flex; justify-content: space-between; align-items: flex-start; width: 70%; float: left; margin-right: 0px;">
 		<div style="display: block; width: 100%;">
 			<div class="pageactions">
-			<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled" id="deploy">Deploy Action</button> <button class="formgo" id="investigate" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Investigate</button> <button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled" id="getinfo">Get Info</button>
+			<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled" id="deploy">Deploy Action</button> <button class="formgo" id="investigate" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Investigate</button> <button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled" id="getinfo">Get Info</button><?php
+			// Deregister removes an endpoint from the server; the button is
+			// rendered only for the Administrator role (ROLE = 1). The API
+			// enforces the same role server-side.
+			if (isset($acctrole) && $acctrole == "1") {
+				print ' <button class="formgo" id="deregister" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Deregister</button>';
+			}
+			?>
 			</div>
 			<table id="cstable" style="margin-top: 10px; text-align: left;">
 			<tr><td colspan="8"><div style="position: absolute; padding-top: 5px; padding-left: 5px;"><img id="refresh" src="icons/refresh.png" style="cursor: pointer; width: 15px; height: 15px; vertical-align: top;" onclick="cstatusRefresh()">&nbsp;&nbsp;<span id="viscount">0</span> of <span id="totcount">0</span> Items <span id="selcount"></span></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="cstatusfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" maxlength="64"></div></td></tr>
@@ -128,6 +135,77 @@ function cstatusButtons(n) {
 	if (n >= 2) { inv.disabled = false; gi.disabled = true; dep.disabled = false; }
 	else if (n === 1) { inv.disabled = false; gi.disabled = false; dep.disabled = false; }
 	else { inv.disabled = true; gi.disabled = true; dep.disabled = true; }
+	// Deregister (administrators only; the button is not rendered for other
+	// roles) works on one or more selected endpoints.
+	var der = document.getElementById('deregister');
+	if (der) { der.disabled = n < 1; }
+}
+
+// Deregister the selected endpoints (protocol 6.1, core/unregister): a
+// confirmation names what will happen, then each selected UID is queued
+// for the broker's MQTT worker, which deactivates it (CSTATE = 'DEACT')
+// and removes its MQTT credentials. The table's next poll shows the
+// deactivated state; the selection is cleared for the deregistered UIDs.
+function cstatusDeregister() {
+	var uids = [];
+	for (var k in cstatusState.selected) {
+		if (cstatusState.selected[k]) { uids.push(k); }
+	}
+	if (uids.length === 0) { return; }
+	var names = [];
+	if (cstatusData) {
+		cstatusData.rows.forEach(function (r) {
+			if (cstatusState.selected[r.id]) { names.push(r.hostname); }
+		});
+	}
+	var label = uids.length === 1 ? names[0] : uids.length + ' endpoints';
+	LuminumOverlay.show({
+		title: 'Deregister Endpoint',
+		message: 'Deregister ' + label + '? The endpoint will be deactivated and will no longer be able to communicate with the server. This cannot be undone from the console.',
+		buttons: [
+			{ label: 'Cancel', onclick: function () { LuminumOverlay.hide(); } },
+			{
+				label: 'Deregister',
+				onclick: function () {
+					LuminumOverlay.hide();
+					var btn = document.getElementById('deregister');
+					btn.disabled = true;
+					btn.textContent = 'Deregistering...';
+					var meta = document.querySelector('meta[name="csrf-token"]');
+					var pending = uids.length;
+					var failed = 0;
+					uids.forEach(function (uid) {
+						fetch('/api/deregister.php', {
+							method: 'POST',
+							headers: {
+								'Content-Type': 'application/json',
+								'X-CSRF-Token': meta ? meta.content : ''
+							},
+							body: JSON.stringify({ target: uid })
+						}).then(function (resp) {
+							return resp.json().then(function (data) {
+								if (!resp.ok || !data.ok) { failed++; }
+							});
+						}).catch(function () { failed++; }).then(function () {
+							pending--;
+							if (pending > 0) { return; }
+							btn.textContent = 'Deregister';
+							uids.forEach(function (u) { delete cstatusState.selected[u]; });
+							if (failed > 0) {
+								LuminumOverlay.show({
+									title: 'Deregister',
+									message: failed + ' of ' + uids.length + ' endpoint(s) could not be deregistered.',
+									buttons: [{ label: 'OK', onclick: function () { LuminumOverlay.hide(); } }]
+								});
+							}
+							cstatusApply();
+							if (cstatusPoll) { cstatusPoll.refresh(); }
+						});
+					});
+				}
+			}
+		]
+	});
 }
 
 // The filter tables' percentages and counts reflect the rows currently
@@ -300,6 +378,12 @@ document.getElementById('selectall').addEventListener('change', function (e) {
 	visible.forEach(function (r) { cstatusState.selected[r.id] = e.target.checked; });
 	cstatusApply();
 });
+
+// Deregister (rendered only for the Administrator role).
+var deregisterBtn = document.getElementById('deregister');
+if (deregisterBtn) {
+	deregisterBtn.addEventListener('click', cstatusDeregister);
+}
 
 document.getElementById('cstatusfilter').addEventListener('input', function (e) {
 	cstatusState.text = e.target.value;

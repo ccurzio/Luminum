@@ -464,9 +464,36 @@ sub _pump_outbox {
 	}
 }
 
-# Ensure the answer-storage table exists (protocol 7.3). schema.sql creates
-# it for installed databases; this covers a worker pointed at a database
-# that predates the table.
+# Process console-queued endpoint deregistrations (protocol 6.1, the
+# core/unregister deactivation). The console's Deregister action inserts a
+# PENDING DEREGS row; each row here performs the same deactivation the
+# broker's client-initiated path does - STATUS.CSTATE = 'DEACT' plus removal
+# of the client's secret from the mosquitto password_file (the web console
+# cannot maintain that file) - and marks the row DONE. passwd_remove is
+# idempotent for an absent user, so a row whose client was already
+# deactivated (or whose secret was already removed) still completes.
+sub _pump_deregs {
+	my ($db, $log, $passwd_file, $pid_file) = @_;
+	my $dbh = _dbh($db);
+	my $sth = $dbh->prepare("select ID, UID from DEREGS where STATUS = 'PENDING' order by ID asc limit 50");
+	$sth->execute();
+	while (my @row = $sth->fetchrow_array()) {
+		my ($id, $uid) = @row;
+		$dbh->do("update STATUS set CSTATE = 'DEACT' where ID = ?", undef, $uid);
+		if (passwd_remove($passwd_file, $uid)) {
+			reload($pid_file);
+		}
+		else {
+			$log->("dereg: UID $uid deactivated, but the MQTT password_file removal failed ($passwd_file)");
+		}
+		$dbh->do("update DEREGS set STATUS = 'DONE', DONE = now() where ID = ?", undef, $id);
+		$log->("dereg: deregistered client ID $uid (console request $id)");
+	}
+}
+
+# Ensure the worker's tables exist (protocol 7.3, 6.1). schema.sql creates
+# them for installed databases; this covers a worker pointed at a database
+# that predates them.
 sub _ensure_schema {
 	my ($db) = @_;
 	my $dbh = _dbh($db);
@@ -485,6 +512,17 @@ sub _ensure_schema {
 			key IDX_QUERYRESULTS_QID (QID)
 		) engine=InnoDB default charset=utf8mb4
 	});
+	$dbh->do(qq{
+		create table if not exists DEREGS (
+			ID int(20) not null auto_increment,
+			UID int(20) not null,
+			REQUESTED datetime not null,
+			STATUS tinytext not null default 'PENDING',
+			DONE datetime default null,
+			primary key (ID),
+			key IDX_DEREGS_STATUS (STATUS)
+		) engine=InnoDB default charset=utf8mb4
+	});
 }
 
 # The main worker loop. Runs forever in a forked child.
@@ -498,6 +536,11 @@ sub _ensure_schema {
 #   poll_secs                                 - outbox poll interval (default 1)
 #   cmd_timeout, depl_timeout                 - command deadlines in seconds
 #                                               (protocol 9.3; defaults 120/3600)
+#   passwd_file, pid_file                     - mosquitto password_file and
+#                                               pid file (console-queued
+#                                               deregistrations remove the
+#                                               client's secret and reload
+#                                               the broker)
 #   log                                       - coderef($msg) for logging
 sub worker {
 	my (%a) = @_;
@@ -538,6 +581,10 @@ sub worker {
 			if (time() - $last >= ($a{poll_secs} // 1)) {
 				$last = time();
 				_pump_outbox($db, $m, $a{sid}, $a{seed}, $cmd_timeout, $depl_timeout, $log);
+				# Console-queued deregistrations need the mosquitto
+				# password_file to remove the client's secret; a worker
+				# started without it (tests) skips the pump.
+				_pump_deregs($db, $log, $a{passwd_file}, $a{pid_file}) if defined $a{passwd_file};
 			}
 			if (time() - $last_sweep >= 3600) {
 				$last_sweep = time();
