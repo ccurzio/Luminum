@@ -81,9 +81,9 @@
 	function headerHTML(config) {
 		var cols = config.columns;
 		var hasSub = cols.some(function (c) { return c.sub && c.sub.length; });
-		if (!hasSub) { return '<tr>' + cols.map(headerCell).join('') + '</tr>'; }
-		var t1 = '<tr>';
-		var t2 = '<tr>';
+		if (!hasSub) { return '<tr class="luminum-head">' + cols.map(headerCell).join('') + '</tr>'; }
+		var t1 = '<tr class="luminum-head">';
+		var t2 = '<tr class="luminum-head">';
 		cols.forEach(function (col) {
 			if (col.sub && col.sub.length) {
 				t1 += headerCell({ width: col.width, align: col.align, header: col.header, label: col.label, colspan: col.sub.length });

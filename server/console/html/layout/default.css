@@ -573,6 +573,14 @@ th, td {
 	border: 1px solid #101017;
 	}
 
+/* The column header row: marked luminum-head by LuminumTable.headerHTML
+   and the static PHP list tables. It sits between the counter/filter
+   top row and the data rows and carries its own darker tone; the top
+   and bottom rows carry no class and keep the standard cell color. */
+tr.luminum-head td {
+	background-color: #1c1d2d;
+	}
+
 /* Data rows render their text slightly smaller than the header, summary
    and filter rows. A data row is exactly a row carrying a row checkbox
    (input[id^="ID"] - the console's data-row convention, also used by

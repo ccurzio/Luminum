@@ -17,7 +17,7 @@ $actioncount = 0;
 		<table id="ahtable" style="margin-top: 10px; table-layout: fixed;">
 		<colgroup><col style="width: 32px;"><col style="width: 75px;"><col><col style="width: 75px;"><col style="width: 100px;"><col style="width: 150px;"><col style="width: 150px;"><col style="width: 150px;"><col style="width: 120px;"></colgroup>
 		<tr><td colspan="9"><div style="position: absolute; padding-top: 5px; padding-left: 5px;"><img id="refresh" src="icons/refresh.png" style="cursor: pointer; width: 15px; height: 15px; vertical-align: top;" onclick="reloadTable()">&nbsp;&nbsp;<span id="viscount"><?php print $actioncount; ?></span> of <span id="totcount"><?php print $actioncount; ?></span> Items <span id="selcount"></span></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="actionhistoryfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($actioncount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
-		<tr><td>
+		<tr class="luminum-head"><td>
 		<?php
 		if ($actioncount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
 		else { print "<input type=\"checkbox\">"; }

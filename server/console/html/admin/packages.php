@@ -39,7 +39,7 @@ $pkgcount = mysqli_num_rows($pkgquery);
 				}
 			?>
 		</select> Filter: <input type="text" id="packagesfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($pkgcount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
-		<tr><td>
+		<tr class="luminum-head"><td>
 		<?php
 			if ($pkgcount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
 			else { print "<input type=\"checkbox\">"; }

@@ -184,7 +184,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 				}
 			?>
 		</select> Filter: <input type="text" id="sensorsfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($sensorcount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
-		<tr><td>
+		<tr class="luminum-head"><td>
 		<?php
 			if ($sensorcount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
 			else { print "<input id=\"selectall\" type=\"checkbox\" onclick=\"allToggle();\">"; }
