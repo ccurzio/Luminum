@@ -494,6 +494,20 @@ function res(uid, sensor, status, output, err) {
 		Q.queryDone(Object.assign({}, base, { answered: 3 }), 500 * 1000) === true);
 	ok("done: one answer short of the online endpoints, not done",
 		Q.queryDone(Object.assign({}, base, { answered: 2 }), 500 * 1000) === false);
+	// No-match reports (protocol 7.3): an endpoint on which the condition
+	// tree evaluates false publishes NO_MATCH instead of answering, and the
+	// worker records it per endpoint - the clock counts it toward the
+	// target.
+	ok("done: answers plus no-matches covering the target stop the clock",
+		Q.queryDone(Object.assign({}, base, { answered: 1, no_match: 2 }), 500 * 1000) === true);
+	ok("done: answers plus no-matches one short of the target, not done",
+		Q.queryDone(Object.assign({}, base, { answered: 1, no_match: 1 }), 500 * 1000) === false);
+	ok("done: every online endpoint no-matched stops the clock (no answers at all)",
+		Q.queryDone(Object.assign({}, base, { answered: 0, no_match: 3 }), 500 * 1000) === true);
+	ok("done: no-matches with no online endpoints is not a vacuous completion",
+		Q.queryDone(Object.assign({}, base, { target_online: 0, answered: 0, no_match: 3 }), 500 * 1000) === false);
+	ok("done: a pre-no-match client (no no_match field) still completes on answers",
+		Q.queryDone({ status: 'SENT', deadline_ts: 1000, target_online: 1, answered: 1 }, 500 * 1000) === true);
 	ok("done: no online endpoints is not a vacuous completion",
 		Q.queryDone(Object.assign({}, base, { target_online: 0, answered: 0 }), 500 * 1000) === false);
 	ok("done: a PENDING query (no deadline published yet) is not done",
@@ -644,6 +658,8 @@ ok("module: the footer clock ticks 'Processing Query...' while running",
 ok("module: the footer clock stops as 'Query Completed in'",
 	qrSrc.indexOf("'Query Completed in'") >= 0);
 ok("module: the clock stops on the queryDone condition", qrSrc.indexOf("queryDone(q, Date.now())") >= 0);
+ok("module: the stop condition counts no-match reports toward the target",
+	qrSrc.indexOf("q.answered + (q.no_match || 0) >= q.target_online") >= 0);
 ok("module: the clock stops exactly on the published deadline",
 	qrSrc.indexOf("deadlineMs") >= 0 && qrSrc.indexOf("q.deadline_ts * 1000") >= 0);
 ok("module: an already-finished query shows the server-side duration",

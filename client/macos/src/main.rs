@@ -50,7 +50,7 @@ use base64ct::Encoding;
 use ed25519_dalek::{Signer, Verifier, SigningKey, VerifyingKey, Signature};
 use sha2::{Digest, Sha256};
 
-const VER: &str = "0.0.2";
+const VER: &str = "0.0.3";
 const IPORT: u16 = 10704;
 const DPORT: u16 = 10465;
 const LPORT: u16 = 10461;
@@ -1169,8 +1169,9 @@ async fn eval_condition(node: &serde_json::Value, defs: &HashMap<i64, (String, S
 // recoverable, so the server can still correlate it. An answer that would
 // exceed the 64 KiB MQTT cap comes back as ERR/OUTPUT_TOO_LARGE until the
 // data channel (§8.3) is in place. When the query carries a condition tree
-// that evaluates false on this endpoint, None is returned: the endpoint
-// publishes no answer at all (§7.3).
+// that evaluates false on this endpoint, a NO_MATCH answer is returned
+// (data.qid echoed, no results): the server records it so it knows this
+// endpoint processed the query (§7.3).
 async fn apply_query(env: &Envelope, uid: &str, debug: bool) -> Option<Envelope> {
 	let (qid, sensors) = match env.data.as_ref() {
 		Some(d) => {
@@ -1187,11 +1188,12 @@ async fn apply_query(env: &Envelope, uid: &str, debug: bool) -> Option<Envelope>
 	};
 	let defs = sensor_definitions(debug);
 	// Condition filtering (§7.3): before running any retrieve sensor, an
-	// endpoint on which the tree evaluates false stays silent.
+	// endpoint on which the tree evaluates false answers NO_MATCH (no
+	// results) so the server knows it processed the query.
 	if let Some(conds) = env.data.as_ref().and_then(|d| d.get("conditions")) {
 		if !eval_condition(conds, &defs, debug).await {
-			dbout(debug, 3, &format!("query {} conditions not met on this endpoint; not answering", qid));
-			return None;
+			dbout(debug, 3, &format!("query {} conditions not met on this endpoint; answering NO_MATCH", qid));
+			return Some(query_no_match(uid, &qid));
 		}
 	}
 	let mut results: Vec<serde_json::Value> = Vec::new();
@@ -1257,6 +1259,14 @@ fn query_err(uid: &str, qid: Option<&str>, err: &str) -> Envelope {
 	let mut resp = new_envelope("client", uid, "core", "answer", "ERR", qid.map(|q| serde_json::json!({ "qid": q })));
 	resp.err = Some(err.to_string());
 	resp
+}
+
+// The no-match answer (protocol §7.3): the query's condition tree evaluated
+// false on this endpoint, so it carries the qid (for correlation) and no
+// results. The server records it per endpoint; it is not an answer, so it
+// does not complete the command.
+fn query_no_match(uid: &str, qid: &str) -> Envelope {
+	new_envelope("client", uid, "core", "answer", "NO_MATCH", Some(serde_json::json!({ "qid": qid })))
 }
 
 // ---------------------------------------------------------------------------
@@ -1434,7 +1444,7 @@ async fn mqtt_run(debug: bool, ccfg: HashMap<String, String>) {
 				// per-UID resp topic (the server's worker correlates it back
 				// to the outbox: setgroups/config by action, answers by
 				// data.qid). A query whose conditions do not match on this
-				// endpoint produces no response at all (§7.3).
+				// endpoint is answered NO_MATCH (§7.3).
 				if let Some(mut resp) = handle_command(&client, &mut cmd_topics, &env, &uid, &sid, &checkin_interval, debug).await {
 					sign_envelope(&mut resp, &seed);
 					let payload = serde_json::to_vec(&resp).expect("Error: unable to serialize response");
@@ -1459,13 +1469,12 @@ async fn mqtt_run(debug: bool, ccfg: HashMap<String, String>) {
 }
 
 // Dispatch a verified command and build its response envelope (protocol 6).
-// The response is signed and published by the caller; None means the command
-// produces no response (a query whose conditions do not match, §7.3). Core
-// actions: setgroups/setcheckinint/config/query are applied; deploy awaits
-// the data channel (§8.3); client-originated actions and unknown
-// actions/lumys are rejected per §6.3. Lumy namespaces are routed over MQTT
-// as a follow-on (§6.2); until then a non-core lumy is answered
-// UNKNOWN_LUMY.
+// The response is signed and published by the caller. Core actions:
+// setgroups/setcheckinint/config/query are applied (a query whose conditions
+// do not match is answered NO_MATCH, §7.3); deploy awaits the data channel
+// (§8.3); client-originated actions and unknown actions/lumys are rejected
+// per §6.3. Lumy namespaces are routed over MQTT as a follow-on (§6.2);
+// until then a non-core lumy is answered UNKNOWN_LUMY.
 async fn handle_command(
 	client: &rumqttc::AsyncClient,
 	cmd_topics: &mut Vec<String>,
@@ -1491,7 +1500,7 @@ async fn handle_command(
 			Some(err) => Some(cmd_error(uid, &env.lumy, &env.action, &err)),
 			None => Some(cmd_ok(uid, &env.lumy, &env.action)),
 		},
-		// None: the query's conditions did not match on this endpoint (§7.3).
+		// A query whose conditions do not match is answered NO_MATCH (§7.3).
 		"query" => apply_query(env, uid, debug).await,
 		"deploy" => Some(cmd_error(uid, &env.lumy, &env.action, "NOT_IMPLEMENTED")),
 		// Client-originated actions (protocol §6.1): never valid on a cmd topic.

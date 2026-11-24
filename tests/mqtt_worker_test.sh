@@ -470,6 +470,52 @@ sleep 2
 check "broadcast query: a redelivered answer from the same endpoint is dropped" \
     $([ "$(dbq "select count(*) from QUERYRESULTS where QID='$QQRY2';")" = "2" ]; echo $?)
 
+# --- no-match report (protocol 7.3) -------------------------------------------
+# An endpoint on which the query's condition tree evaluates false publishes a
+# NO_MATCH answer (data.qid echoed, no results). The worker records it in
+# QUERYNOMATCH - one row per (QID, UID) - without storing results and without
+# ACKing the command: a no-match is not an answer, so a query no endpoint
+# matches stays SENT and times out at its deadline.
+QNM=$(python3 -c 'import uuid;print(uuid.uuid4())')
+dbq "insert into COMMANDS (SID,TARGET,LUMY,ACTION,DATA,QID,STATUS,CREATED) values ($SID,'43','core','query','{\"qid\":\"$QNM\",\"sensors\":[{\"sid\":7}]}','$QNM','PENDING',now());"
+# Wait for the worker to publish the query before the endpoint reports, so
+# the report lands on a published command inside the answer window
+# (cmd_timeout is 5s in this test).
+N1=1
+for i in $(seq 1 40); do
+    st=$(dbq "select STATUS from COMMANDS where QID='$QNM';")
+    [ "$st" = "SENT" ] && { N1=0; break; }
+    sleep 0.5
+done
+check "no-match: the query command was published (SENT)" "$N1" "final status: $(dbq "select STATUS from COMMANDS where QID='$QNM';")"
+mosquitto_pub -h 127.0.0.1 -p "$PORT" --cafile "$CERTDIR/ca.pem" \
+    -u "$SERVER_USER" -P "$SERVER_SECRET" \
+    -t "luminum/$SID/43/resp" \
+    -m "{\"lumy\":\"core\",\"action\":\"answer\",\"status\":\"NO_MATCH\",\"data\":{\"qid\":\"$QNM\"}}"
+N2=1
+for i in $(seq 1 60); do
+    n=$(dbq "select count(*) from QUERYNOMATCH where QID='$QNM';")
+    [ "$n" = "1" ] && { N2=0; break; }
+    sleep 0.5
+done
+check "no-match: recorded in QUERYNOMATCH (one row per QID+UID)" "$N2" "rows: $(dbq "select count(*) from QUERYNOMATCH where QID='$QNM';")"
+check "no-match: stored no results" \
+    $([ "$(dbq "select count(*) from QUERYRESULTS where QID='$QNM';")" = "0" ]; echo $?)
+# The no-match must not have ACKed the command: it is still SENT (or already
+# TIMEDOUT if the 5s deadline passed first) - never ACKED.
+nst=$(dbq "select STATUS from COMMANDS where QID='$QNM';")
+check "no-match: did not ACK the command (SENT or TIMEDOUT, never ACKED)" \
+    $([ "$nst" = "SENT" ] || [ "$nst" = "TIMEDOUT" ]; echo $?) "status: $nst"
+# A redelivered no-match from the same endpoint (QoS 1) is dropped by the
+# unique key.
+mosquitto_pub -h 127.0.0.1 -p "$PORT" --cafile "$CERTDIR/ca.pem" \
+    -u "$SERVER_USER" -P "$SERVER_SECRET" \
+    -t "luminum/$SID/43/resp" \
+    -m "{\"lumy\":\"core\",\"action\":\"answer\",\"status\":\"NO_MATCH\",\"data\":{\"qid\":\"$QNM\"}}"
+sleep 2
+check "no-match: a redelivered no-match from the same endpoint is dropped" \
+    $([ "$(dbq "select count(*) from QUERYNOMATCH where QID='$QNM';")" = "1" ]; echo $?)
+
 # --- query deadline: no answer by the deadline => TIMEDOUT (protocol 7.3) -----
 # The worker runs with cmd_timeout=5s. Target 99 has no client, so the query
 # gets no answer and must be marked TIMEDOUT (and not republished).

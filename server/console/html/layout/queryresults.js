@@ -41,9 +41,9 @@
 // query goes out to the endpoints as the page opens) and ticks
 // "Processing Query... X.XX Seconds" until the soonest of the command's
 // deadline (the query timeout) or every online endpoint in the target
-// having answered, then reads "Query Completed in X.XX Seconds". A page
-// opened on an already-finished query shows the server-side duration
-// instead of ticking.
+// having answered or reported no match (protocol 7.3), then reads
+// "Query Completed in X.XX Seconds". A page opened on an already-finished
+// query shows the server-side duration instead of ticking.
 //
 // The pure functions (cellValue, pivotResults, expandRow, buildConfig,
 // queryDone, doneElapsed) are DOM-free so they can be unit-tested under
@@ -241,16 +241,19 @@
 	// Whether a query has finished (the footer clock's stop condition): the
 	// command timed out (the worker marked it TIMEDOUT, or its deadline -
 	// now() + CMDTIMEOUT - has passed), or every online endpoint in the
-	// target has answered. A conditional query's non-matching endpoints
-	// never answer (protocol 7.3), so such a query always runs to its
-	// deadline. No online endpoints in the target is not a completion (the
-	// query would otherwise finish vacuously before anything could answer).
+	// target has answered or reported no match (protocol 7.3: an endpoint
+	// on which the condition tree evaluates false publishes a NO_MATCH
+	// answer, which the worker records per endpoint). The deadline remains
+	// the bound for endpoints that never respond at all - a client that
+	// predates the no-match report, or one that drops offline mid-query.
+	// No online endpoints in the target is not a completion (the query
+	// would otherwise finish vacuously before anything could answer).
 	// now is milliseconds since the epoch (Date.now()).
 	function queryDone(q, now) {
 		now = now || Date.now();
 		if (q.status === 'TIMEDOUT') { return true; }
 		if (q.deadline_ts !== null && q.deadline_ts !== undefined && now >= q.deadline_ts * 1000) { return true; }
-		if (q.target_online > 0 && q.answered >= q.target_online) { return true; }
+		if (q.target_online > 0 && q.answered + (q.no_match || 0) >= q.target_online) { return true; }
 		return false;
 	}
 
@@ -279,7 +282,11 @@
 		if (!table) { return null; }
 		var config = null;
 		var rows = [];
-		var state = { selected: {}, text: '' };
+		// sort: the active column sort ({ col: <physical column index>,
+		// dir: 1|-1 }, set by the header click wiring below); render()
+		// applies it. A split sensor's sub-columns sort the table - the
+		// physical index addresses the sub-column, not its parent.
+		var state = { selected: {}, text: '', sort: null };
 
 		// --- the footer clock --------------------------------------------
 		// Starts when the page loads and ticks "Processing Query... X.XX
@@ -381,16 +388,18 @@
 			// Incremental update: the pivot rows are append-only (a group's
 			// cells are fixed when its first answer arrives, its count only
 			// grows, and a new group appends at the end), so while the
-			// column set is unchanged and no filter is active, update the
-			// changed Count cells in place and append the new rows - the
-			// rows appear as the answers arrive, without a full repaint.
-			// A structural change (the Count column appearing, a split
-			// sensor gaining a generic sub-column) or an active filter
-			// falls back to the full re-render. The comparison is on the
-			// physical column count (a sub-column counts as one).
+			// column set is unchanged and no filter or sort is active,
+			// update the changed Count cells in place and append the new
+			// rows - the rows appear as the answers arrive, without a full
+			// repaint. A structural change (the Count column appearing, a
+			// split sensor gaining a generic sub-column), an active filter,
+			// or an active column sort (the append would land the new rows
+			// out of sorted order) falls back to the full re-render. The
+			// comparison is on the physical column count (a sub-column
+			// counts as one).
 			var structural = !config ||
 				LuminumTable.physicalColumns(config).length !== LuminumTable.physicalColumns(newConfig).length;
-			if (structural || state.text !== '') {
+			if (structural || state.text !== '' || state.sort) {
 				config = newConfig;
 				rows = newRows;
 				var ncol = LuminumTable.physicalColumns(config).length;
@@ -423,6 +432,19 @@
 
 		document.getElementById('qrfilter').addEventListener('input', function (e) {
 			state.text = e.target.value;
+			applyRows();
+		});
+
+		// Column sort: a header click sorts the table by that column
+		// (ascending first, descending on the repeat click) and shows the
+		// direction arrow in the header. A split sensor's sub-columns are
+		// the sort targets - the click addresses the sub-column's physical
+		// index. The header is rebuilt when the columns change, so the
+		// click is delegated on the table and the sort lives in the state;
+		// render() re-applies both the sort and the marker on every
+		// re-render.
+		LuminumTable.attachHeaderSort(table, function (sort) {
+			state.sort = sort;
 			applyRows();
 		});
 

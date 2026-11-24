@@ -16,9 +16,11 @@
 // the command's deadline (deadline_ts, set to now() + CMDTIMEOUT when the
 // MQTT worker publishes it), its SENT/CREATED/ACKED instants, target_online
 // (the online endpoints the target must answer - CSTATE = 'OK'), answered
-// (the unique endpoints that have), and last_answer_ts. The page's clock
-// stops at the soonest of the deadline or every online target endpoint
-// having answered.
+// (the unique endpoints that have), no_match (the unique endpoints that
+// reported NO_MATCH - the query's condition tree evaluated false on them,
+// protocol 7.3), and last_answer_ts (the newest response of either kind).
+// The page's clock stops at the soonest of the deadline or every online
+// target endpoint having answered or reported no match.
 //
 require_once __DIR__ . '/_init.php';
 require_once __DIR__ . '/queryresultmap.php';
@@ -93,6 +95,18 @@ foreach ($queries as $q) {
 		$ts = (int)$rrow['TS_EPOCH'];
 		if ($ts > $last_ts) { $last_ts = $ts; }
 	}
+	// No-match reports (protocol 7.3): the endpoints on which the query's
+	// condition tree evaluated false. They carry no results - only the
+	// (QID, UID) record and its instant, which the clock's stop condition
+	// (every online target endpoint answered or no-matched) and
+	// last_answer_ts use.
+	$nomatch_uids = [];
+	$result = api_query($db, "select UID, UNIX_TIMESTAMP(TS) as TS_EPOCH from CLIENTS.QUERYNOMATCH where QID = '$qid'", 'CLIENTS');
+	while ($nrow = mysqli_fetch_assoc($result)) {
+		$nomatch_uids[(int)$nrow['UID']] = true;
+		$ts = (int)$nrow['TS_EPOCH'];
+		if ($ts > $last_ts) { $last_ts = $ts; }
+	}
 	// The retrieve sensors (the query's order): the results page builds one
 	// table column per entry and matches each result row to its column by
 	// sid. A sensor that no longer exists falls back to an ID-based label
@@ -116,7 +130,8 @@ foreach ($queries as $q) {
 		'status' => $row['STATUS'],
 		'target_online' => $target_online($row['TARGET']),
 		'answered' => count($answer_uids),
-		'last_answer_ts' => count($answer_uids) > 0 ? $last_ts : null,
+		'no_match' => count($nomatch_uids),
+		'last_answer_ts' => (count($answer_uids) + count($nomatch_uids)) > 0 ? $last_ts : null,
 		'sensors' => $sensor_list,
 		'conditions' => is_array($dd) && isset($dd['conditions']),
 		'results' => $results,

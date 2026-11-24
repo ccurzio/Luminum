@@ -522,6 +522,29 @@ CREATE TABLE IF NOT EXISTS `QUERYRESULTS` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
+-- Table structure for table `QUERYNOMATCH`
+--
+-- Endpoints that reported no match for a conditional query (protocol 7.3):
+-- the query's condition tree evaluated false on the endpoint, so it
+-- published a NO_MATCH answer (data.qid echoed, no results) instead of
+-- sensor results. One row per (QID, UID) - the unique key is the QoS 1
+-- redelivery dedup. The console's query clock stops when every online
+-- endpoint in the target has a row here or in QUERYRESULTS (the command
+-- deadline remains the bound for endpoints that never respond at all).
+-- Filled in by the broker's MQTT worker.
+--
+
+CREATE TABLE IF NOT EXISTS `QUERYNOMATCH` (
+  `ID` int(20) NOT NULL AUTO_INCREMENT,
+  `CMDID` int(20) NOT NULL,
+  `QID` char(36) NOT NULL,
+  `UID` int(20) NOT NULL,
+  `TS` datetime NOT NULL,
+  PRIMARY KEY (`ID`),
+  UNIQUE KEY `UQ_QUERYNOMATCH` (`QID`,`UID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
 -- Current Database: `LOGS`
 --
 

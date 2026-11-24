@@ -345,7 +345,7 @@ sub _on_resp {
 	my $action = $env->{action} // "";
 	my $data = (ref($env->{data}) eq "HASH") ? $env->{data} : undef;
 	if ($action eq "answer" && defined $data) {
-		_on_answer($db, $uid, $data, $log);
+		_on_answer($db, $uid, $data, $env->{status}, $log);
 		return;
 	}
 	my $dbh = _dbh($db);
@@ -369,8 +369,16 @@ sub _on_resp {
 # are stored. An answer past the command's deadline is dropped - the answer
 # window is closed whether the command was TIMEDOUT (no answer by the
 # deadline) or ACKed by a first answer and the deadline has since passed.
+#
+# A NO_MATCH answer (7.3: the query's condition tree evaluated false on the
+# endpoint) carries no results. It is recorded in QUERYNOMATCH - one row per
+# (QID, UID), the unique key deduplicating a QoS 1 redelivery - so the
+# console's query clock knows every endpoint in the target has either
+# answered or reported no match. A no-match is not an answer: it stores no
+# results and does not ACK the command, so a query no endpoint matches stays
+# SENT and times out at its deadline exactly as before.
 sub _on_answer {
-	my ($db, $uid, $data, $log) = @_;
+	my ($db, $uid, $data, $status, $log) = @_;
 	my $qid = $data->{qid};
 	if (!defined $qid || $qid !~ /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/) {
 		$log->("answer: UID $uid answer without a valid data.qid; not correlated");
@@ -379,13 +387,33 @@ sub _on_answer {
 	my $dbh = _dbh($db);
 	my $sth = $dbh->prepare("select ID, STATUS, (DEADLINE is not null and DEADLINE < now()) from COMMANDS where QID = ?");
 	$sth->execute($qid);
-	my ($id, $status, $late) = $sth->fetchrow_array();
+	my ($id, $cstatus, $late) = $sth->fetchrow_array();
 	if (!defined $id) {
 		$log->("answer: UID $uid answer for unknown qid $qid (no matching outbox command)");
 		return;
 	}
-	if ($status eq "TIMEDOUT" || $late) {
+	if ($cstatus eq "TIMEDOUT" || $late) {
 		$log->("answer: late answer from UID $uid for command $id (answer window closed); ignored");
+		return;
+	}
+	if (defined $status && $status eq "NO_MATCH") {
+		# An endpoint that already answered this query cannot also report no
+		# match (the condition evaluation is deterministic per endpoint); a
+		# stray no-match after an answer is logged and dropped.
+		my $answered = $dbh->prepare("select 1 from QUERYRESULTS where QID = ? and UID = ? limit 1");
+		$answered->execute($qid, $uid);
+		if ($answered->fetchrow_array()) {
+			$log->("answer: UID $uid no-match for command $id after an answer; ignored");
+			return;
+		}
+		my $nm = $dbh->prepare("select 1 from QUERYNOMATCH where QID = ? and UID = ? limit 1");
+		$nm->execute($qid, $uid);
+		if ($nm->fetchrow_array()) {
+			$log->("answer: duplicate no-match from UID $uid for command $id; ignored");
+			return;
+		}
+		$dbh->do("insert into QUERYNOMATCH (CMDID,QID,UID,TS) values (?,?,?,now())", undef, $id, $qid, $uid);
+		$log->("answer: UID $uid reported no match for query $qid (command $id)");
 		return;
 	}
 	my $dup = $dbh->prepare("select 1 from QUERYRESULTS where QID = ? and UID = ? limit 1");
@@ -396,7 +424,7 @@ sub _on_answer {
 	}
 	# The first answer ACKs the command; the remaining endpoints of a
 	# broadcast query keep answering (their UIDs are not in QUERYRESULTS yet).
-	if ($status ne "ACKED") {
+	if ($cstatus ne "ACKED") {
 		$dbh->do("update COMMANDS set STATUS = 'ACKED', ACKED = now() where ID = ?", undef, $id);
 	}
 	my $results = (ref($data->{results}) eq "ARRAY") ? $data->{results} : [];
@@ -510,6 +538,17 @@ sub _ensure_schema {
 			TS datetime not null,
 			primary key (ID),
 			key IDX_QUERYRESULTS_QID (QID)
+		) engine=InnoDB default charset=utf8mb4
+	});
+	$dbh->do(qq{
+		create table if not exists QUERYNOMATCH (
+			ID int(20) not null auto_increment,
+			CMDID int(20) not null,
+			QID char(36) not null,
+			UID int(20) not null,
+			TS datetime not null,
+			primary key (ID),
+			unique key UQ_QUERYNOMATCH (QID, UID)
 		) engine=InnoDB default charset=utf8mb4
 	});
 	$dbh->do(qq{

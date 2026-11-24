@@ -1117,13 +1117,17 @@ check "result row carries the sensor output" \
     $([ "$(dbq "select if(OUTPUT like '%probe-output-42%','yes','no') from CLIENTS.QUERYRESULTS where QID='$QID_Q';")" = "yes" ]; echo $?)
 
 # A query whose condition the client cannot match must get NO answer: the
-# client evaluates the tree, finds it false, and publishes nothing.
+# client evaluates the tree, finds it false, and answers NO_MATCH (protocol
+# 7.3) - no sensor results, but the worker records the no-match in
+# QUERYNOMATCH so the console's query clock knows the endpoint processed the
+# query.
 body=$(python3 -c 'import json,sys;print(json.dumps({"target":"all","action":"query","sensors":[{"sid":int(sys.argv[1])}],"conditions":{"sid":int(sys.argv[1]),"op":"==","value":"does-not-match"}}))' "$SENSOR_Q")
 code=$(curl -k -s -o "$RUN/query-nomatch.json" -w '%{http_code}' -b "$RUN/cookies" \
     -H 'Content-Type: application/json' -H "X-CSRF-Token: $CSRF" -d "$body" \
     "https://127.0.0.1:$WPORT/api/commands.php")
 check "api: non-matching broadcast query accepted (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
 QID_N=$(python3 -c "import json;print(json.load(open('$RUN/query-nomatch.json'))['qid'])")
+CMD_N=$(python3 -c "import json;print(json.load(open('$RUN/query-nomatch.json'))['command'])")
 sent_ok=1
 for i in $(seq 1 60); do
     st=$(dbq "select STATUS from CLIENTS.COMMANDS where QID='$QID_N';")
@@ -1132,8 +1136,25 @@ for i in $(seq 1 60); do
 done
 check "non-matching query reached the client (SENT)" "$sent_ok" "final status: $(dbq "select STATUS from CLIENTS.COMMANDS where QID='$QID_N';")"
 sleep 5
-check "non-matching query got no answer (client stayed silent)" \
+check "non-matching query got no answer (no sensor results)" \
     $([ "$(dbq "select count(*) from CLIENTS.QUERYRESULTS where QID='$QID_N';")" = "0" ]; echo $?)
+# The client answered NO_MATCH instead of staying silent: the worker
+# recorded it (one row per QID+UID), and the results API carries the count
+# (the clock's stop condition: every online target endpoint answered or
+# no-matched).
+nm_ok=1
+for i in $(seq 1 60); do
+    [ "$(dbq "select count(*) from CLIENTS.QUERYNOMATCH where QID='$QID_N';")" = "1" ] && { nm_ok=0; break; }
+    sleep 0.5
+done
+check "non-matching query: the client's NO_MATCH was recorded in QUERYNOMATCH" "$nm_ok" \
+    "rows: $(dbq "select count(*) from CLIENTS.QUERYNOMATCH where QID='$QID_N';")"
+code=$(curl -k -s -o "$RUN/queryresults-nomatch.json" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/api/queryresults.php?id=$CMD_N")
+check "api: queryresults?id for the non-matching query renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+check "api: the non-matching query carries no_match:1 and answered:0" \
+    $(grep -q '"no_match":1' "$RUN/queryresults-nomatch.json" 2>/dev/null \
+        && grep -q '"answered":0' "$RUN/queryresults-nomatch.json" 2>/dev/null; echo $?)
 
 # Invalid sensors are rejected server-side: a query naming a nonexistent
 # sensor ID is never processed (no outbox rows) and the error names every
@@ -1301,12 +1322,16 @@ check "api: queryresults?id carries only the named query and its output" \
         && grep -q "probe-output-42" "$RUN/queryresults-id.json" 2>/dev/null; echo $?)
 # The footer clock's inputs: the command's deadline (set when the worker
 # published it), the online endpoints in the target, and the unique
-# endpoints that answered.
-check "api: queryresults carries the clock fields (deadline/online/answered)" \
+# endpoints that answered or reported no match.
+check "api: queryresults carries the clock fields (deadline/online/answered/no_match)" \
     $(grep -q '"deadline_ts"' "$RUN/queryresults-id.json" 2>/dev/null \
         && grep -q '"target_online"' "$RUN/queryresults-id.json" 2>/dev/null \
         && grep -q '"answered"' "$RUN/queryresults-id.json" 2>/dev/null \
+        && grep -q '"no_match"' "$RUN/queryresults-id.json" 2>/dev/null \
         && grep -q '"last_answer_ts"' "$RUN/queryresults-id.json" 2>/dev/null; echo $?)
+# The matching client answered (not no-matched): the count is 0.
+check "api: the matching query carries no_match:0" \
+    $(grep -q '"no_match":0' "$RUN/queryresults-id.json" 2>/dev/null; echo $?)
 # The CSPLIT sensor's retrieve entry carries the split metadata the results
 # page expands the output with (the unsplit sensor's entry does not).
 code=$(curl -k -s -o "$RUN/queryresults-split.json" -w '%{http_code}' -b "$RUN/cookies" \
