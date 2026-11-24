@@ -97,6 +97,7 @@ function pkgAllCheck() {
 		<h1>Create New Package</h1>
 
 		<form id="npform" action="/admin/packages.php" method="POST">
+		<?php luminum_csrf_field(); ?>
 		<div class="pagecol">
 		<div class="pageactions">
 			<a href="/index.php?view=packages"><button type="button" class="formgo" style="margin-right: 0px;">Cancel</button></a>

@@ -95,13 +95,20 @@ var LuminumSession = {
 	},
 
 	// Refresh the server deadline via /api/touch.php. Throttled, unless
-	// force is set (explicit Extend / warning dismissal).
+	// force is set (explicit Extend / warning dismissal). The session's
+	// CSRF token (the page's <meta name="csrf-token"> tag) rides the
+	// X-CSRF-Token header; the endpoint rejects a request that does not
+	// carry it.
 	touch: function (force) {
 		var nowMs = Date.now();
 		if (!force && nowMs - this.lastTouch < this.TOUCH_THROTTLE_MS) { return; }
 		this.lastTouch = nowMs;
 		var self = this;
-		fetch('/api/touch.php', { credentials: 'same-origin' })
+		var meta = document.querySelector('meta[name="csrf-token"]');
+		fetch('/api/touch.php', {
+			credentials: 'same-origin',
+			headers: { 'X-CSRF-Token': meta ? meta.content : '' }
+		})
 			.then(function (r) { return r.ok ? r.json() : null; })
 			.then(function (data) {
 				if (data && data.expires) {

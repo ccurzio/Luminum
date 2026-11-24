@@ -372,10 +372,32 @@ check "web console is listening on $WPORT" "$web_up" "see $RUN/start-web.log"
 code=$(curl -k -s -o "$RUN/api-anon.json" -w '%{http_code}' "https://127.0.0.1:$WPORT/api/clients.php")
 check "api: unauthenticated request rejected (401)" $([ "$code" = "401" ]; echo $?) "got: $code"
 
-# Log in as the console admin (lumadmin / the --adminpass value) over the real
-# login flow; the PHP session cookie is what the API auth gate validates.
-code=$(curl -k -s -o "$RUN/login.html" -w '%{http_code}' -c "$RUN/cookies" \
+# --- CSRF: the login form carries the session's token in a hidden field,
+# --- and the login POST must echo it back.
+code=$(curl -k -s -o "$RUN/login-form.html" -w '%{http_code}' -c "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/index.php")
+check "console: login page renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+CSRF=$(grep -o 'name="csrf" value="[0-9a-f]\{64\}"' "$RUN/login-form.html" 2>/dev/null | grep -o '[0-9a-f]\{64\}' | head -n1)
+check "console: login form carries the CSRF token field" $([ -n "$CSRF" ]; echo $?) "csrf=[$CSRF]"
+
+# A login POST without the token is a forged cross-site submission: it is
+# rejected before the credentials are checked (no session row) and the
+# login page re-renders with the rejection message shown.
+code=$(curl -k -s -o "$RUN/login-notoken.html" -w '%{http_code}' -c "$RUN/cookies-notoken" \
     --data "username=lumadmin&password=$ADMINPASS" "https://127.0.0.1:$WPORT/index.php")
+check "login: POST without the CSRF token created no session" \
+    $([ "$(dbq "select count(*) from AUTH.SESSION;")" = "0" ]; echo $?)
+check "login: the rejection re-renders the login page with the message shown" \
+    $(grep -q 'id="loginform"' "$RUN/login-notoken.html" 2>/dev/null \
+        && grep -q 'opacity: 1;">The sign-in request was invalid.' "$RUN/login-notoken.html" 2>/dev/null; echo $?)
+
+# Log in as the console admin (lumadmin / the --adminpass value) over the real
+# login flow; the PHP session cookie is what the API auth gate validates, and
+# the CSRF token field is what the CSRF gate validates. The jar is read AND
+# written (-b -c): the form's GET created the session that owns the token, so
+# the POST must resume that same session.
+code=$(curl -k -s -o "$RUN/login.html" -w '%{http_code}' -b "$RUN/cookies" -c "$RUN/cookies" \
+    --data "username=lumadmin&password=$ADMINPASS&csrf=$CSRF" "https://127.0.0.1:$WPORT/index.php")
 check "login: POST to index.php succeeds (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
 check "login: PHP session cookie issued" \
     $(grep -q "PHPSESSID" "$RUN/cookies" 2>/dev/null; echo $?)
@@ -409,6 +431,11 @@ code=$(curl -k -s -o "$RUN/cstatus.html" -w '%{http_code}' -b "$RUN/cookies" \
 check "console: Client Status page renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
 check "console: Client Status table markup present" \
     $(grep -q 'id="cstable"' "$RUN/cstatus.html" 2>/dev/null; echo $?)
+# The page head carries the CSRF meta tag (the console JS reads it for the
+# X-CSRF-Token header on /api/touch.php and /api/commands.php); the token is
+# stable per session, so it is the same value the login form posted.
+check "console: the page head carries the CSRF meta tag with the session token" \
+    $(grep -q "name=\"csrf-token\" content=\"$CSRF\"" "$RUN/cstatus.html" 2>/dev/null; echo $?)
 # The submenu parent links lay out label + arrow with flex: the arrow is
 # pinned to the right edge by margin-left: auto in default.css, so no
 # per-label inline margin hacks may remain on the arrow spans.
@@ -481,6 +508,8 @@ AUTHOR_ID=$(dbq "select ID from AUTH.USERS where USERNAME='lumadmin';")
 code=$(curl -k -s -o "$RUN/sensor-new.html" -w '%{http_code}' -b "$RUN/cookies" \
     "https://127.0.0.1:$WPORT/index.php?view=sensors&action=new")
 check "console: sensor create form renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+check "console: the sensor form carries the CSRF token field" \
+    $(grep -q "name=\"csrf\" value=\"$CSRF\"" "$RUN/sensor-new.html" 2>/dev/null; echo $?)
 # The "Split Results into Columns" checkbox reveals the output column name
 # fields on the line below: two "Column Name" textfields (splitting needs
 # at least two columns), each with the query builder's add button (and a
@@ -497,7 +526,28 @@ check "console: toggleSplit shows the column field row and restores two fields" 
     $(grep -q 'document.getElementById("colrow").style.display = checkbox.checked ? "" : "none"' "$RUN/sensor-new.html" 2>/dev/null \
         && grep -q 'while (container.children.length < 2)' "$RUN/sensor-new.html" 2>/dev/null; echo $?)
 
+# A POST without the CSRF token is a forged cross-site submission: it is
+# rejected (err=csrf back to the form) and inserts nothing.
+code=$(curl -k -s -D "$RUN/sensor-notoken.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "pkgname=Deploy CSRF Sensor" \
+    --data-urlencode "pkgdesc=Tokenless sensor created by the deploy test" \
+    --data-urlencode "timeout=30" \
+    --data-urlencode "tint=sec" \
+    --data-urlencode "rtype=text" \
+    --data-urlencode "contentset=$CSET_ID" \
+    --data-urlencode "category=none" \
+    --data-urlencode "leselect=on" \
+    --data-urlencode "lstype=shell" \
+    --data-urlencode "lscript=echo csrf-probe" \
+    "https://127.0.0.1:$WPORT/admin/sensors.php")
+check "console: tokenless sensor POST redirects (302)" $([ "$code" = "302" ]; echo $?) "got: $code"
+check "console: the tokenless POST points back to the form with err=csrf" \
+    $(grep -qi "Location:.*action=new&err=csrf" "$RUN/sensor-notoken.hdr" 2>/dev/null; echo $?)
+check "the tokenless POST inserted nothing" \
+    $([ "$(dbq "select count(*) from CONTENT.SENSORS where NAME='Deploy CSRF Sensor';")" = "0" ]; echo $?)
+
 code=$(curl -k -s -D "$RUN/sensor-post.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "csrf=$CSRF" \
     --data-urlencode "pkgname=Deploy Test Sensor" \
     --data-urlencode "pkgdesc=End-to-end sensor created by the deploy test" \
     --data-urlencode "timeout=30" \
@@ -522,6 +572,7 @@ check "sensor row stored with the posted fields" \
 # A CSPLIT sensor: the column names post as repeated outcol fields and are
 # stored joined by the delimiter in OUTCOLS.
 code=$(curl -k -s -D "$RUN/sensor-split-post.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "csrf=$CSRF" \
     --data-urlencode "pkgname=Deploy Split Sensor" \
     --data-urlencode "pkgdesc=Split-output sensor created by the deploy test" \
     --data-urlencode "timeout=30" \
@@ -543,6 +594,7 @@ check "split sensor stored with CSPLIT, DELIMITER, and the joined OUTCOLS" \
     $([ "$srow" = "1|||Name|Version|yes" ]; echo $?) "got: $srow"
 # Splitting with fewer than two column names is rejected (no row stored).
 code=$(curl -k -s -D "$RUN/sensor-split-bad.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "csrf=$CSRF" \
     --data-urlencode "pkgname=Deploy Split Bad Sensor" \
     --data-urlencode "pkgdesc=Split sensor with one column name" \
     --data-urlencode "timeout=30" \
@@ -655,6 +707,7 @@ check "console: action history displayed count tracks the text filter" \
 
 # A duplicate name is rejected (case-insensitive collation) and adds no row.
 code=$(curl -k -s -D "$RUN/sensor-dup.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "csrf=$CSRF" \
     --data-urlencode "pkgname=deploy test sensor" \
     --data-urlencode "pkgdesc=Duplicate attempt" \
     --data-urlencode "timeout=30" \
@@ -681,6 +734,7 @@ check "console: save failure shown via the overlay popup" \
 
 # A POST with no platform enabled fails validation (err=os) and inserts nothing.
 code=$(curl -k -s -D "$RUN/sensor-bad.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "csrf=$CSRF" \
     --data-urlencode "pkgname=Bad Sensor" \
     --data-urlencode "pkgdesc=No script provided" \
     --data-urlencode "timeout=30" \
@@ -748,6 +802,7 @@ check "console: unknown id shows Sensor Not Found and no form" \
 # A dedicated sensor for the save-path checks (the query section below relies
 # on Deploy Test Sensor's script, so that one is only used for render checks).
 code=$(curl -k -s -D "$RUN/sensor-editc-post.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "csrf=$CSRF" \
     --data-urlencode "pkgname=Deploy Edit Sensor" \
     --data-urlencode "pkgdesc=Sensor created for the edit-form checks" \
     --data-urlencode "timeout=2" \
@@ -778,6 +833,7 @@ check "console: edit form editor payload carries the stored script" \
 # A valid edit updates the row, stamps MODIFIED/EDITOR, and snapshots the
 # pre-edit state into SENSORHISTORY (revision 1).
 code=$(curl -k -s -D "$RUN/sensor-edit-post.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "csrf=$CSRF" \
     --data-urlencode "sensorid=$SENSOR_X" \
     --data-urlencode "pkgname=Deploy Edit Sensor" \
     --data-urlencode "pkgdesc=Edited by the deploy test" \
@@ -812,6 +868,7 @@ check "SENSORHISTORY carries the SENSOR_REV unique key" \
 
 # A second edit snapshots the intermediate state as revision 2.
 code=$(curl -k -s -D "$RUN/sensor-edit2-post.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "csrf=$CSRF" \
     --data-urlencode "sensorid=$SENSOR_X" \
     --data-urlencode "pkgname=Deploy Edit Sensor" \
     --data-urlencode "pkgdesc=Edited twice by the deploy test" \
@@ -868,6 +925,7 @@ check "console: Modified By column does not show the raw editor ID" \
 # Renaming to another sensor's name is rejected; the failure redirect keeps
 # the edit form's id so the overlay popup shows on it.
 code=$(curl -k -s -D "$RUN/sensor-edit-dup.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "csrf=$CSRF" \
     --data-urlencode "sensorid=$SENSOR_X" \
     --data-urlencode "pkgname=Deploy Test Sensor" \
     --data-urlencode "pkgdesc=Steal the other name" \
@@ -889,6 +947,7 @@ check "rename did not change the sensor name" \
 # An edit that disables every platform fails validation (err=os) and changes
 # nothing.
 code=$(curl -k -s -D "$RUN/sensor-edit-os.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "csrf=$CSRF" \
     --data-urlencode "sensorid=$SENSOR_X" \
     --data-urlencode "pkgname=Deploy Edit Sensor" \
     --data-urlencode "pkgdesc=No platforms left" \
@@ -905,6 +964,7 @@ check "platform-less edit changed nothing" \
 
 # An edit POST for a nonexistent sensor bounces to the list and inserts nothing.
 code=$(curl -k -s -D "$RUN/sensor-edit-ghost.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "csrf=$CSRF" \
     --data-urlencode "sensorid=999999" \
     --data-urlencode "pkgname=Ghost Edit Sensor" \
     --data-urlencode "pkgdesc=Editing a sensor that does not exist" \
@@ -999,9 +1059,22 @@ check "console: the standalone savedqueries view no longer renders" \
     $([ "$code" = "200" ] && ! grep -q '<h1>Saved Queries</h1>' "$RUN/savedqueries.html" 2>/dev/null; echo $?)
 
 SENSOR_Q=$(dbq "select ID from CONTENT.SENSORS where NAME='Deploy Test Sensor';")
+# A query POST without the X-CSRF-Token header is a forged cross-site
+# submission: it is rejected (403) and enqueues nothing.
+N_BEFORE=$(dbq "select count(*) from CLIENTS.COMMANDS;")
+body=$(python3 -c 'import json,sys;print(json.dumps({"target":"all","action":"query","sensors":[{"sid":int(sys.argv[1])}]}))' "$SENSOR_Q")
+code=$(curl -k -s -o "$RUN/query-notoken.json" -w '%{http_code}' -b "$RUN/cookies" \
+    -H 'Content-Type: application/json' -d "$body" \
+    "https://127.0.0.1:$WPORT/api/commands.php")
+check "api: query POST without the CSRF header rejected (403)" $([ "$code" = "403" ]; echo $?) "got: $code"
+check "api: the 403 names the missing token" \
+    $(grep -q "CSRF" "$RUN/query-notoken.json" 2>/dev/null; echo $?)
+check "the tokenless query enqueued nothing" \
+    $([ "$(dbq "select count(*) from CLIENTS.COMMANDS;")" = "$N_BEFORE" ]; echo $?)
+
 body=$(python3 -c 'import json,sys;print(json.dumps({"target":"all","action":"query","sensors":[{"sid":int(sys.argv[1])}],"conditions":{"sid":int(sys.argv[1]),"op":"==","value":"probe-output-42"}}))' "$SENSOR_Q")
 code=$(curl -k -s -o "$RUN/query-post.json" -w '%{http_code}' -b "$RUN/cookies" \
-    -H 'Content-Type: application/json' -d "$body" \
+    -H 'Content-Type: application/json' -H "X-CSRF-Token: $CSRF" -d "$body" \
     "https://127.0.0.1:$WPORT/api/commands.php")
 check "api: matching broadcast query accepted (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
 QID_Q=$(python3 -c "import json;print(json.load(open('$RUN/query-post.json'))['qid'])")
@@ -1032,7 +1105,7 @@ check "result row carries the sensor output" \
 # client evaluates the tree, finds it false, and publishes nothing.
 body=$(python3 -c 'import json,sys;print(json.dumps({"target":"all","action":"query","sensors":[{"sid":int(sys.argv[1])}],"conditions":{"sid":int(sys.argv[1]),"op":"==","value":"does-not-match"}}))' "$SENSOR_Q")
 code=$(curl -k -s -o "$RUN/query-nomatch.json" -w '%{http_code}' -b "$RUN/cookies" \
-    -H 'Content-Type: application/json' -d "$body" \
+    -H 'Content-Type: application/json' -H "X-CSRF-Token: $CSRF" -d "$body" \
     "https://127.0.0.1:$WPORT/api/commands.php")
 check "api: non-matching broadcast query accepted (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
 QID_N=$(python3 -c "import json;print(json.load(open('$RUN/query-nomatch.json'))['qid'])")
@@ -1053,14 +1126,14 @@ check "non-matching query got no answer (client stayed silent)" \
 N_BEFORE=$(dbq "select count(*) from CLIENTS.COMMANDS;")
 body=$(python3 -c 'import json;print(json.dumps({"target":"all","action":"query","sensors":[{"sid":999999}]}))')
 code=$(curl -k -s -o "$RUN/query-badsid.json" -w '%{http_code}' -b "$RUN/cookies" \
-    -H 'Content-Type: application/json' -d "$body" \
+    -H 'Content-Type: application/json' -H "X-CSRF-Token: $CSRF" -d "$body" \
     "https://127.0.0.1:$WPORT/api/commands.php")
 check "api: query with a nonexistent sensor rejected (404)" $([ "$code" = "404" ]; echo $?) "got: $code"
 check "api: the error names the missing sensor" \
     $(grep -q "No such sensor: 999999" "$RUN/query-badsid.json" 2>/dev/null; echo $?)
 body=$(python3 -c 'import json;print(json.dumps({"target":"all","action":"query","sensors":[{"sid":999999},{"sid":888888}],"conditions":{"sid":777777,"op":"==","value":"x"}}))')
 code=$(curl -k -s -o "$RUN/query-badsids.json" -w '%{http_code}' -b "$RUN/cookies" \
-    -H 'Content-Type: application/json' -d "$body" \
+    -H 'Content-Type: application/json' -H "X-CSRF-Token: $CSRF" -d "$body" \
     "https://127.0.0.1:$WPORT/api/commands.php")
 check "api: every missing sensor ID is reported at once" \
     $([ "$code" = "404" ] && grep -q "No such sensor: 999999, 888888, 777777" "$RUN/query-badsids.json" 2>/dev/null; echo $?) "got: $code"
@@ -1069,7 +1142,7 @@ check "rejected queries enqueued nothing" \
 # A valid retrieve sensor with a nonexistent condition sensor is rejected too.
 body=$(python3 -c 'import json,sys;print(json.dumps({"target":"all","action":"query","sensors":[{"sid":int(sys.argv[1])}],"conditions":{"sid":777777,"op":"==","value":"x"}}))' "$SENSOR_Q")
 code=$(curl -k -s -o "$RUN/query-badcond.json" -w '%{http_code}' -b "$RUN/cookies" \
-    -H 'Content-Type: application/json' -d "$body" \
+    -H 'Content-Type: application/json' -H "X-CSRF-Token: $CSRF" -d "$body" \
     "https://127.0.0.1:$WPORT/api/commands.php")
 check "api: a query with a nonexistent condition sensor rejected (404)" \
     $([ "$code" = "404" ] && grep -q "No such sensor: 777777" "$RUN/query-badcond.json" 2>/dev/null; echo $?) "got: $code"
@@ -1109,6 +1182,7 @@ check "console: the Run Query tab wiring is served" \
 # client's config, must come back UNKNOWN_SENSOR when retrieved, and must
 # evaluate false when used as a condition.
 code=$(curl -k -s -D "$RUN/sensor-mac-post.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "csrf=$CSRF" \
     --data-urlencode "pkgname=Deploy Test Mac Sensor" \
     --data-urlencode "pkgdesc=Mac-only sensor created by the deploy test" \
     --data-urlencode "timeout=30" \
@@ -1130,7 +1204,7 @@ check "Mac-only sensor stored with a NULL Linux pair" \
 # and UNKNOWN_SENSOR for the other.
 body=$(python3 -c 'import json,sys;print(json.dumps({"target":"all","action":"query","sensors":[{"sid":int(sys.argv[1])},{"sid":int(sys.argv[2])}],"conditions":{"sid":int(sys.argv[1]),"op":"==","value":"probe-output-42"}}))' "$SENSOR_Q" "$SENSOR_M")
 code=$(curl -k -s -o "$RUN/query-mixed.json" -w '%{http_code}' -b "$RUN/cookies" \
-    -H 'Content-Type: application/json' -d "$body" \
+    -H 'Content-Type: application/json' -H "X-CSRF-Token: $CSRF" -d "$body" \
     "https://127.0.0.1:$WPORT/api/commands.php")
 check "api: mixed-platform broadcast query accepted (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
 QID_M=$(python3 -c "import json;print(json.load(open('$RUN/query-mixed.json'))['qid'])")
@@ -1153,7 +1227,7 @@ check "Mac-only sensor row is ERR UNKNOWN_SENSOR (skipped by the Linux client)" 
 SENSOR_S=$(dbq "select ID from CONTENT.SENSORS where NAME='Deploy Split Sensor';")
 body=$(python3 -c 'import json,sys;print(json.dumps({"target":"all","action":"query","sensors":[{"sid":int(sys.argv[1])}],"conditions":{"sid":int(sys.argv[2]),"op":"==","value":"probe-output-42"}}))' "$SENSOR_S" "$SENSOR_Q")
 code=$(curl -k -s -o "$RUN/query-split.json" -w '%{http_code}' -b "$RUN/cookies" \
-    -H 'Content-Type: application/json' -d "$body" \
+    -H 'Content-Type: application/json' -H "X-CSRF-Token: $CSRF" -d "$body" \
     "https://127.0.0.1:$WPORT/api/commands.php")
 check "api: split-sensor broadcast query accepted (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
 QID_S=$(python3 -c "import json;print(json.load(open('$RUN/query-split.json'))['qid'])")
@@ -1178,7 +1252,7 @@ check "the split sensor's full output is stored past the old preview cap" \
 # silent even though the value would match on a Mac.
 body=$(python3 -c 'import json,sys;print(json.dumps({"target":"all","action":"query","sensors":[{"sid":int(sys.argv[1])}],"conditions":{"sid":int(sys.argv[2]),"op":"==","value":"mac-only-output-43"}}))' "$SENSOR_Q" "$SENSOR_M")
 code=$(curl -k -s -o "$RUN/query-maccond.json" -w '%{http_code}' -b "$RUN/cookies" \
-    -H 'Content-Type: application/json' -d "$body" \
+    -H 'Content-Type: application/json' -H "X-CSRF-Token: $CSRF" -d "$body" \
     "https://127.0.0.1:$WPORT/api/commands.php")
 check "api: Mac-condition broadcast query accepted (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
 QID_C=$(python3 -c "import json;print(json.load(open('$RUN/query-maccond.json'))['qid'])")
@@ -1403,6 +1477,7 @@ CSET_ID=$(dbq "select ID from CONTENT.SETS where NAME = 'Luminum Default';")
 check "database: Luminum Default content set exists" $([ -n "$CSET_ID" ]; echo $?)
 # A full valid save: every tab's options in one POST.
 code=$(curl -k -s -D "$RUN/serveropts-post.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "csrf=$CSRF" \
     --data-urlencode "adminemail=ops@example.com" \
     --data-urlencode "minactconf=enabled" \
     --data-urlencode "actconfclients=100" \
@@ -1475,6 +1550,7 @@ check "console: complexity checkboxes re-render checked" \
 # An invalid save must redirect with the offending fields and write nothing.
 before=$(dbq "select CVAL from SYSTEM.CONFIG where CKEY = 'CHECKININT';")
 code=$(curl -k -s -D "$RUN/serveropts-bad.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "csrf=$CSRF" \
     --data-urlencode "adminemail=not-an-email" \
     --data-urlencode "minactconf=enabled" \
     --data-urlencode "actconfclients=100" \
@@ -1502,6 +1578,7 @@ check "database: invalid save wrote nothing" \
     $([ "$(dbq "select CVAL from SYSTEM.CONFIG where CKEY = 'CHECKININT';")" = "$before" ]; echo $?)
 # A nonexistent content set is rejected (the dropdowns only list real sets).
 code=$(curl -k -s -D "$RUN/serveropts-ghost.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "csrf=$CSRF" \
     --data-urlencode "adminemail=ops@example.com" \
     --data-urlencode "minactconf=enabled" \
     --data-urlencode "actconfclients=100" \
@@ -1528,6 +1605,7 @@ check "console: nonexistent content set rejected" \
 # the backend validator and must not reach AUTH.USERS.
 before=$(dbq "select EMAIL from AUTH.USERS where USERNAME = 'lumadmin';")
 code=$(curl -k -s -D "$RUN/serveropts-xss.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
+    --data-urlencode "csrf=$CSRF" \
     --data-urlencode 'adminemail=a"onfocus=alert(1)@x.com' \
     --data-urlencode "minactconf=enabled" \
     --data-urlencode "actconfclients=100" \
@@ -1564,10 +1642,21 @@ delta=$(dbq "select timestampdiff(second, now(), EXPIRES) from AUTH.SESSION;")
 check "session: EXPIRES stamped from UTIMEOUT (15M)" \
     $([ "$delta" -gt 870 ] && [ "$delta" -lt 930 ]; echo $?) "delta: ${delta}s"
 
+# A touch without the X-CSRF-Token header is a forged cross-site submission:
+# it is rejected (403) and must not be able to extend the deadline.
+before=$(dbq "select unix_timestamp(EXPIRES) from AUTH.SESSION;")
+code=$(curl -k -s -o "$RUN/touch-notoken.json" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/api/touch.php")
+after=$(dbq "select unix_timestamp(EXPIRES) from AUTH.SESSION;")
+check "api: touch without the CSRF header rejected (403)" $([ "$code" = "403" ]; echo $?) "got: $code"
+check "api: the tokenless touch did not move the deadline" \
+    $([ "$before" -eq "$after" ]; echo $?) "before=$before after=$after"
+
 # The extend endpoint refreshes the deadline and reports it to the client.
 before=$(dbq "select unix_timestamp(EXPIRES) from AUTH.SESSION;")
 sleep 2
 code=$(curl -k -s -o "$RUN/touch.json" -w '%{http_code}' -b "$RUN/cookies" \
+    -H "X-CSRF-Token: $CSRF" \
     "https://127.0.0.1:$WPORT/api/touch.php")
 after=$(dbq "select unix_timestamp(EXPIRES) from AUTH.SESSION;")
 check "api: touch.php refreshes the deadline (200)" $([ "$code" = "200" ]; echo $?) "got: $code"

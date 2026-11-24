@@ -13,6 +13,7 @@ require_once __DIR__ . '/sensormap.php';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	require_once __DIR__ . '/../layout/db.php';
 	require_once __DIR__ . '/../layout/session.php';
+	require_once __DIR__ . '/../layout/csrf.php';
 	if (!isset($_SESSION)) { session_start(); }
 	$db = luminum_db();
 	// Bounce unauthenticated/expired sessions to the login page; a POST is
@@ -33,6 +34,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	// failure redirects go back to the edit form for that sensor.
 	$editid = (isset($_POST['sensorid']) && is_string($_POST['sensorid']) && preg_match('/^[1-9][0-9]*$/', $_POST['sensorid'])) ? (int)$_POST['sensorid'] : null;
 	$back = $editid !== null ? 'edit&id=' . $editid : 'new';
+	// CSRF gate: the form posts the session's token in a hidden field; a
+	// POST without it is a forged cross-site submission.
+	if (!luminum_csrf_valid()) {
+		header('Location: /index.php?view=sensors&action=' . $back . '&err=csrf');
+		exit;
+	}
 	$v = luminum_validate_sensor_create($_POST);
 	if (!$v['ok']) {
 		header('Location: /index.php?view=sensors&action=' . $back . '&err=' . $v['err']);
@@ -295,6 +302,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 		<?php endif; ?>
 
 		<form id="nsform" action="/admin/sensors.php" method="POST">
+		<?php luminum_csrf_field(); ?>
 		<!-- The ace editors are not form fields; their contents are copied
 		     into these hidden inputs by formCheck()/the submit handler. -->
 		<input type="hidden" name="sensorid" value="<?php print $sensor !== null ? (int)$sensor['ID'] : ''; ?>">

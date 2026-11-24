@@ -8,6 +8,7 @@ error_reporting(E_ALL);
 
 require_once __DIR__ . '/layout/db.php';
 require_once __DIR__ . '/layout/session.php';
+require_once __DIR__ . '/layout/csrf.php';
 $instdir = luminum_console_conf('instdir');
 $db = luminum_db();
 
@@ -28,6 +29,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 	}
 else {
 	if (!isset($_SESSION['SID'])) {
+		// CSRF gate: the login form posts the session's token in a hidden
+		// field (login.php); a POST without it is a forged cross-site
+		// submission and is rejected before the credentials are checked.
+		if (!luminum_csrf_valid()) {
+			$_GET["err"] = "csrf";
+			include ("login.php");
+			}
 		if ($_POST['username'] == "" || $_POST['password'] == "" || !isset($_POST['username']) || !isset($_POST['password']) || !ctype_alnum($_POST['username'])) {
 			$_GET["err"] = "credfail";
 			include ("login.php");

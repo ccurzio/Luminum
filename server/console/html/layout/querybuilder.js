@@ -845,11 +845,17 @@
 	// POST a ready query payload (the /api/commands.php statement - the
 	// builder's form or a saved query's data-payload) and follow the
 	// response: on success the page opens on the query's results, on
-	// failure the error overlay.
+	// failure the error overlay. The session's CSRF token (the page's
+	// <meta name="csrf-token"> tag) rides the X-CSRF-Token header; the
+	// endpoint rejects a POST that does not carry it.
 	function submitPayload(payload) {
+		var meta = document.querySelector('meta[name="csrf-token"]');
 		fetch('/api/commands.php', {
 			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
+			headers: {
+				'Content-Type': 'application/json',
+				'X-CSRF-Token': meta ? meta.content : ''
+			},
 			body: JSON.stringify(payload)
 		})
 		.then(function (resp) {

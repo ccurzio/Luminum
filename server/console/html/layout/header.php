@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/csrf.php';
 $instdir = luminum_console_conf('instdir');
 $hostname = luminum_console_conf('hostname');
 if ($hostname === '') { $hostname = explode(':', $_SERVER['HTTP_HOST'] ?? '')[0]; }
@@ -39,6 +40,12 @@ $ienabled = $invinfo["CVAL"];
 	<meta charset="UTF-8">
 	<title>Luminum (<?php print $hostname; ?>)</title>
 	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<!-- The session's CSRF token: the console JS (layout/session.js,
+	     layout/querybuilder.js) sends it as the X-CSRF-Token header on
+	     every state-changing API call (/api/touch.php, /api/commands.php).
+	     HTML forms carry the same token in a hidden input
+	     (luminum_csrf_field in layout/csrf.php). -->
+	<meta name="csrf-token" content="<?php print luminum_csrf_token(); ?>">
 	<link rel="stylesheet" href="layout/default.css">
 	<style type="text/css" media="screen">
 		#leditor {

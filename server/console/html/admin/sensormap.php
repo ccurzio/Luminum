@@ -187,6 +187,7 @@ function luminum_sensor_error_message($code) {
 		'os' => 'Enable at least one platform, and provide a valid type and a non-empty script for every enabled platform.',
 		'dupname' => 'A sensor with that name already exists.',
 		'save' => 'Saving the sensor failed.',
+		'csrf' => 'The form submission was rejected (missing security token). Please try again.',
 	];
 	return $msgs[$code] ?? 'The sensor could not be saved.';
 }

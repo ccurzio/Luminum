@@ -152,6 +152,7 @@ function removeLetters(str) {
 	<h1>Create New Content Set</h1>
 
 	<form id="ncsform" action="/admin/csets.php" method="POST">
+	<?php luminum_csrf_field(); ?>
 	<div class="pagecol">
 	<div class="pageactions">
 		<a href="/index.php?view=csets"><button type="button" class="formgo" style="margin-right: 0px;">Cancel</button></a>

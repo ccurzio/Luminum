@@ -36,6 +36,13 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 	json_error('Method not allowed', 405);
 }
 
+// CSRF gate: the console's query builder sends the session's token in the
+// X-CSRF-Token header (read from the page's <meta name="csrf-token"> tag);
+// a POST without it is a forged cross-site submission.
+if (!luminum_csrf_valid()) {
+	json_error('Invalid or missing CSRF token', 403);
+}
+
 $body = json_decode(file_get_contents('php://input'), true);
 if (!is_array($body)) {
 	json_error('Invalid JSON body', 400);

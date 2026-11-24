@@ -33,6 +33,7 @@
 	<h1>Account Profile</h1>
 
 		<form id="userform" action="user.php" method="POST">
+		<?php luminum_csrf_field(); ?>
 		<div class="pagecol" style="width: 75%; margin: 0 auto;">
 		<div class="pageactions">
 			<input type="reset" id="reset" value="Reset Values" class="formgo" style="margin-right: 0;" onclick="return resetForm();">

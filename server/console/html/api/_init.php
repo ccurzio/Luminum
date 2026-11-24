@@ -5,6 +5,7 @@
 // requires this file first.
 //
 require_once __DIR__ . '/../layout/db.php';
+require_once __DIR__ . '/../layout/csrf.php';
 
 session_start();
 date_default_timezone_set("America/New_York");

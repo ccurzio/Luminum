@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/layout/db.php';
+require_once __DIR__ . '/layout/csrf.php';
 $hostname = luminum_console_conf('hostname');
 if ($hostname === '') { $hostname = explode(':', $_SERVER['HTTP_HOST'] ?? '')[0]; }
 
@@ -13,6 +14,10 @@ if (isset($_GET["err"])) {
 		}
 	elseif ($_GET["err"] == "badsession") {
 		$message = "Session Expired";
+		$showmsg = "1";
+		}
+	elseif ($_GET["err"] == "csrf") {
+		$message = "The sign-in request was invalid. Please try again.";
 		$showmsg = "1";
 		}
 	}
@@ -37,6 +42,7 @@ if (isset($_GET["err"])) {
 	<div style="width: 400px; height: 420px; float: left; background-color: #ccc; text-align: center; box-shadow: 5px 5px 10px rgba(0,0,0,0.5);">
 		<div style="margin-top: 15%; margin-left: 20px; margin-bottom: 7%;"><span id="message" style="color: red; opacity: <?php print "$showmsg"; ?>;"><?php print "$message"; ?></span></div>
 		<form action="/index.php" method="post" id="loginform">
+			<?php luminum_csrf_field(); ?>
 			<div style="width: 275px; text-align: left; padding-left: 65px;">
 			<span style="color: #444; font-weight: bold; font-size: 15px;">Username:</span><br>
 			<input type="text" name="username" id="username" autofocus style="width: 250px; font-size: 16px; margin-top: 5px;">

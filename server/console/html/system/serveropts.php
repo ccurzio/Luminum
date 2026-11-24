@@ -12,6 +12,7 @@
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	require_once __DIR__ . '/../layout/db.php';
 	require_once __DIR__ . '/../layout/session.php';
+	require_once __DIR__ . '/../layout/csrf.php';
 	require_once __DIR__ . '/serveroptsmap.php';
 	if (!isset($_SESSION)) { session_start(); }
 	$db = luminum_db();
@@ -28,6 +29,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	// $acctrole > 1), so the save path enforces the same.
 	if ($urow === null || (int)$urow['ROLE'] > 1) {
 		header('Location: /config.php?view=options');
+		exit;
+	}
+	// CSRF gate: the form posts the session's token in a hidden field; a
+	// POST without it is a forged cross-site submission.
+	if (!luminum_csrf_valid()) {
+		header('Location: /config.php?view=options&err=csrf');
 		exit;
 	}
 	$v = luminum_validate_serveropts($_POST);
@@ -139,6 +146,7 @@ else {
 	<h1>Server Configuration Options</h1>
 
 	<form id="scform" action="/system/serveropts.php" method="POST">
+	<?php luminum_csrf_field(); ?>
 	<div class="pagecol" style="width: 80%; margin: 0 auto;">
 	<div class="pageactions">
 		<input type="reset" id="reset" style="margin-right: 0;" value="Reset Values" class="formgo" onclick="return resetForm();">
@@ -149,6 +157,9 @@ else {
 		$errfields = preg_replace('/[^a-z0-9,]/', '', $_GET['err']);
 		if ($errfields === 'save') {
 			print "<div style=\"margin: 0 0 10px 0; padding: 8px 12px; background-color: #f4e6e6; border: 1px solid #a44; color: #622; font-size: 14px;\">The configuration could not be saved. Please try again.</div>\n";
+		}
+		elseif ($errfields === 'csrf') {
+			print "<div style=\"margin: 0 0 10px 0; padding: 8px 12px; background-color: #f4e6e6; border: 1px solid #a44; color: #622; font-size: 14px;\">The form submission was rejected (missing security token). Please try again.</div>\n";
 		}
 		elseif ($errfields !== '') {
 			print "<div style=\"margin: 0 0 10px 0; padding: 8px 12px; background-color: #f4e6e6; border: 1px solid #a44; color: #622; font-size: 14px;\">One or more values are invalid and could not be saved. Check the highlighted fields.</div>\n";

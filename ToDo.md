@@ -211,7 +211,7 @@ TBD
 | --     |Not Started    |Server OS Hardening         |Routines to automatically secure the server operating system                            |
 | --     |Not Started    |Lumy Signature Verification |Routines to validate module signatures                                                  |
 |&#9654; |*In Progress*  |Input Validation            |User input validation across the complete system                                        |
-|&#9654; |*In Progress*  |CSRF Token                  |Token to prevent cross-site request forgery vulnerabilities                             |
+|&#10003;|**Completed**  |CSRF Token                  |Token to prevent cross-site request forgery vulnerabilities                             |
 
 
 ### Communication
@@ -1141,9 +1141,19 @@ TBD
 
 |        |Status         |OS |
 |--------|---------------|---|
-| --     |Not Started    |LIN|
-| --     |Not Started    |MAC|
-| --     |Not Started    |WIN|
+|&#10003;|**Completed**  |LIN|
+|&#10003;|**Completed**  |MAC|
+|&#10003;|**Completed**  |WIN|
+</li>
+
+<li>
+
+#### BIOS Information
+
+|        |Status         |OS |
+|--------|---------------|---|
+|&#10003;|**Completed**  |LIN|
+|&#10003;|**Completed**  |WIN|
 </li>
 
 <li>

@@ -10,6 +10,13 @@
 require_once __DIR__ . '/_init.php';
 require_once __DIR__ . '/../layout/session.php';
 
+// CSRF gate: the inactivity client (layout/session.js) sends the session's
+// token in the X-CSRF-Token header; a request without it is a forged
+// cross-site submission and must not be able to extend the deadline.
+if (!luminum_csrf_valid()) {
+	json_error('Invalid or missing CSRF token', 403);
+}
+
 $expires = luminum_session_touch($db);
 if ($expires === null) {
 	json_error('Session expired', 401);

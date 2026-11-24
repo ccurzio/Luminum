@@ -124,6 +124,7 @@ class El {
 		if (sel === "input") { return this.tagName === "input"; }
 		if (sel === "select") { return this.tagName === "select"; }
 		if (sel === "img") { return this.tagName === "img"; }
+		if (sel === 'meta[name="csrf-token"]') { return this.tagName === "meta" && this.attrs["name"] === "csrf-token"; }
 		if (sel === 'select[name="fromop"]') { return this.tagName === "select" && this.attrs["name"] === "fromop"; }
 		if (sel === "select.logical-operator") { return this.tagName === "select" && this.classes.indexOf("logical-operator") >= 0; }
 		if (sel === "span.bool-op") { return this.tagName === "span" && this.classes.indexOf("bool-op") >= 0; }
@@ -166,9 +167,17 @@ const doc = {
 			if (n._matches && parts.some((p) => n._matches(p)) && out.indexOf(n) < 0) { out.push(n); }
 		}
 		return out;
-	}
+	},
+	querySelector(sel) { const r = this.querySelectorAll(sel); return r.length ? r[0] : null; }
 };
 global.document = doc;
+
+// The page's CSRF meta tag (layout/header.php emits it): submitPayload
+// reads the token from here for the X-CSRF-Token header. Some tests
+// truncate ALL_ELS, so the submit tests re-push it before clicking.
+const csrfMeta = new El("meta");
+csrfMeta.setAttribute("name", "csrf-token");
+csrfMeta.content = "test-csrf-token";
 
 const catalog = [
 	{ id: 1, name: "Hostname" },
@@ -1096,7 +1105,7 @@ const delBtn = new El("button"); delBtn.id = "sqdelete";
 doc.byId["sqdelete"] = delBtn;
 let fetchCalls = [];
 global.fetch = function (url, opts) {
-	fetchCalls.push({ url: url, body: opts ? opts.body : null });
+	fetchCalls.push({ url: url, body: opts ? opts.body : null, headers: opts ? opts.headers : null });
 	return Promise.resolve({ ok: true, json: () => Promise.resolve({ command: 42 }) });
 };
 window.location = {};
@@ -1169,11 +1178,25 @@ ok("run: the Saved tab submits the selected saved query, ignoring the builder", 
 	b.gl.querySelectorAll(".list-item")[0].querySelector("input").value = "Nope";
 	savedPanel.style.display = "block";
 	savedRow(true, JSON.stringify({ target: "all", action: "query", sensors: [{ sid: 3 }] }));
+	ALL_ELS.push(csrfMeta);
 	initQuery();
 	queryBtn.click();
 	return fetchCalls.length === 1 &&
 		fetchCalls[0].url === "/api/commands.php" &&
 		fetchCalls[0].body === JSON.stringify({ target: "all", action: "query", sensors: [{ sid: 3 }] });
+})());
+ok("run: the POST carries the session's CSRF token header", (function () {
+	overlayShown = null; fetchCalls = [];
+	const b = pristineBuilder();
+	b.gl.querySelectorAll(".list-item")[0].querySelector("input").value = "Hostname";
+	doc.byId["targets"].value = "all";
+	savedPanel.style.display = "none";
+	ALL_ELS.push(csrfMeta);
+	initQuery();
+	queryBtn.click();
+	return fetchCalls.length === 1 &&
+		fetchCalls[0].headers &&
+		fetchCalls[0].headers["X-CSRF-Token"] === csrfMeta.content;
 })());
 ok("run: the Saved tab with no selection -> overlay, nothing submitted", (function () {
 	overlayShown = null; fetchCalls = [];
@@ -1205,10 +1228,12 @@ ok("run: the Query Builder tab submits the builder's form, ignoring the selectio
 	savedPanel.style.display = "none";
 	// a checked saved query that must be ignored
 	savedRow(true, JSON.stringify({ target: "all", action: "query", sensors: [{ sid: 3 }] }));
+	ALL_ELS.push(csrfMeta);
 	initQuery();
 	queryBtn.click();
 	return fetchCalls.length === 1 &&
-		fetchCalls[0].body === JSON.stringify({ target: "all", action: "query", sensors: [{ sid: 1 }] });
+		fetchCalls[0].body === JSON.stringify({ target: "all", action: "query", sensors: [{ sid: 1 }] }) &&
+		fetchCalls[0].headers["X-CSRF-Token"] === csrfMeta.content;
 })());
 ok("run: the button follows the active tab's validity", (function () {
 	const b = pristineBuilder();
