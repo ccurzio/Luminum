@@ -21,6 +21,8 @@
 #   <root>/logs/                   client-stdout.log
 #   <root>/run/                    client.pid
 #   <root>/modules/<lumy>/         Lumy module binaries
+#   <root>/Packages/
+#   <root>/Downloads/
 #
 # Install modes, detected from the install root:
 #   fresh      the install root does not exist; install everything
@@ -159,7 +161,8 @@ else
 		fail "missing binary: $CLIENT_BIN (the distribution must include the prebuilt LuminumClient binary in dist/)"
 
 	# --- install layout -------------------------------------------------------------
-	mkdir -p "$ROOT/bin" "$ROOT/config" "$ROOT/logs" "$ROOT/run" "$ROOT/modules" || \
+	mkdir -p "$ROOT/bin" "$ROOT/config" "$ROOT/logs" "$ROOT/run" "$ROOT/modules" \
+		"$ROOT/Packages" "$ROOT/Downloads" || \
 		fail "cannot create directories under $ROOT"
 	install -m 0755 "$CLIENT_BIN" "$ROOT/LuminumClient" || fail "cannot install client binary"
 

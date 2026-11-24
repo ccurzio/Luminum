@@ -14,6 +14,8 @@
       <root>\config\    client.conf.db, server.crt, server-signing.crt
       <root>\logs\      client.log
       <root>\modules\   Lumy module binaries
+      <root>\Packages\
+      <root>\Downloads\
 
     Registry:
       HKLM\SOFTWARE\Luminum\LuminumClient\InstallRoot = <root>
@@ -81,7 +83,7 @@ if (-not (Test-Path $clientBin)) {
 }
 
 # --- install layout ----------------------------------------------------------
-foreach ($d in @("config", "logs", "modules")) {
+foreach ($d in @("config", "logs", "modules", "Packages", "Downloads")) {
 	$p = Join-Path $InstallRoot $d
 	if (-not (Test-Path $p)) { New-Item -Path $p -ItemType Directory -Force | Out-Null }
 }
