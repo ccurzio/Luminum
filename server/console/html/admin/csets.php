@@ -56,6 +56,12 @@ LuminumTable.attachTextFilter('csetsfilter', function (visible) {
 	document.getElementById('viscount').textContent = visible;
 	});
 
+// Column sort: a header click sorts the table by that column (ascending
+// first, descending on the repeat click); the arrow marker in the header
+// shows the active column and direction.
+var csetsSortTable = document.getElementById('csetsfilter');
+if (csetsSortTable) { LuminumTable.attachHeaderSort(csetsSortTable.closest('table')); }
+
 function rowHighlight(idnum) {
 	var checkBox = document.getElementById("ID" + idnum);
 	const checkboxes = document.querySelectorAll('input[class="contentset"]');

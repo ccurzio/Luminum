@@ -497,6 +497,48 @@ check "console: inactivity client initialized with the UTIMEOUT config" \
         && grep -q 'timeout: 900' "$RUN/cstatus.html" 2>/dev/null \
         && grep -q 'warn: true' "$RUN/cstatus.html" 2>/dev/null; echo $?)
 
+# --- table column sort (LuminumTable.attachHeaderSort) -----------------------
+# Every console list table is sortable by clicking a column header: the
+# header click wiring and the sort logic live in table.js, the direction
+# arrow marker and the header row's pointer cursor in default.css, and each
+# page attaches the wiring to its list table (found through the filter
+# input's table). The query results page's split-sensor sub-columns are the
+# sort targets (the physical column index addresses the sub-column).
+code=$(curl -k -s -o "$RUN/table.js" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/layout/table.js")
+check "console: table.js serves the sort wiring" \
+    $([ "$code" = "200" ] \
+        && grep -q 'attachHeaderSort' "$RUN/table.js" 2>/dev/null \
+        && grep -q 'sortRows' "$RUN/table.js" 2>/dev/null \
+        && grep -q 'luminum-sort' "$RUN/table.js" 2>/dev/null; echo $?)
+check "console: default.css styles the sort marker and header cursor" \
+    $(grep -qF '.luminum-sort' "$RUN/default.css" 2>/dev/null \
+        && grep -qF 'tr.luminum-head td' "$RUN/default.css" 2>/dev/null \
+        && grep -q 'cursor: pointer' "$RUN/default.css" 2>/dev/null; echo $?)
+check "console: Client Status header is sortable" \
+    $(grep -q 'attachHeaderSort' "$RUN/cstatus.html" 2>/dev/null; echo $?)
+# Each static list table page attaches the sort wiring next to its text
+# filter wiring.
+for sortpage in sensors packages csets actions actionhistory ugroups cgroups users; do
+    code=$(curl -k -s -o "$RUN/sort-$sortpage.html" -w '%{http_code}' -b "$RUN/cookies" \
+        "https://127.0.0.1:$WPORT/index.php?view=$sortpage")
+    check "console: $sortpage list header is sortable" \
+        $([ "$code" = "200" ] \
+            && grep -q 'attachHeaderSort' "$RUN/sort-$sortpage.html" 2>/dev/null; echo $?)
+done
+code=$(curl -k -s -o "$RUN/sort-query.html" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/modules.php?view=query")
+check "console: the query page's saved-queries header is sortable" \
+    $([ "$code" = "200" ] \
+        && grep -q 'attachHeaderSort' "$RUN/sort-query.html" 2>/dev/null; echo $?)
+# The results tab's table (one column per sensor, the split sensors'
+# sub-columns as the sort targets) is wired in layout/queryresults.js.
+code=$(curl -k -s -o "$RUN/queryresults.js" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/layout/queryresults.js")
+check "console: the query results table sorts by its columns" \
+    $([ "$code" = "200" ] \
+        && grep -q 'attachHeaderSort' "$RUN/queryresults.js" 2>/dev/null; echo $?)
+
 # --- sensor create form (admin/sensors.php POST handler) ---------------------
 # The create form posts directly to /admin/sensors.php; a valid POST inserts
 # into CONTENT.SENSORS and redirects to the list. The installer's seeded

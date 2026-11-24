@@ -38,15 +38,18 @@ ok("escapeHTML: escapes & < > ' \"",
 	LT.escapeHTML('a&b<c>d"e\'f'));
 
 // --- headerHTML -------------------------------------------------------------
+// The header row carries the luminum-head class (the console's header-row
+// marker: the darker tone in default.css, and the sort-click target row for
+// LuminumTable.attachHeaderSort).
 ok("headerHTML: plain label, no style attr",
-	LT.headerHTML({ columns: [plain[0]] }) === "<tr><td>Hostname</td></tr>",
+	LT.headerHTML({ columns: [plain[0]] }) === '<tr class="luminum-head"><td>Hostname</td></tr>',
 	LT.headerHTML({ columns: [plain[0]] }));
 ok("headerHTML: width + align in style",
-	LT.headerHTML({ columns: [plain[1]] }) === '<tr><td style="width: 125px;text-align: center;">IP</td></tr>',
+	LT.headerHTML({ columns: [plain[1]] }) === '<tr class="luminum-head"><td style="width: 125px;text-align: center;">IP</td></tr>',
 	LT.headerHTML({ columns: [plain[1]] }));
 ok("headerHTML: custom header used raw",
 	LT.headerHTML({ columns: [{ label: "OS", header: 'Operating <em>System</em>' }] }) ===
-		"<tr><td>Operating <em>System</em></td></tr>");
+		'<tr class="luminum-head"><td>Operating <em>System</em></td></tr>');
 
 // A config with a sub-labeled column (the query results page's CSPLIT
 // sensor): the header is two tiers, the rows span one <tr> per sub-row.
@@ -80,17 +83,17 @@ ok("physicalColumns: a sub column expands to one physical column per sub-label",
 // --- headerHTML: two tiers --------------------------------------------------
 const twoTier = LT.headerHTML(subCfg);
 ok("headerHTML: two tiers when a column carries sub-labels",
-	(twoTier.match(/<tr>/g) || []).length === 2, twoTier);
+	(twoTier.match(/<tr[ >]/g) || []).length === 2, twoTier);
 ok("headerHTML: the sub column's label spans its sub-columns",
 	twoTier.indexOf('<td colspan="2">Installed Applications</td>') !== -1, twoTier);
 ok("headerHTML: the sub-labels sit in the second tier",
-	/<tr><td>Name<\/td><td>Version<\/td><\/tr>/.test(twoTier), twoTier);
+	/<tr class="luminum-head"><td>Name<\/td><td>Version<\/td><\/tr>/.test(twoTier), twoTier);
 ok("headerHTML: the other columns span both tiers",
 	twoTier.indexOf('rowspan="2"') !== -1 && (twoTier.match(/rowspan="2"/g) || []).length === 3, twoTier);
 ok("headerHTML: the checkbox header keeps its raw HTML",
 	twoTier.indexOf('id="qrselectall"') !== -1, twoTier);
 ok("headerHTML: a plain config stays a single tier",
-	(LT.headerHTML(cfg).match(/<tr>/g) || []).length === 1);
+	(LT.headerHTML(cfg).match(/<tr[ >]/g) || []).length === 1);
 
 // --- colgroupHTML -----------------------------------------------------------
 ok("colgroupHTML: checkbox column pinned to the fixed width",
@@ -297,6 +300,74 @@ ok("filterRows: subset + text + cutoff combine",
 		cfg,
 		{ subset: { field: "clientver", checked: { "1.0": true } }, text: "aa", checkin: { cutoff: 2500 } }
 	).map((r) => r.id).join(",") === "1");
+
+// --- compareValues ----------------------------------------------------------
+ok("compareValues: equal values are 0", LT.compareValues("abc", "abc") === 0);
+ok("compareValues: case-insensitive text",
+	LT.compareValues("Apple", "apple") === 0 &&
+		LT.compareValues("Banana", "apple") > 0 &&
+		LT.compareValues("apple", "Banana") < 0);
+ok("compareValues: numbers compare numerically (2 < 10)",
+	LT.compareValues("2", "10") < 0 && LT.compareValues("10", "2") > 0);
+ok("compareValues: negative and decimal numbers",
+	LT.compareValues("-5", "3") < 0 && LT.compareValues("1.5", "1.45") > 0);
+ok("compareValues: a number and a non-number compare as text",
+	LT.compareValues("10", "9x") < 0 && LT.compareValues("x10", "9") > 0);
+ok("compareValues: IPv4 compares octet by octet (10.x < 192.x)",
+	LT.compareValues("10.0.0.9", "192.168.1.2") < 0 &&
+		LT.compareValues("192.168.1.2", "192.168.1.10") < 0 &&
+		LT.compareValues("172.16.0.1", "172.16.0.1") === 0);
+ok("compareValues: an IP and a non-IP compare as text",
+	LT.compareValues("10.0.0.1", "10.0.0.1x") !== 0);
+ok("compareValues: null/undefined sort as empty",
+	LT.compareValues(null, "a") < 0 && LT.compareValues(undefined, undefined) === 0);
+ok("compareValues: surrounding whitespace is ignored",
+	LT.compareValues("  abc ", "abc") === 0);
+
+// --- sortRows ---------------------------------------------------------------
+const sortRows = [
+	{ id: 1, hostname: "web-01", ip: "172.16.0.10" },
+	{ id: 2, hostname: "alpha-02", ip: "10.0.0.5" },
+	{ id: 3, hostname: "Alpha-01", ip: "192.168.1.20" },
+];
+const sortCfg = { columns: [
+	{ label: "Hostname", key: "hostname" },
+	{ label: "IP", key: "ip" },
+] };
+ok("sortRows: no sort returns the rows untouched",
+	LT.sortRows(sortRows, sortCfg, null) === sortRows);
+ok("sortRows: ascending text (case-insensitive)",
+	LT.sortRows(sortRows, sortCfg, { col: 0, dir: 1 }).map((r) => r.id).join(",") === "3,2,1");
+ok("sortRows: descending text",
+	LT.sortRows(sortRows, sortCfg, { col: 0, dir: -1 }).map((r) => r.id).join(",") === "1,2,3");
+ok("sortRows: IP column sorts octet by octet",
+	LT.sortRows(sortRows, sortCfg, { col: 1, dir: 1 }).map((r) => r.id).join(",") === "2,1,3");
+ok("sortRows: does not mutate the input",
+	sortRows.map((r) => r.id).join(",") === "1,2,3");
+ok("sortRows: ties keep their relative order",
+	LT.sortRows(
+		[{ id: 1, n: "a" }, { id: 2, n: "b" }, { id: 3, n: "a" }, { id: 4, n: "b" }],
+		{ columns: [{ label: "N", key: "n" }] },
+		{ col: 0, dir: 1 }
+	).map((r) => r.id).join(",") === "1,3,2,4");
+ok("sortRows: a column index past the config leaves the rows alone",
+	LT.sortRows(sortRows, sortCfg, { col: 9, dir: 1 }).map((r) => r.id).join(",") === "1,2,3");
+
+// A sub-column (the query results page's CSPLIT sensor): the physical index
+// addresses the sub-column, and the sort key is the first line's segment.
+const subSortRows = [
+	{ id: 1, s9: "b-line", s9_0_0: "beta", s9_0_1: "2.0", s9_1_0: "x", s9_1_1: "1.0", span: 2 },
+	{ id: 2, s9: "a-line", s9_0_0: "alpha", s9_0_1: "10.0", s9_1_0: "y", s9_1_1: "2.0", span: 2 },
+	{ id: 3, s9: "c-line", s9_0_0: "Alpha", s9_0_1: "9.0", s9_1_0: "z", s9_1_1: "1.0", span: 2 },
+];
+ok("sortRows: a sub-column sorts by the first line's segment",
+	LT.sortRows(subSortRows, subCfg, { col: 2, dir: 1 }).map((r) => r.id).join(",") === "2,3,1");
+ok("sortRows: the sub-column's second sub-label sorts its own segments",
+	LT.sortRows(subSortRows, subCfg, { col: 3, dir: 1 }).map((r) => r.id).join(",") === "1,3,2");
+ok("sortRows: a sub-column descending (ties keep their input order)",
+	LT.sortRows(subSortRows, subCfg, { col: 2, dir: -1 }).map((r) => r.id).join(",") === "1,2,3");
+ok("sortRows: a plain column of a sub config still sorts by the row value",
+	LT.sortRows(subSortRows, subCfg, { col: 1, dir: 1 }).map((r) => r.id).join(",") === "1,2,3");
 
 console.log("-".repeat(60));
 if (failures) {

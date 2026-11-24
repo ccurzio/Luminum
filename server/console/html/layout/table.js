@@ -6,9 +6,10 @@
 // the repetitive row markup is produced by a callable function from data +
 // config, and the page polls the API to keep the table live.
 //
-// The pure functions (escapeHTML, headerHTML, rowHTML, rowsHTML, filterRows)
-// are DOM-free so they can be unit-tested under Node. The DOM helpers
-// (render, poll) only run in the browser.
+// The pure functions (escapeHTML, headerHTML, rowHTML, rowsHTML, filterRows,
+// compareValues, sortRows) are DOM-free so they can be unit-tested under
+// Node. The DOM helpers (render, poll, attachTextFilter, attachHeaderSort)
+// only run in the browser.
 //
 (function (root, factory) {
 	if (typeof module === 'object' && module.exports) {
@@ -245,6 +246,57 @@
 		});
 	}
 
+	// --- sorting --------------------------------------------------------------
+
+	// Compare two cell values for sorting: IPv4 addresses compare octet by
+	// octet (string order would put 192.168.x before 10.x), values that are
+	// both plain numbers compare numerically (so 2 < 10), and everything
+	// else compares as case-insensitive text. Null/undefined sort as empty.
+	function compareValues(a, b) {
+		var sa = String(a === null || a === undefined ? '' : a).trim();
+		var sb = String(b === null || b === undefined ? '' : b).trim();
+		if (sa === sb) { return 0; }
+		var am = sa.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+		var bm = sb.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+		if (am && bm) {
+			for (var i = 1; i <= 4; i++) {
+				var d = parseInt(am[i], 10) - parseInt(bm[i], 10);
+				if (d !== 0) { return d; }
+			}
+			return 0;
+		}
+		if (/^-?\d+(\.\d+)?$/.test(sa) && /^-?\d+(\.\d+)?$/.test(sb)) {
+			return parseFloat(sa) - parseFloat(sb);
+		}
+		return sa.toLowerCase().localeCompare(sb.toLowerCase());
+	}
+
+	// The sort value of a row for one physical column: a plain column's row
+	// value, or - for a sub-column - the first line's segment (a multi-line
+	// row's later lines are its detail, not its sort key).
+	function sortValue(row, phys) {
+		var v;
+		if (phys.subIndex !== null) { v = row[phys.col.key + '_0_' + phys.subIndex]; }
+		else { v = row[phys.col.key]; }
+		return (v === null || v === undefined) ? '' : v;
+	}
+
+	// Sort a set of rows for a column config. sort: { col: <physical column
+	// index, see physicalColumns>, dir: 1 (ascending) or -1 (descending) }.
+	// Returns a new array; the input is not mutated. Ties keep their
+	// relative order (Array.prototype.sort is stable), so sorting by a
+	// column whose values all match leaves the table as it was.
+	function sortRows(rows, config, sort) {
+		if (!sort) { return rows; }
+		var phys = physicalColumns(config);
+		var p = phys[sort.col];
+		if (!p) { return rows; }
+		var dir = (sort.dir === -1) ? -1 : 1;
+		return rows.slice().sort(function (a, b) {
+			return dir * compareValues(sortValue(a, p), sortValue(b, p));
+		});
+	}
+
 	// --- DOM helpers (browser only) -----------------------------------------
 
 	// Re-render the data rows of a <table> that contains a
@@ -252,7 +304,13 @@
 	// Also pins the column widths: the table is switched to table-layout:
 	// fixed and a <colgroup> is (re)generated from the config so the checkbox
 	// column holds its fixed width instead of stretching with the table.
+	// When state carries a sort ({ col: <physical column index>, dir: 1|-1 },
+	// set by attachHeaderSort) the rows are sorted before they are filtered
+	// and rendered, and the header's sort marker is (re)placed on the sorted
+	// column - a re-render after the header was rebuilt (a column change on
+	// the query results page) restores the marker.
 	function render(tableEl, config, data, state) {
+		state = state || {};
 		tableEl.style.tableLayout = 'fixed';
 		var cg = tableEl.querySelector('colgroup');
 		if (!cg) {
@@ -261,7 +319,10 @@
 		}
 		cg.innerHTML = colgroupCols(config);
 		var tbody = tableEl.querySelector('tbody[data-luminum-body]');
-		tbody.innerHTML = rowsHTML(config, filterRows(data.rows, config, state), state);
+		var rows = data.rows;
+		if (state.sort) { rows = sortRows(rows, config, state.sort); }
+		tbody.innerHTML = rowsHTML(config, filterRows(rows, config, state), state);
+		setSortMarkers(tableEl, state.sort);
 	}
 
 	// Poll a JSON endpoint on an interval. Returns { stop, refresh }.
@@ -355,6 +416,114 @@
 		apply();
 	}
 
+	// The table's header cells in physical column order (the order
+	// physicalColumns expands the config): a single-tier header is its own
+	// cells, and a two-tier header (a column with sub-labels) yields the
+	// tier-1 cells that span both tiers plus the tier-2 sub-label cells, in
+	// the order the config's columns expand.
+	function headerCells(tableEl) {
+		var heads = tableEl.querySelectorAll('tr.luminum-head');
+		if (!heads.length) { return []; }
+		if (heads.length === 1) {
+			return Array.prototype.slice.call(heads[0].querySelectorAll('td'));
+		}
+		var t1 = Array.prototype.slice.call(heads[0].querySelectorAll('td'));
+		var t2 = Array.prototype.slice.call(heads[1].querySelectorAll('td'));
+		var cells = [];
+		var subSeen = 0;
+		t1.forEach(function (c) {
+			var cs = c.colSpan || 1;
+			if (cs > 1) {
+				for (var k = 0; k < cs; k++) { cells.push(t2[subSeen + k]); }
+				subSeen += cs;
+			} else {
+				cells.push(c);
+			}
+		});
+		return cells;
+	}
+
+	// Place the sort marker - a small arrow to the right of the header
+	// title - on the sorted column's header cell and remove it from the
+	// rest. sort: { col: <physical column index>, dir: 1 (ascending, up
+	// arrow) or -1 (descending, down arrow) }, or null for no marker.
+	function setSortMarkers(tableEl, sort) {
+		var cells = headerCells(tableEl);
+		cells.forEach(function (c) {
+			var m = c.querySelector('.luminum-sort');
+			if (m && m.parentNode) { m.parentNode.removeChild(m); }
+		});
+		if (sort && cells[sort.col]) {
+			var marker = document.createElement('span');
+			marker.className = 'luminum-sort';
+			marker.textContent = (sort.dir === -1) ? '\u25BC' : '\u25B2';
+			cells[sort.col].appendChild(marker);
+		}
+	}
+
+	// Reorder a server-rendered table's data rows (the tr.luminum-row
+	// elements) in place for a sort: the rows are moved, not rebuilt, so
+	// the text filter's hidden state and the row highlights survive, and
+	// the counter/footer rows (and the filter's "No Results" row) keep
+	// their positions.
+	function reorderRows(tableEl, sort) {
+		var rows = Array.prototype.slice.call(tableEl.querySelectorAll('tr.luminum-row'));
+		if (rows.length < 2) { return; }
+		var last = rows[rows.length - 1];
+		var parent = last.parentNode;
+		var anchor = last.nextSibling;
+		var dir = (sort.dir === -1) ? -1 : 1;
+		var col = sort.col;
+		rows.sort(function (a, b) {
+			var ca = a.cells ? a.cells[col] : null;
+			var cb = b.cells ? b.cells[col] : null;
+			if (!ca || !cb) { return 0; }
+			return dir * compareValues(ca.textContent, cb.textContent);
+		});
+		rows.forEach(function (r) {
+			if (anchor && anchor.parentNode === parent) { parent.insertBefore(r, anchor); }
+			else { parent.appendChild(r); }
+		});
+	}
+
+	// Make a table's column headers sortable: a click on a header cell sorts
+	// the table by that column - ascending on the first click, descending on
+	// the next click on the same column, and a fresh ascending sort when a
+	// different column is picked - and shows the direction arrow in that
+	// column's header. The click is delegated on the table, so headers that
+	// are re-rendered (the query results page rebuilds its header when the
+	// columns change) stay wired.
+	//
+	//   tableEl - the <table> to sort.
+	//   onSort  - optional callback, called as onSort(sort) after the sort
+	//             state changes, with sort = { col: <physical column index>,
+	//             dir: 1|-1 }. Data-driven tables (rendered by render() from
+	//             polled data) pass one: they store the sort in their state
+	//             and re-render, and render() applies it. Tables whose rows
+	//             are printed by PHP pass none: the rows are reordered in
+	//             place instead (reorderRows).
+	//
+	// Cells that carry a control (the select-all checkbox cell) are not sort
+	// columns: clicking them only operates the control.
+	function attachHeaderSort(tableEl, onSort) {
+		if (!tableEl) { return; }
+		var sort = null;
+		tableEl.addEventListener('click', function (e) {
+			var target = e.target;
+			if (!target || !target.closest) { return; }
+			var cell = target.closest('td');
+			if (!cell || !cell.closest('tr.luminum-head')) { return; }
+			if (cell.closest('table') !== tableEl) { return; }
+			if (cell.querySelector('input, select, button, a')) { return; }
+			var idx = headerCells(tableEl).indexOf(cell);
+			if (idx === -1) { return; }
+			sort = (sort && sort.col === idx) ? { col: idx, dir: -sort.dir } : { col: idx, dir: 1 };
+			setSortMarkers(tableEl, sort);
+			if (typeof onSort === 'function') { onSort(sort); }
+			else { reorderRows(tableEl, sort); }
+		});
+	}
+
 	return {
 		ROW_BASE: ROW_BASE,
 		ROW_SELECTED: ROW_SELECTED,
@@ -367,8 +536,14 @@
 		rowsHTML: rowsHTML,
 		stateBucket: stateBucket,
 		filterRows: filterRows,
+		compareValues: compareValues,
+		sortRows: sortRows,
 		render: render,
 		poll: poll,
-		attachTextFilter: attachTextFilter
+		attachTextFilter: attachTextFilter,
+		headerCells: headerCells,
+		setSortMarkers: setSortMarkers,
+		reorderRows: reorderRows,
+		attachHeaderSort: attachHeaderSort
 	};
 }));

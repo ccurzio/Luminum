@@ -34,6 +34,12 @@ LuminumTable.attachTextFilter('actionsfilter', function (visible) {
 	document.getElementById('viscount').textContent = visible;
 	});
 
+// Column sort: a header click sorts the table by that column (ascending
+// first, descending on the repeat click); the arrow marker in the header
+// shows the active column and direction.
+var actionsSortTable = document.getElementById('actionsfilter');
+if (actionsSortTable) { LuminumTable.attachHeaderSort(actionsSortTable.closest('table')); }
+
 function reloadTable() {
 	var refreshButton = document.getElementById("refresh");
 	if (refreshButton.className != "refresh") {

@@ -107,6 +107,9 @@ var cstatusConfig = {
 var cstatusState = {
 	selected: {},
 	text: '',
+	// The active column sort ({ col: <physical column index>, dir: 1|-1 },
+	// set by the header click wiring below); render() applies it.
+	sort: null,
 	platforms: { linux: false, macos: false, windows: false },
 	states: { green: false, yellow: false, red: false, offline: false },
 	// Client versions checked in the version filter (version -> true).
@@ -361,6 +364,16 @@ function checkinform() {
 // Must run before the event wiring below, which attaches to #selectall.
 
 document.getElementById('cstable-head').innerHTML = LuminumTable.headerHTML(cstatusConfig);
+
+// Column sort: a header click sorts the table by that column (ascending
+// first, descending on the repeat click) and shows the direction arrow in
+// the header. The body is re-rendered from the polled data on every apply,
+// so the sort lives in the state and render() applies it - the click
+// handler only records it.
+LuminumTable.attachHeaderSort(cstableEl, function (sort) {
+	cstatusState.sort = sort;
+	cstatusApply();
+});
 
 // --- event wiring ----------------------------------------------------------
 

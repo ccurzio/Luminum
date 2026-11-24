@@ -582,8 +582,28 @@ tr.luminum-bar td {
 	background-color: #1c1d2d;
 	}
 
-/* Data rows render their text slightly smaller than the header, summary
-   and filter rows. A data row is exactly a row carrying a row checkbox
+/* The column header row is the table's sort control: clicking a header
+   cell sorts the table by that column (LuminumTable.attachHeaderSort), so
+   the row reads as interactive. The header title text carries the data
+   row's size (tr.luminum-row); the top/bottom luminum-bar rows (counter/
+   filter and processing-clock footer) keep the standard cell text size. */
+tr.luminum-head td {
+	cursor: pointer;
+	font-size: 14px;
+	}
+
+/* The sort direction marker: a small arrow to the right of the header
+   title in the column the table is sorted by. attachHeaderSort adds it to
+   the active column's header cell and removes it from the rest; the arrow
+   inherits the header cell's text color. */
+.luminum-sort {
+	font-size: 9px;
+	margin-left: 4px;
+	}
+
+/* Data rows and the column header row render their text at this size;
+   the top/bottom luminum-bar rows (summary/filter and footer) keep the
+   standard cell text size. A data row is exactly a row carrying a row checkbox
    (input[id^="ID"] - the console's data-row convention, also used by
    LuminumTable.attachTextFilter); the header's select-all box
    (selectall/qrselectall), the summary/filter row and the footer carry no

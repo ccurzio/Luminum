@@ -604,6 +604,12 @@ LuminumTable.attachTextFilter('savedqueriesfilter', function (visible) {
 	document.getElementById('sqviscount').textContent = visible;
 	});
 
+// Column sort: a header click sorts the table by that column (ascending
+// first, descending on the repeat click); the arrow marker in the header
+// shows the active column and direction.
+var savedqueriesSortTable = document.getElementById('savedqueriesfilter');
+if (savedqueriesSortTable) { LuminumTable.attachHeaderSort(savedqueriesSortTable.closest('table')); }
+
 function sqRowHighlight() {
 	// The rows are one radio group, so the row being deselected never
 	// fires its own onchange: re-paint every row from its radio's state

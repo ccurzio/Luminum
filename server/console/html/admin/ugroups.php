@@ -44,6 +44,12 @@ $ugcount = mysqli_num_rows($ugquery);
 <script src="layout/table.js"></script>
 <script>
 LuminumTable.attachTextFilter('ugroupsfilter');
+
+// Column sort: a header click sorts the table by that column (ascending
+// first, descending on the repeat click); the arrow marker in the header
+// shows the active column and direction.
+var ugroupsSortTable = document.getElementById('ugroupsfilter');
+if (ugroupsSortTable) { LuminumTable.attachHeaderSort(ugroupsSortTable.closest('table')); }
 </script>
 
 	<?php elseif ($_GET["action"] == "new"): ?>

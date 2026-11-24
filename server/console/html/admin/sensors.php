@@ -960,6 +960,13 @@ LuminumTable.attachTextFilter('sensorsfilter', function (visible) {
 	document.getElementById('viscount').textContent = visible;
 	});
 
+// Column sort: a header click sorts the table by that column (ascending
+// first, descending on the repeat click); the arrow marker in the header
+// shows the active column and direction. The filter input only exists on
+// the list view, so the guard keeps the form views quiet.
+var sensorsSortTable = document.getElementById('sensorsfilter');
+if (sensorsSortTable) { LuminumTable.attachHeaderSort(sensorsSortTable.closest('table')); }
+
 function rowHighlight(idnum) {
 	var checkbox = document.getElementById("ID" + idnum);
 	const checkboxes = document.querySelectorAll('input[class="sensorrow"]');
