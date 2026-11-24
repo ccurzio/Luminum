@@ -52,12 +52,13 @@ else {
 	<div class="content">
 	<h1>Network Configuration</h1>
 
-	<div style="width: 70%; text-align: right; margin: -50px auto 10px auto;">
+	<div class="pagecol" style="width: 65%; margin: 0 auto;">
+	<div class="pageactions">
 		<input type="reset" id="reset" style="margin-right: 0;" value="Reset Values" class="formgo" onclick="return resetForm();">
-		<button id="save" class="formgo" style="margin-right: 35px" disabled="disabled">Save Changes</button>
+		<button id="save" class="formgo" disabled="disabled" style="margin-right: 0;">Save Changes</button>
 	</div>
 
-	<div class="module-content" style="padding: 0; width: 65%; margin-left: auto; margin-right: auto;">
+	<div class="module-content" style="padding: 0;">
 		<div class="tabbar tabbarback">
 			<button type="button" class="tabbaritem tabbutton tablink tabbarsel" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'General')">General</button>
 			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Proxies')">Proxies</button>
@@ -114,6 +115,8 @@ else {
 			<p>
 			</p>
 		</div>
+	</div>
+	</div>
 
 		<?php elseif ($_GET['view'] == "auth"): ?>
 		<div class="content">

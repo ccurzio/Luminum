@@ -53,7 +53,7 @@ $showsaved = !$showresults && isset($_GET['tab']) && $_GET['tab'] === 'saved';
 	</div>
 </div>
 <?php } else { ?>
-<div>
+<div class="pagecol">
 	<!-- <div class="module-content" style="display: flex; justify-content: space-between; align-items: flex-start;"> -->
 	<div class="module-content" style="padding: 0;">
 		<div class="tabbar tabbarback">
@@ -127,8 +127,8 @@ $showsaved = !$showresults && isset($_GET['tab']) && $_GET['tab'] === 'saved';
 	     contents - a tab switch is a click, so the document-level state
 	     listener re-enables or disables it as the operator moves between
 	     the tabs. -->
-	<div id="formbuttons" style="width: 100%; text-align: right; padding-top: 10px;">
-		<button id="sqdelete" class="formgo" style="<?php print $showsaved ? '' : 'display: none;'; ?>margin-right: 0;" disabled="disabled">Delete Selected</button> <button id="resetform" class="formgo" style="margin-right: 0;"<?php print $showsaved ? ' disabled="disabled"' : ''; ?>><?php print $showsaved ? 'Copy to Builder' : 'Reset Form'; ?></button> <button id="querygo" class="formgo" style="margin-left: 0;" disabled="disabled">Run Query</button>
+	<div id="formbuttons" class="pageactions" style="padding-top: 10px; margin-bottom: 0;">
+		<button id="sqdelete" class="formgo" style="<?php print $showsaved ? '' : 'display: none;'; ?>margin-right: 0;" disabled="disabled">Delete Selected</button> <button id="resetform" class="formgo" style="margin-right: 0;"<?php print $showsaved ? ' disabled="disabled"' : ''; ?>><?php print $showsaved ? 'Copy to Builder' : 'Reset Form'; ?></button> <button id="querygo" class="formgo" style="margin-right: 0;" disabled="disabled">Run Query</button>
 	</div>
 
 </div>

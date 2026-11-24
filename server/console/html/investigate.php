@@ -23,10 +23,10 @@ else { ?>
 <?php if (!isset($_GET['step']) || $_GET['step'] == "1"): ?>
 
 <?php endif; ?>
-		<div style="margin-top: 10px; text-align: right; width: 102%; margin-left: 0;">
+		<div class="pageactions" style="margin-top: 10px; margin-bottom: 0;">
 			<?php
-			if ($_GET['step'] == "4") { "<button class=\"formgo\" style=\"width: 90px;\">Start</button>\n"; }
-			else { print "<button class=\"formgo\" style=\"width: 90px;\">Next</button>\n"; }
+			if ($_GET['step'] == "4") { "<button class=\"formgo\" style=\"width: 90px; margin-right: 0;\">Start</button>\n"; }
+			else { print "<button class=\"formgo\" style=\"width: 90px; margin-right: 0;\">Next</button>\n"; }
 			?>
 		</div>
 	</div>

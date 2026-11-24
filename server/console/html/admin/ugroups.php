@@ -17,11 +17,12 @@ $ugcount = mysqli_num_rows($ugquery);
         <h1>User Groups</h1>
 
         <div class="module-content">
-		<div style="display: block; width: 100%; text-align: right;">
+		<div class="pageactions">
 		<a href="/index.php?view=ugroups&action=new"><button class="formgo" style="margin-top: 5px; margin-right: 0;">Create New</button></a>
 		<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Edit Selected</button>
 		<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Delete Selected</button>
 		<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Get Info</button>
+		</div>
 
 		<table style="margin-top: 10px; text-align: left; table-layout: fixed;">
 		<colgroup><col style="width: 32px;"><col><col style="width: 100px;"><col style="width: 75px;"><col style="width: 120px;"><col style="width: 150px;"><col style="width: 120px;"></colgroup>

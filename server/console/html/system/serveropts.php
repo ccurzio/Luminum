@@ -139,23 +139,24 @@ else {
 	<h1>Server Configuration Options</h1>
 
 	<form id="scform" action="/system/serveropts.php" method="POST">
-	<div style="width: 84%; text-align: right; margin: -50px auto 10px auto;">
+	<div class="pagecol" style="width: 80%; margin: 0 auto;">
+	<div class="pageactions">
 		<input type="reset" id="reset" style="margin-right: 0;" value="Reset Values" class="formgo" onclick="return resetForm();">
-		<button id="save" class="formgo" disabled="disabled">Save Changes</button>
+		<button id="save" class="formgo" disabled="disabled" style="margin-right: 0;">Save Changes</button>
 	</div>
 
 	<?php if (isset($_GET['err'])) {
 		$errfields = preg_replace('/[^a-z0-9,]/', '', $_GET['err']);
 		if ($errfields === 'save') {
-			print "<div style=\"width: 80%; margin: 0 auto 10px auto; padding: 8px 12px; background-color: #f4e6e6; border: 1px solid #a44; color: #622; font-size: 14px;\">The configuration could not be saved. Please try again.</div>\n";
+			print "<div style=\"margin: 0 0 10px 0; padding: 8px 12px; background-color: #f4e6e6; border: 1px solid #a44; color: #622; font-size: 14px;\">The configuration could not be saved. Please try again.</div>\n";
 		}
 		elseif ($errfields !== '') {
-			print "<div style=\"width: 80%; margin: 0 auto 10px auto; padding: 8px 12px; background-color: #f4e6e6; border: 1px solid #a44; color: #622; font-size: 14px;\">One or more values are invalid and could not be saved. Check the highlighted fields.</div>\n";
+			print "<div style=\"margin: 0 0 10px 0; padding: 8px 12px; background-color: #f4e6e6; border: 1px solid #a44; color: #622; font-size: 14px;\">One or more values are invalid and could not be saved. Check the highlighted fields.</div>\n";
 		}
 	}
 	?>
 
-	<div class="module-content" style="padding: 0; width: 80%; margin-left: auto; margin-right: auto;">
+	<div class="module-content" style="padding: 0;">
 		<div class="tabbar tabbarback">
 			<button type="button" class="tabbaritem tabbutton tablink tabbarsel" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'General')">General</button>
 			<button type="button" class="tabbaritem tabbutton tablink" style="border-right: 1px solid #07f;" onclick="switchTab(event, 'Accounts')">Accounts</button>
@@ -337,6 +338,7 @@ else {
 		<div id="Export" class="configtab" style="display: none;">
 			<p>Configuration Export Settings</p>
 		</div>
+	</div>
 	</div>
 	</form>
 </div>

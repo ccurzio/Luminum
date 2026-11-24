@@ -10,8 +10,10 @@
 	<h1>Client Status</h1>
 
 	<div class="module-content" style="display: flex; justify-content: space-between; align-items: flex-start; width: 70%; float: left; margin-right: 0px;">
-		<div style="display: block; width: 100%; text-align: right;">
+		<div style="display: block; width: 100%;">
+			<div class="pageactions">
 			<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled" id="deploy">Deploy Action</button> <button class="formgo" id="investigate" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Investigate</button> <button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled" id="getinfo">Get Info</button>
+			</div>
 			<table id="cstable" style="margin-top: 10px; text-align: left;">
 			<tr><td colspan="8"><div style="position: absolute; padding-top: 5px; padding-left: 5px;"><img id="refresh" src="icons/refresh.png" style="cursor: pointer; width: 15px; height: 15px; vertical-align: top;" onclick="cstatusRefresh()">&nbsp;&nbsp;<span id="viscount">0</span> of <span id="totcount">0</span> Items <span id="selcount"></span></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="cstatusfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" maxlength="64"></div></td></tr>
 			<tbody id="cstable-head"></tbody>

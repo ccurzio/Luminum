@@ -145,7 +145,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 
 	<div class="module-content">
 		<?php
-		print "<div style=\"display: block; width: 100%; text-align: right;\">\n";
+		print "<div class=\"pageactions\">\n";
 		if (isset($acctrole) && $acctrole <= 2) {
 			print "<a href=\"/index.php?view=sensors&action=new\"><button class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\">Create New</button></a>\n";
 			print "<button id=\"modify\" class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\" disabled=\"disabled\">Edit Selected</button>\n";
@@ -301,9 +301,10 @@ $sensorcount = mysqli_num_rows($sensorquery);
 		<input type="hidden" name="lscript" id="lhscript" value="">
 		<input type="hidden" name="mscript" id="mhscript" value="">
 		<input type="hidden" name="wscript" id="whscript" value="">
-		<div style="width: 100%; text-align: right; margin: -50px auto 10px auto;">
+		<div class="pagecol">
+		<div class="pageactions">
 			<a href="/index.php?view=sensors" id="cancel"><button type="button" class="formgo" style="margin-right: 0px;">Cancel</button></a>
-			<button id="save" class="formgo" disabled="disabled" style="margin-top: 5px; margin-right: 25px;">Save Sensor</button>
+			<button id="save" class="formgo" disabled="disabled" style="margin-right: 0;">Save Sensor</button>
 		</div>
 
 		<div class="module-content" style="overflow: auto; min-width: 1000px;">
@@ -444,6 +445,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 			</div>
 		</div>
 	</div>
+		</div>
 
 <script>
 // The selected sensor's stored per-OS type/script pairs (null on the create

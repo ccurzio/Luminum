@@ -19,7 +19,7 @@ $pkgcount = mysqli_num_rows($pkgquery);
 
 	<div class="module-content">
                 <?php
-                print "<div style=\"display: block; width: 100%; text-align: right;\">\n";
+                print "<div class=\"pageactions\">\n";
                 if (isset($acctrole) && $acctrole <= 2) {
                         print "<a href=\"/index.php?view=packages&action=new\"><button class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\">Create New</button></a>\n";
                         print "<button class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\" disabled=\"disabled\">Edit Selected</button>\n";
@@ -97,9 +97,10 @@ function pkgAllCheck() {
 		<h1>Create New Package</h1>
 
 		<form id="npform" action="/admin/packages.php" method="POST">
-		<div style="width: 100%; text-align: right; margin: -50px auto 10px auto;">
+		<div class="pagecol">
+		<div class="pageactions">
 			<a href="/index.php?view=packages"><button type="button" class="formgo" style="margin-right: 0px;">Cancel</button></a>
-			<button id="save" class="formgo" style="margin-top: 5px; margin-right: 25px;" disabled="disabled">Save Package</button>
+			<button id="save" class="formgo" disabled="disabled" style="margin-right: 0;">Save Package</button>
 		</div>
 
 		<div class="module-content" style="overflow: auto; min-width: 1000px;">
@@ -237,6 +238,7 @@ function pkgAllCheck() {
 			</div>
 		</div>
 	</div>
+		</div>
 
 <script>
 const dtElement = document.getElementById('timeout');

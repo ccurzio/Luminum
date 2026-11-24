@@ -3,6 +3,15 @@
 	src: url(/layout/USHI.otf);
 	}
 
+:root {
+	/* The content area's right inset: the gap between the page content's
+	   right edge and the viewport's right edge. .module-content's right
+	   margin and .pagecol's right margin both reference it, so a page's
+	   action row (which shares the pagecol's width) always lines up with
+	   the content box's right edge. */
+	--content-inset: 25px;
+	}
+
 body {
 	font-family: Arial, sans-serif;
 	margin: 0;
@@ -58,9 +67,40 @@ body h1 {
 	background-color: #d7e8fc;
 	border: 1px solid #07f;
 	border-radius: 6px;
-	margin-right: 25px;
+	margin-right: var(--content-inset);
 	padding: 5px 20px 20px 20px;
 	position: relative;
+	}
+
+/* A page's content column: owns the width shared by the page's action
+   row and its content box, so the buttons line up with the box's right
+   edge structurally instead of per-page offsets. Full-width pages use it
+   as-is (inset by the content inset); centered pages set their width and
+   auto margins inline. */
+.pagecol {
+	margin-right: var(--content-inset);
+	}
+
+/* Inside a pagecol the column owns the right inset. (Boxes that carry
+   their own inline margins, e.g. the forms' nested editor boxes, are
+   unaffected - inline styles win.) */
+.pagecol .module-content {
+	margin-right: 0;
+	}
+
+/* A page's action button row: right-aligns the buttons to the content
+   box's right edge (the pagecol's right edge, or the box's inner edge
+   when the row sits inside the box). The gap spaces the buttons - a flex
+   row drops the whitespace between inline buttons, so the spacing has to
+   be explicit. Every button in the row carries margin-right: 0, so the
+   gap is the only horizontal spacing and the last button sits flush with
+   the row's right edge. */
+.pageactions {
+	display: flex;
+	justify-content: flex-end;
+	align-items: center;
+	gap: 10px;
+	margin-bottom: 10px;
 	}
 
 .module-content h3 {

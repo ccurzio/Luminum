@@ -17,11 +17,12 @@ $cgcount = mysqli_num_rows($cgquery);
         <h1>Computer Groups</h1>
 
         <div class="module-content">
-		<div style="display: block; width: 100%; text-align: right;">
+		<div class="pageactions">
 		<a href="/index.php?view=cgroups&action=new"><button class="formgo" style="margin-top: 5px; margin-right: 0;">Create New</button></a>
 		<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Edit Selected</button>
 		<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Delete Selected</button>
 		<button class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Get Info</button>
+		</div>
 
 		<table style="margin-top: 10px; text-align: left;">
 		<tr><td colspan="7"><div style="position: absolute; padding-top: 5px; padding-left: 5px;">0 of <?php print $cgcount; ?> items</div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="cgroupsfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" maxlength="64" <?php if ($cgcount == 0) { print "disabled=\"disabled\""; } ?>></div></td></tr>

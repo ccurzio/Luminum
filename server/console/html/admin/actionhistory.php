@@ -10,7 +10,7 @@ $actioncount = 0;
 	<h1>Action History</h1>
 
 	<div class="module-content">
-		<div style="display: block; width: 100%; text-align: right;">
+		<div class="pageactions">
 			<button id="reissue" class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Reissue Selected</button>
 			<button id="getinfo" class="formgo" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Get Info</button>
 		</div>

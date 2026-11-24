@@ -17,7 +17,7 @@ $cscount = mysqli_num_rows($csquery);
 
 	<div class="module-content">
                 <?php
-                print "<div style=\"display: block; width: 100%; text-align: right;\">\n";
+                print "<div class=\"pageactions\">\n";
                 if (isset($acctrole) && $acctrole <= 2) {
                         print "<a href=\"/index.php?view=csets&action=new\"><button class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\">Create New</button></a>\n";
                         print "<button id=\"modify\" class=\"formgo\" style=\"margin-top: 5px; margin-right: 0;\" disabled=\"disabled\">Edit Selected</button>\n";
@@ -152,9 +152,10 @@ function removeLetters(str) {
 	<h1>Create New Content Set</h1>
 
 	<form id="ncsform" action="/admin/csets.php" method="POST">
-	<div style="width: 100%; text-align: right; margin: -50px auto 10px auto;">
+	<div class="pagecol">
+	<div class="pageactions">
 		<a href="/index.php?view=csets"><button type="button" class="formgo" style="margin-right: 0px;">Cancel</button></a>
-		<button id="save" class="formgo" style="margin-top: 5px; margin-right: 25px;" disabled="disabled">Save Content Set</button>
+		<button id="save" class="formgo" disabled="disabled" style="margin-right: 0;">Save Content Set</button>
 	</div>
 
 	<div class="module-content" style="overflow: auto; min-width: 1000px;">
@@ -187,6 +188,7 @@ function removeLetters(str) {
 
 			</div>
 
+	</div>
 	</div>
 
 <script>

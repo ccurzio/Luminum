@@ -33,13 +33,14 @@
 	<h1>Account Profile</h1>
 
 		<form id="userform" action="user.php" method="POST">
-		<div style="width: 80%; text-align: right; margin: -50px auto 10px auto;">
+		<div class="pagecol" style="width: 75%; margin: 0 auto;">
+		<div class="pageactions">
 			<input type="reset" id="reset" value="Reset Values" class="formgo" style="margin-right: 0;" onclick="return resetForm();">
-			<button id="save" class="formgo" disabled="disabled">Save Changes</button>
+			<button id="save" class="formgo" disabled="disabled" style="margin-right: 0;">Save Changes</button>
 		</div>
 
 
-	<div class="module-content" style="padding: 0; width: 75%; margin-left: auto; margin-right: auto; padding: 10px;">
+	<div class="module-content" style="padding: 10px;">
 		<div style="margin-top: 10px;">
 			<table style="width: 75%; border: 0; margin-left: auto; margin-right: auto; margin-top: 15px; margin-bottom: 15px;">
                         <tr><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Username:</td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"> <input id="username" type="text" value="<?php print $userinfo["USERNAME"]; ?>" maxlength="16" tabindex="1" <?php if ($userinfo["USERNAME"] == "lumadmin") { print "disabled=\"disabled\""; } ?>></td><td style="color: #444; background-color: transparent; border: 0; font-weight: bold;">Password: <span style="color: red;">*</span> <div class="tooltip"><img src="/icons/tooltip.png" style="width: 15px; height: 15px; opacity: 0.33; vertical-align: top;"><span class="tooltiptext">Your password is required to make changes to your account configuration.</span></td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><input id="password" type="password" value="" tabindex="5"></td></tr>
@@ -88,6 +89,7 @@
 			</table>
 		</div>
 	</div>
+		</div>
 
 <script>
 window.onload = function() {
