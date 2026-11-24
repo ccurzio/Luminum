@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 #
 # Luminum "Local Time" Sensor (macOS)
 # ===================================
