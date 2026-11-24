@@ -57,8 +57,8 @@ LuminumTable.attachTextFilter('csetsfilter', function (visible) {
 	});
 
 // Column sort: a header click sorts the table by that column (ascending
-// first, descending on the repeat click); the arrow marker in the header
-// shows the active column and direction.
+// first, descending on the second click, cleared on the third); the arrow
+// marker in the header shows the active column and direction.
 var csetsSortTable = document.getElementById('csetsfilter');
 if (csetsSortTable) { LuminumTable.attachHeaderSort(csetsSortTable.closest('table')); }
 

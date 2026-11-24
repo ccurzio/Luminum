@@ -465,22 +465,28 @@
 	// elements) in place for a sort: the rows are moved, not rebuilt, so
 	// the text filter's hidden state and the row highlights survive, and
 	// the counter/footer rows (and the filter's "No Results" row) keep
-	// their positions.
-	function reorderRows(tableEl, sort) {
+	// their positions. With a null sort the rows go back to defaultRows -
+	// the server-rendered order captured when the sort was attached.
+	function reorderRows(tableEl, sort, defaultRows) {
 		var rows = Array.prototype.slice.call(tableEl.querySelectorAll('tr.luminum-row'));
 		if (rows.length < 2) { return; }
 		var last = rows[rows.length - 1];
 		var parent = last.parentNode;
 		var anchor = last.nextSibling;
-		var dir = (sort.dir === -1) ? -1 : 1;
-		var col = sort.col;
-		rows.sort(function (a, b) {
-			var ca = a.cells ? a.cells[col] : null;
-			var cb = b.cells ? b.cells[col] : null;
-			if (!ca || !cb) { return 0; }
-			return dir * compareValues(ca.textContent, cb.textContent);
-		});
-		rows.forEach(function (r) {
+		var ordered;
+		if (!sort) {
+			ordered = defaultRows;
+		} else {
+			var dir = (sort.dir === -1) ? -1 : 1;
+			var col = sort.col;
+			ordered = rows.slice().sort(function (a, b) {
+				var ca = a.cells ? a.cells[col] : null;
+				var cb = b.cells ? b.cells[col] : null;
+				if (!ca || !cb) { return 0; }
+				return dir * compareValues(ca.textContent, cb.textContent);
+			});
+		}
+		ordered.forEach(function (r) {
 			if (anchor && anchor.parentNode === parent) { parent.insertBefore(r, anchor); }
 			else { parent.appendChild(r); }
 		});
@@ -488,26 +494,33 @@
 
 	// Make a table's column headers sortable: a click on a header cell sorts
 	// the table by that column - ascending on the first click, descending on
-	// the next click on the same column, and a fresh ascending sort when a
-	// different column is picked - and shows the direction arrow in that
-	// column's header. The click is delegated on the table, so headers that
-	// are re-rendered (the query results page rebuilds its header when the
-	// columns change) stay wired.
+	// the second, and a third click clears the sort (the table goes back to
+	// its default order, the arrow is removed) - and a different column
+	// always starts a fresh ascending sort. The direction arrow shows in
+	// the sorted column's header while a sort is active. The click is
+	// delegated on the table, so headers that are re-rendered (the query
+	// results page rebuilds its header when the columns change) stay wired.
 	//
 	//   tableEl - the <table> to sort.
 	//   onSort  - optional callback, called as onSort(sort) after the sort
 	//             state changes, with sort = { col: <physical column index>,
-	//             dir: 1|-1 }. Data-driven tables (rendered by render() from
-	//             polled data) pass one: they store the sort in their state
-	//             and re-render, and render() applies it. Tables whose rows
-	//             are printed by PHP pass none: the rows are reordered in
-	//             place instead (reorderRows).
+	//             dir: 1|-1 } or null when the sort is cleared. Data-driven
+	//             tables (rendered by render() from polled data) pass one:
+	//             they store the sort in their state and re-render, and
+	//             render() applies it. Tables whose rows are printed by PHP
+	//             pass none: the rows are reordered in place instead
+	//             (reorderRows), and a cleared sort restores the
+	//             server-rendered order captured here at attach time.
 	//
 	// Cells that carry a control (the select-all checkbox cell) are not sort
 	// columns: clicking them only operates the control.
 	function attachHeaderSort(tableEl, onSort) {
 		if (!tableEl) { return; }
 		var sort = null;
+		// The table's default row order (the order the rows were rendered
+		// in): captured once so a cleared sort can restore it. The text
+		// filter hides rows without moving them, so it stays valid.
+		var defaultRows = Array.prototype.slice.call(tableEl.querySelectorAll('tr.luminum-row'));
 		tableEl.addEventListener('click', function (e) {
 			var target = e.target;
 			if (!target || !target.closest) { return; }
@@ -517,10 +530,15 @@
 			if (cell.querySelector('input, select, button, a')) { return; }
 			var idx = headerCells(tableEl).indexOf(cell);
 			if (idx === -1) { return; }
-			sort = (sort && sort.col === idx) ? { col: idx, dir: -sort.dir } : { col: idx, dir: 1 };
+			if (sort && sort.col === idx) {
+				// The same column: ascending -> descending -> cleared.
+				sort = (sort.dir === 1) ? { col: idx, dir: -1 } : null;
+			} else {
+				sort = { col: idx, dir: 1 };
+			}
 			setSortMarkers(tableEl, sort);
 			if (typeof onSort === 'function') { onSort(sort); }
-			else { reorderRows(tableEl, sort); }
+			else { reorderRows(tableEl, sort, defaultRows); }
 		});
 	}
 

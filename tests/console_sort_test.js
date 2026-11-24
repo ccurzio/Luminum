@@ -196,6 +196,18 @@ table.dispatch("click", headCells[1]);
 ok("repeat click Name: rows sorted descending", rowOrder(table).join(",") === "Gamma,Beta,Alpha");
 ok("repeat click Name: down arrow", markerIn(headCells[1]) === "\u25BC");
 
+// A third click on the same header clears the sort: the rows go back to
+// the table's default (server-rendered) order and the marker is removed.
+table.dispatch("click", headCells[1]);
+ok("third click Name: sort cleared, default order restored",
+	rowOrder(table).join(",") === "Gamma,Alpha,Beta");
+ok("third click Name: no marker anywhere",
+	headCells.every((c) => markerIn(c) === null));
+// A fourth click starts the cycle fresh (ascending).
+table.dispatch("click", headCells[1]);
+ok("fourth click Name: fresh ascending sort",
+	rowOrder(table).join(",") === "Alpha,Beta,Gamma" && markerIn(headCells[1]) === "\u25B2");
+
 // Click a different header: fresh ascending sort, marker moves.
 table.dispatch("click", headCells[2]);
 ok("click Packages: ascending numeric (2 < 3 < 10)", rowOrder(table).join(",") === "Beta,Gamma,Alpha");
@@ -223,6 +235,15 @@ table.dispatch("click", headCells[3]);
 ok("click Owner: ascending, ties keep their relative order",
 	rowOrder(table).join(",") === "Gamma,Beta,Alpha");
 ok("click Owner: marker on the Owner header", markerIn(headCells[3]) === "\u25B2");
+// ...and the cycle completes on this column too: descending (the tied
+// alice rows keep their current relative order), then cleared back to the
+// default order.
+table.dispatch("click", headCells[3]);
+ok("repeat click Owner: descending", rowOrder(table).join(",") === "Alpha,Gamma,Beta");
+table.dispatch("click", headCells[3]);
+ok("third click Owner: cleared, default order restored, marker gone",
+	rowOrder(table).join(",") === "Gamma,Alpha,Beta" &&
+		headCells.every((c) => markerIn(c) === null));
 
 // Two-tier header (the query results page's split sensor): the physical
 // order is the tier-1 spanning cells plus the tier-2 sub-label cells, and
@@ -276,6 +297,14 @@ ok("onSort: the callback receives the sort state",
 ok("onSort: the DOM rows are not reordered (the page re-renders)",
 	rowOrder(cbTable).join(",") === "Gamma,Alpha,Beta");
 ok("onSort: the marker is still placed", markerIn(cbHead.cells[1]) === "\u25B2");
+// The cycle continues through the callback: descending, then cleared -
+// the callback receives null and the marker is removed.
+cbTable.dispatch("click", cbHead.cells[1]);
+ok("onSort: the repeat click receives the descending state",
+	lastSort && lastSort.col === 1 && lastSort.dir === -1);
+cbTable.dispatch("click", cbHead.cells[1]);
+ok("onSort: the third click receives null (sort cleared)", lastSort === null);
+ok("onSort: the marker is removed on clear", markerIn(cbHead.cells[1]) === null);
 
 console.log("-".repeat(60));
 if (failures) {

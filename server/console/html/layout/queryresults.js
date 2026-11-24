@@ -436,13 +436,13 @@
 		});
 
 		// Column sort: a header click sorts the table by that column
-		// (ascending first, descending on the repeat click) and shows the
-		// direction arrow in the header. A split sensor's sub-columns are
-		// the sort targets - the click addresses the sub-column's physical
-		// index. The header is rebuilt when the columns change, so the
-		// click is delegated on the table and the sort lives in the state;
-		// render() re-applies both the sort and the marker on every
-		// re-render.
+		// (ascending first, descending on the second click, cleared on the
+		// third) and shows the direction arrow in the header. A split
+		// sensor's sub-columns are the sort targets - the click addresses
+		// the sub-column's physical index. The header is rebuilt when the
+		// columns change, so the click is delegated on the table and the
+		// sort lives in the state; render() re-applies both the sort and
+		// the marker on every re-render.
 		LuminumTable.attachHeaderSort(table, function (sort) {
 			state.sort = sort;
 			applyRows();

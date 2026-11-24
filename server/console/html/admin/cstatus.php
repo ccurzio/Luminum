@@ -366,10 +366,10 @@ function checkinform() {
 document.getElementById('cstable-head').innerHTML = LuminumTable.headerHTML(cstatusConfig);
 
 // Column sort: a header click sorts the table by that column (ascending
-// first, descending on the repeat click) and shows the direction arrow in
-// the header. The body is re-rendered from the polled data on every apply,
-// so the sort lives in the state and render() applies it - the click
-// handler only records it.
+// first, descending on the second click, cleared on the third) and shows
+// the direction arrow in the header. The body is re-rendered from the
+// polled data on every apply, so the sort lives in the state and render()
+// applies it - the click handler only records it.
 LuminumTable.attachHeaderSort(cstableEl, function (sort) {
 	cstatusState.sort = sort;
 	cstatusApply();
