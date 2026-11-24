@@ -30,7 +30,7 @@ $pkgcount = mysqli_num_rows($pkgquery);
                 ?>
 		<table style="margin-top: 10px; table-layout: fixed;">
 		<colgroup><col style="width: 32px;"><col><col><col style="width: 95px;"><col style="width: 75px;"><col style="width: 75px;"><col style="width: 120px;"><col style="width: 150px;"><col style="width: 120px;"></colgroup>
-		<tr><td colspan="9"><div style="position: absolute; padding-top: 7px; padding-left: 5px;"><span id="viscount"><?php print $pkgcount; ?></span> of <span id="totcount"><?php print $pkgcount; ?></span> items <span id="selcount"></span></div>
+		<tr class="luminum-bar"><td colspan="9"><div style="position: absolute; padding-top: 7px; padding-left: 5px;"><span id="viscount"><?php print $pkgcount; ?></span> of <span id="totcount"><?php print $pkgcount; ?></span> items <span id="selcount"></span></div>
 		<div style="float: right; text-align: right; padding-right: 5px;">Content Set: <select id="contentset" name="contentset" style="margin-left: 2px; margin-right: 30px; margin-top: 2px; width: 170px; height: 28px;" <?php if ($pkgcount == 0) { print "disabled=\"disabled\""; } ?>>
 			<option value="all">All</option>
 			<?php
@@ -56,7 +56,7 @@ $pkgcount = mysqli_num_rows($pkgquery);
 				}
 			}
 		?>
-		<tr style="height: 35px;"><td colspan="9"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;"><i>Query Completed in <?php print $duration; ?> Seconds</i></div></td></tr>
+		<tr class="luminum-bar" style="height: 35px;"><td colspan="9"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;"><i>Query Completed in <?php print $duration; ?> Seconds</i></div></td></tr>
 		</table>
 	</div>
 

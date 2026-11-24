@@ -44,10 +44,10 @@ $showsaved = !$showresults && isset($_GET['tab']) && $_GET['tab'] === 'saved';
 	<div class="module-content">
 		<div style="display: block; width: 100%; text-align: right;">
 			<table id="qrtable" style="margin-top: 10px; text-align: left;">
-			<tr><td id="qrtopcell" colspan="3"><div style="position: absolute; padding-top: 5px; padding-left: 5px;"><img id="qrrefresh" src="icons/refresh.png" style="cursor: pointer; width: 15px; height: 15px; vertical-align: top;" onclick="qrRefresh()">&nbsp;&nbsp;<span id="qrcount">0</span> of <span id="qrtotal">0</span> Items <span id="qrselcount"></span></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="qrfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" maxlength="64"></div></td></tr>
+			<tr class="luminum-bar"><td id="qrtopcell" colspan="3"><div style="position: absolute; padding-top: 5px; padding-left: 5px;"><img id="qrrefresh" src="icons/refresh.png" style="cursor: pointer; width: 15px; height: 15px; vertical-align: top;" onclick="qrRefresh()">&nbsp;&nbsp;<span id="qrcount">0</span> of <span id="qrtotal">0</span> Items <span id="qrselcount"></span></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="qrfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" maxlength="64"></div></td></tr>
 			<tbody id="qrtable-head"></tbody>
 			<tbody data-luminum-body id="qrtable-body"></tbody>
-			<tr style="height: 35px;"><td id="qrfootcell" colspan="3"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;"><i><span id="qrfootprefix">Processing Query...</span> <span id="queryms">0.00</span> Seconds</i></div></td></tr>
+			<tr class="luminum-bar" style="height: 35px;"><td id="qrfootcell" colspan="3"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;"><i><span id="qrfootprefix">Processing Query...</span> <span id="queryms">0.00</span> Seconds</i></div></td></tr>
 			</table>
 		</div>
 	</div>
@@ -103,10 +103,10 @@ $showsaved = !$showresults && isset($_GET['tab']) && $_GET['tab'] === 'saved';
 			<div style="padding: 5px 20px 20px 20px;">
 				<table style="margin-top: 10px; table-layout: fixed;">
 				<colgroup><col style="width: 32px;"><col><col><col style="width: 100px;"><col style="width: 120px;"></colgroup>
-				<tr><td colspan="5"><div style="position: absolute; padding-top: 7px; padding-left: 5px;"><span id="sqviscount">0</span> of <span id="sqtotcount">0</span> items <span id="sqselcount"></span></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="savedqueriesfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" disabled="disabled" maxlength="64"></div></td></tr>
+				<tr class="luminum-bar"><td colspan="5"><div style="position: absolute; padding-top: 7px; padding-left: 5px;"><span id="sqviscount">0</span> of <span id="sqtotcount">0</span> items <span id="sqselcount"></span></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="savedqueriesfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" disabled="disabled" maxlength="64"></div></td></tr>
 				<tr class="luminum-head"><td><input type="checkbox" disabled="disabled"></td><td>Name</td><td>Structure</td><td>Author</td><td>Create Date</td></tr>
 				<tr><td colspan="5" style="text-align: center; background-color: #494a69; font-weight: normal; font-style: italic;">No Results</td></tr>
-				<tr style="height: 35px;"><td colspan="5"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;"><i>Query Completed in 0.00 Seconds</i></div></td></tr>
+				<tr class="luminum-bar" style="height: 35px;"><td colspan="5"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;"><i>Query Completed in 0.00 Seconds</i></div></td></tr>
 				</table>
 			</div>
 		</div>

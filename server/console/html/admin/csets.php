@@ -27,7 +27,7 @@ $cscount = mysqli_num_rows($csquery);
                 print "</div>\n";
                 ?>
 		<table style="margin-top: 10px;">
-		<tr><td colspan="10"><div style="position: absolute; padding-top: 7px; padding-left: 5px;"><span id="viscount"><?php print $cscount; ?></span> of <span id="totcount"><?php print $cscount; ?></span> items <span id="selcount"></span></div>
+		<tr class="luminum-bar"><td colspan="10"><div style="position: absolute; padding-top: 7px; padding-left: 5px;"><span id="viscount"><?php print $cscount; ?></span> of <span id="totcount"><?php print $cscount; ?></span> items <span id="selcount"></span></div>
 		<div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="csetsfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($cscount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
 		<tr class="luminum-head"><td style="width: 15px;">
 		<?php
@@ -46,7 +46,7 @@ $cscount = mysqli_num_rows($csquery);
 				}
 			}
 		?>
-		<tr style="height: 35px;"><td colspan="10"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;"><i>Query Completed in <?php print $duration; ?> Seconds</i></div></td></tr>
+		<tr class="luminum-bar" style="height: 35px;"><td colspan="10"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;"><i>Query Completed in <?php print $duration; ?> Seconds</i></div></td></tr>
 		</table>
 	</div>
 

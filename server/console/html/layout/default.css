@@ -573,11 +573,12 @@ th, td {
 	border: 1px solid #101017;
 	}
 
-/* The column header row: marked luminum-head by LuminumTable.headerHTML
-   and the static PHP list tables. It sits between the counter/filter
-   top row and the data rows and carries its own darker tone; the top
-   and bottom rows carry no class and keep the standard cell color. */
-tr.luminum-head td {
+/* The table's top row (counter/filter) and bottom row (processing-clock
+   footer): marked luminum-bar in the page markup. They carry the darker
+   tone; the column header row (marked luminum-head by
+   LuminumTable.headerHTML and the static PHP list tables) and the data
+   rows keep their own colors. */
+tr.luminum-bar td {
 	background-color: #1c1d2d;
 	}
 

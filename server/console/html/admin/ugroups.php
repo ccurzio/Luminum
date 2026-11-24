@@ -26,7 +26,7 @@ $ugcount = mysqli_num_rows($ugquery);
 
 		<table style="margin-top: 10px; text-align: left; table-layout: fixed;">
 		<colgroup><col style="width: 32px;"><col><col style="width: 100px;"><col style="width: 75px;"><col style="width: 120px;"><col style="width: 150px;"><col style="width: 120px;"></colgroup>
-		<tr><td colspan="7"><div style="position: absolute; padding-top: 5px; padding-left: 5px;">0 of <?php print $ugcount; ?> items</div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="ugroupsfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" maxlength="64" <?php if ($ugcount == 0) { print "disabled=\"disabled\""; } ?>></div></td></tr>
+		<tr class="luminum-bar"><td colspan="7"><div style="position: absolute; padding-top: 5px; padding-left: 5px;">0 of <?php print $ugcount; ?> items</div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="ugroupsfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" maxlength="64" <?php if ($ugcount == 0) { print "disabled=\"disabled\""; } ?>></div></td></tr>
 		<tr class="luminum-head"><td style="text-align: center; padding: 0;"><?php
 			if ($ugcount == 0) { print "<input type=\"checkbox\" disabled=\"disabled\">"; }
 			else { print "<input id=\"selectall\" type=\"checkbox\" onclick=\"allToggle();\">"; }
@@ -37,7 +37,7 @@ $ugcount = mysqli_num_rows($ugquery);
 				print "<tr><td colspan=\"8\" style=\"text-align: center; background-color: #494a69; font-weight: normal; font-style: italic;\">No Results</td></tr>\n";
 				}
 		?>
-		<tr style="height: 35px;"><td colspan="8"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;"><i>Query Completed in <?php print $duration; ?> Seconds</i></div></td></tr>
+		<tr class="luminum-bar" style="height: 35px;"><td colspan="8"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; padding-bottom: 2px; padding-right: 5px; font-weight: normal;"><i>Query Completed in <?php print $duration; ?> Seconds</i></div></td></tr>
 		</table>
 	</div>
 

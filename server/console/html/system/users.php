@@ -27,7 +27,7 @@ else {
 		</div>
 		<table style="margin-top: 10px; table-layout: fixed;">
 		<colgroup><col style="width: 32px;"><col style="width: 50px;"><col style="width: 85px;"><col style="width: 120px;"><col><col style="width: 90px;"><col style="width: 90px;"><col style="width: 150px;"><col style="width: 150px;"></colgroup>
-		<tr><td colspan="9"><div style="position: absolute; padding-top: 5px; padding-left: 5px;"><span id="viscount"><?php print $usercount; ?></span> of <span id="totcount"><?php print $usercount; ?></span> items <span id="selcount"></span></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="usersfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($usercount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
+		<tr class="luminum-bar"><td colspan="9"><div style="position: absolute; padding-top: 5px; padding-left: 5px;"><span id="viscount"><?php print $usercount; ?></span> of <span id="totcount"><?php print $usercount; ?></span> items <span id="selcount"></span></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="usersfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($usercount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
 		<tr class="luminum-head"><td><input type="checkbox" id="selectall" onclick="allToggle();"></td><td style="text-align: center;">UID</td><td style="text-align: center;">Enabled</td><td>Username</td><td>Full Name</td><td>Role</td><td>Type</td><td>Created</td><td>Last Login</td></tr>
 
 		<?php
@@ -46,7 +46,7 @@ else {
 					}
 				}
 		?>
-		<tr style="height: 35px;"><td colspan="9"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; font-weight: normal; padding-right: 5px; padding-bottom: 2px;"><i>Query Completed in <?php print $duration; ?> Seconds</i></div></td></tr>
+		<tr class="luminum-bar" style="height: 35px;"><td colspan="9"><div style="position: absolute; padding-top: 5px;"></div><div style="float: right; text-align: right; font-weight: normal; padding-right: 5px; padding-bottom: 2px;"><i>Query Completed in <?php print $duration; ?> Seconds</i></div></td></tr>
 		</table>
 	</div>
 
