@@ -19,7 +19,7 @@ else {
 	<h1>User Accounts</h1>
 
 	<div class="module-content">
-		<div style="display: block; width: 100%; text-align: right;">
+		<div class="pageactions">
 			<button class="formgo" style="margin-top: 5px; margin-right: 0;">Add User</button>
 			<button class="formgo" id="modify" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Edit Selected</button>
 			<button class="formgo" id="delete" style="margin-top: 5px; margin-right: 0;" disabled="disabled">Delete Selected</button>
@@ -27,7 +27,7 @@ else {
 		</div>
 		<table style="margin-top: 10px; table-layout: fixed;">
 		<colgroup><col style="width: 32px;"><col style="width: 50px;"><col style="width: 85px;"><col style="width: 120px;"><col><col style="width: 90px;"><col style="width: 90px;"><col style="width: 150px;"><col style="width: 150px;"></colgroup>
-		<tr><td colspan="9"><div style="position: absolute; padding-top: 5px; padding-left: 5px;"> <span id="usercount">0</span> <span id="totusercount">of <?php print $usercount; ?> items</span></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="usersfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($usercount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
+		<tr><td colspan="9"><div style="position: absolute; padding-top: 5px; padding-left: 5px;"><span id="viscount"><?php print $usercount; ?></span> of <span id="totcount"><?php print $usercount; ?></span> items <span id="selcount"></span></div><div style="float: right; text-align: right; padding-right: 5px;">Filter: <input type="text" id="usersfilter" style="font-size: 15px; padding: 3px; margin-top: 0;" <?php if ($usercount == 0) { print "disabled=\"disabled\""; } ?> maxlength="64"></div></td></tr>
 		<tr><td><input type="checkbox" id="selectall" onclick="allToggle();"></td><td style="text-align: center;">UID</td><td style="text-align: center;">Enabled</td><td>Username</td><td>Full Name</td><td>Role</td><td>Type</td><td>Created</td><td>Last Login</td></tr>
 
 		<?php
@@ -52,7 +52,9 @@ else {
 
 <script src="layout/table.js"></script>
 <script>
-LuminumTable.attachTextFilter('usersfilter');
+LuminumTable.attachTextFilter('usersfilter', function (visible) {
+	document.getElementById('viscount').textContent = visible;
+	});
 
 function rowHighlight(idnum) {
 	var checkBox = document.getElementById("ID" + idnum);
@@ -117,6 +119,8 @@ function allCheck() {
 	checkboxes.forEach(checkbox => {
 		if (checkbox.checked == true) { checkTrigger++; }
 		});
+
+	document.getElementById("selcount").textContent = checkTrigger > 0 ? '(' + checkTrigger + ' Selected)' : '';
 
 	if (checkTrigger == checkboxes.length) {
 		document.getElementById("selectall").checked = "checked";

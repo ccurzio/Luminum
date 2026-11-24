@@ -705,6 +705,21 @@ check "console: action history displayed count tracks the text filter" \
     $(grep -qF "attachTextFilter('actionhistoryfilter', function (visible)" "$RUN/actionhistory.html" 2>/dev/null \
         && grep -qF "document.getElementById('viscount').textContent = visible" "$RUN/actionhistory.html" 2>/dev/null; echo $?)
 
+# The User Accounts list carries the same displayed-of-total + selection
+# counters as the other console tables.
+code=$(curl -k -s -o "$RUN/users.html" -w '%{http_code}' -b "$RUN/cookies" \
+    "https://127.0.0.1:$WPORT/index.php?view=users")
+check "console: user accounts list renders (200)" $([ "$code" = "200" ]; echo $?) "got: $code"
+check "console: user accounts top row is displayed of total items with an empty selection span" \
+    $(grep -q 'id="viscount"' "$RUN/users.html" 2>/dev/null \
+        && grep -q 'id="totcount"' "$RUN/users.html" 2>/dev/null \
+        && grep -qF 'items <span id="selcount"></span>' "$RUN/users.html" 2>/dev/null; echo $?)
+check "console: user accounts displayed count tracks the text filter" \
+    $(grep -qF "attachTextFilter('usersfilter', function (visible)" "$RUN/users.html" 2>/dev/null \
+        && grep -qF "document.getElementById('viscount').textContent = visible" "$RUN/users.html" 2>/dev/null; echo $?)
+check "console: user accounts selection span renders (N Selected) when rows are checked" \
+    $(grep -qF "textContent = checkTrigger > 0 ? '(' + checkTrigger + ' Selected)' : ''" "$RUN/users.html" 2>/dev/null; echo $?)
+
 # A duplicate name is rejected (case-insensitive collation) and adds no row.
 code=$(curl -k -s -D "$RUN/sensor-dup.hdr" -o /dev/null -w '%{http_code}' -b "$RUN/cookies" \
     --data-urlencode "csrf=$CSRF" \
