@@ -48,6 +48,10 @@ my $MADDR;
 my $MPORT = 8883;
 my $CMDTIMEOUT = 120;
 my $DEPLTIMEOUT = 3600;
+# Max seconds a single bootstrap connection (TLS handshake + one
+# request/response) may take before its handler child is cut off. Bounds a
+# stalled handshake or a silent client so neither can wedge the listener.
+my $CONNTIMEOUT = 30;
 my $MQTTUSER;
 my $MQTTPASS;
 my $MQTTPASSWD;
@@ -252,14 +256,22 @@ sub stopweb {
 sub setuplistener {
 	Broker::debugout(0,"Initializing Network Listener...");
 	undef($sock);
+	# SSL listener with a DEFERRED handshake (SSL_startHandshake => 0): accept()
+	# performs only the plain TCP accept (no handshake), so the parent is never
+	# blocked by a stalled TLS negotiation. The handshake and the request/
+	# response exchange are done per-connection in a forked child (startlistener)
+	# under a socket timeout, so a client that connects and stalls the handshake
+	# - or connects and goes silent - can no longer wedge the accept loop and
+	# block every other registration (the failure that took the bootstrap
+	# channel down until the broker was restarted).
 	$sock = IO::Socket::SSL->new(
 		LocalAddr => $LADDR,
 		LocalPort => $LPORT,
 		Proto => 'tcp',
 		Listen => 20,
-		SSL_hostname => $SHOST,
 		SSL_cert_file => $sslcert,
-		SSL_key_file => $sslprvkey
+		SSL_key_file => $sslprvkey,
+		SSL_startHandshake => 0
 		)
 	or do {
 		Broker::debugout(3,"Network Listener could not be initialized.");
@@ -267,7 +279,10 @@ sub setuplistener {
 		stopserver();
 		exit 1;
 		};
-	if ($sock) { Broker::debugout(1,"Network Listener initialized successfully."); }
+	if ($sock) {
+		Broker::debugout(1,"Network Listener initialized successfully.");
+		Broker::debugout(0,"Bootstrap connection timeout: ${CONNTIMEOUT}s");
+		}
 	if ($hupped == 1) {
 		Broker::debugout(1,"Server Reload Complete.");
 		$hupped = 0;
@@ -276,15 +291,69 @@ sub setuplistener {
 
 # Start Network Listener
 #
+# Each accepted connection is handled in a forked child under a wall-clock
+# timeout (CONNTIMEOUT). The parent only performs the plain TCP accept (no
+# handshake), so it is never blocked by a stalled TLS negotiation or a silent
+# client - one wedged connection can no longer stop every other registration.
+# Finished children are auto-reaped (SIGCHLD = IGNORE); the long-lived MQTT
+# worker is reaped the same way when it exits (the parent only needs its PID
+# to signal it on shutdown).
 sub startlistener {
 	$listen = 1;
+	$SIG{CHLD} = 'IGNORE';
+	my $sel = IO::Select->new($sock);
+	my $handled = 0;
 	while($listen == 1) {
-		my $client_socket = $sock->accept() or do { Broker::debugout(2,"Client connection failed: $!"); next; };
-		my $client_address = $client_socket->peerhost();
-		my $client_port = $client_socket->peerport();
+		my @ready = $sel->can_read(60);
+		if (!@ready) {
+			# No connection for a minute: a liveness line so a wedged or
+			# silent listener is visible in the log instead of silent.
+			Broker::debugout(0,"Bootstrap listener idle (no connections for 60s; $handled handled since start).");
+			next;
+			}
+		my $tcp = $sock->accept() or do { Broker::debugout(2,"Client connection failed: $!"); next; };
+		my $client_address = $tcp->peerhost();
+		my $client_port = $tcp->peerport();
 		Broker::debugout(0,"Inbound connection from $client_address:$client_port");
-		handleconnection($client_socket,$client_address);
-		Broker::debugout(0,"Connection with $client_address closed.");
+		my $pid = fork();
+		if (!defined $pid) {
+			Broker::debugout(2,"Unable to fork a handler for $client_address:$client_port: $!; dropping connection");
+			close($tcp);
+			next;
+			}
+		if ($pid == 0) {
+			# Child: bounded TLS handshake + one request/response, then exit.
+			# A socket timeout bounds every read/write, so a stalled handshake
+			# or a silent client cannot hold this connection (or its file
+			# descriptors) forever. (An alarm() does not interrupt the SSL
+			# handshake in this Net::SSLeay build, so it is not used.)
+			# accept_SSL() only honours the socket timeout when the socket is
+			# blocking (it flips it non-blocking internally to enforce the
+			# deadline), so pin it blocking first; otherwise a silent client
+			# would make accept_SSL() return WANT_READ at once instead of
+			# waiting out the timeout.
+			$tcp->blocking(1);
+			$tcp->timeout($CONNTIMEOUT);
+			my $t0 = time();
+			my $ok = eval {
+				$tcp->accept_SSL()
+					or die "SSL handshake failed: ".IO::Socket::SSL::errstr()."\n";
+				handleconnection($tcp,$client_address);
+				1;
+				};
+			my $dur = time() - $t0;
+			if ($ok) {
+				Broker::debugout(0,"Connection with $client_address closed after ${dur}s.");
+				}
+			else {
+				Broker::debugout(2,"Connection from $client_address ended after ${dur}s: $@");
+				}
+			exit 0;
+			}
+		# Parent: the child owns the connection; close our copy and keep
+		# accepting. The child is reaped by the SIGCHLD disposition.
+		close($tcp);
+		$handled++;
 		}
 	}
 
@@ -335,6 +404,7 @@ sub startmqtt {
 			sid => $SID, host => $MADDR, port => $MPORT, ca => $MQTTCA,
 			user => $MQTTUSER, secret => $MQTTPASS, seed => $srvseed,
 			dbname => "CLIENTS", dbuser => $dbuser, dbpass => $dbpass, dbsock => $dbsock, dbhost => $dbhost,
+			content_root => "$mgrpath/content",
 			poll_secs => 1,
 			cmd_timeout => $CMDTIMEOUT, depl_timeout => $DEPLTIMEOUT,
 			passwd_file => $MQTTPASSWD, pid_file => $MQTTPIDFILE,
@@ -363,6 +433,7 @@ sub getbrokerconf {
 				elsif ($_ =~ /^DBPASS[\s|\t]?+\=[\s|\t]?+(.*)$/) { $dbpass = $1; }
 				elsif ($_ =~ /^DBHOST[\s|\t]?+\=[\s|\t]?+(\S+)$/) { $dbhost = $1; }
 				elsif ($_ =~ /^DBSOCKET[\s|\t]?+\=[\s|\t]?+(\S+)$/) { $dbsock = $1; }
+				elsif ($_ =~ /^CONNTIMEOUT[\s|\t]?+\=[\s|\t]?+(\S+)$/) { $CONNTIMEOUT = $1; }
 				}
 			close (BCONF);
 			}
@@ -452,6 +523,7 @@ sub readconfig {
 	if (!$MPORT || $MPORT !~ /^([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$/) { $MPORT = 8883; }
 	if (!$CMDTIMEOUT || $CMDTIMEOUT !~ /^[0-9]+$/) { $CMDTIMEOUT = 120; }
 	if (!$DEPLTIMEOUT || $DEPLTIMEOUT !~ /^[0-9]+$/) { $DEPLTIMEOUT = 3600; }
+	if (!$CONNTIMEOUT || $CONNTIMEOUT !~ /^[0-9]+$/) { $CONNTIMEOUT = 30; }
 	# MQTT broker integration (protocol 4, 9). The worker connects to the
 	# Mosquitto broker as $MQTTUSER and maintains the password_file and ACL
 	# file that Mosquitto is configured to use, reloading it (SIGHUP) after
@@ -1154,6 +1226,7 @@ sub catchhup {
 		undef($MPORT);
 		undef($CMDTIMEOUT);
 		undef($DEPLTIMEOUT);
+		undef($CONNTIMEOUT);
 		undef($sslcert);
 		undef($sslprvkey);
 		undef($sslpubkey);

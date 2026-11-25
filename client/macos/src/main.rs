@@ -50,7 +50,7 @@ use base64ct::Encoding;
 use ed25519_dalek::{Signer, Verifier, SigningKey, VerifyingKey, Signature};
 use sha2::{Digest, Sha256};
 
-const VER: &str = "0.0.4";
+const VER: &str = "0.0.5";
 const IPORT: u16 = 10704;
 const DPORT: u16 = 10465;
 const LPORT: u16 = 10461;
@@ -59,6 +59,12 @@ const CHECKIN_SECS: u64 = 300;
 // sensor script; the server's command deadline (CMDTIMEOUT) governs the
 // whole query.
 const SENSOR_TIMEOUT_SECS: u64 = 30;
+// Bootstrap-channel I/O bounds. The registration path runs on a blocking
+// socket; without these, a stalled TCP connect, a wedged TLS handshake, or a
+// silent server would hang the client forever. The server's own CONNTIMEOUT
+// (30s) bounds the handshake + one request/response, so these match it.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+const IO_TIMEOUT: Duration = Duration::from_secs(30);
 // This client's OS platform (protocol §4.2 / §6.1). Used both in the check-in
 // payload (osplat) and to build the OS group topic luminum/{SID}/os/{os}/cmd.
 const OSPLAT: &str = "macOS";
@@ -652,7 +658,7 @@ fn server_connect(server_host: &str, server_port: &str, cert_path: &str, debug: 
 	let server_addr = server_addr_str.to_socket_addrs()?.next().ok_or("No addresses found for hostname")?;
 
 	let sconn = loop {
-		match TcpStream::connect(server_addr) {
+		match TcpStream::connect_timeout(&server_addr, CONNECT_TIMEOUT) {
 			Ok(sconn) => break sconn,
 			Err(err) => {
 				dbout(debug, 2, &format!("Connection to Luminum server failed: {}", err));
@@ -661,6 +667,13 @@ fn server_connect(server_host: &str, server_port: &str, cert_path: &str, debug: 
 			}
 		}
 	};
+
+	// Bound the TLS handshake and every subsequent read/write on this
+	// connection: a stalled handshake or a silent server cannot hang the
+	// registration path. These OS-level socket timeouts apply to the
+	// handshake's own reads/writes as well as the framed I/O that follows.
+	sconn.set_read_timeout(Some(IO_TIMEOUT))?;
+	sconn.set_write_timeout(Some(IO_TIMEOUT))?;
 
 	let cert_buffer = fs::read(cert_path)?;
 	let mut builder = TlsConnector::builder();
@@ -789,7 +802,12 @@ fn register_with_server(debug: bool, ccfg: &HashMap<String, String>) {
 fn server_send_once(server_host: &str, server_port: &str, cert_path: &str, message: &Envelope) -> Result<Envelope, Box<dyn Error>> {
 	let server_addr_str = format!("{}:{}", server_host, server_port);
 	let server_addr = server_addr_str.to_socket_addrs()?.next().ok_or("No addresses found for hostname")?;
-	let sconn = TcpStream::connect(server_addr).map_err(|err| format!("Connection to Luminum server failed: {}", err))?;
+	let mut sconn = TcpStream::connect_timeout(&server_addr, CONNECT_TIMEOUT)
+		.map_err(|err| format!("Connection to Luminum server failed: {}", err))?;
+	// Same I/O bounds as server_connect: a stalled handshake or a silent
+	// server must not hang a one-shot command (deregistration) forever.
+	sconn.set_read_timeout(Some(IO_TIMEOUT))?;
+	sconn.set_write_timeout(Some(IO_TIMEOUT))?;
 	let cert_buffer = fs::read(cert_path)?;
 	let mut builder = TlsConnector::builder();
 	builder.add_root_certificate(native_tls::Certificate::from_pem(&cert_buffer)?);
