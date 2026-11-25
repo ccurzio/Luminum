@@ -45,7 +45,7 @@
 
 	<hr style="margin-top: 20px;">
 
-	<p style="margin-top: 20px;">
+	<p style="margin-top: 20px; margin-bottom: 0;">
 	<span style="font-size: 15px; font-weight: bold;">Filter by Operating System:</span>
 	</p>
 	<table style="margin-bottom: 40px;">
@@ -55,7 +55,7 @@
 	<tr><td class="wfilter" style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filterwin"></td><td class="wfilter" style="background-color: #494a69;">Windows</td><td class="wfilter" style="background-color: #494a69; text-align: center;"><span id="winpct">0</span>%</td><td class="wfilter" style="background-color: #494a69; text-align: center;"><span id="wincount">0</span></td></tr>
 	</table>
 
-	<p style="margin-top: 20px;">
+	<p style="margin-top: 20px; margin-bottom: 0;">
 	<span id="statfilter" style="font-size: 15px; font-weight: bold;">Filter by Status:</span>
 	</p>
 	<table style="margin-bottom: 40px;">
@@ -66,7 +66,7 @@
 	<tr><td class="ofilter" style="background-color: #494a69; width: 15px; text-align: center;"><input type="checkbox" id="filteroffline"></td><td class="ofilter" style="background-color: #494a69; text-align: center;"><img style="vertical-align: middle;" src="/icons/sysgray.png"></td><td class="ofilter" style="background-color: #494a69; text-align: center;"><span id="offlinepct">0</span>%</td><td class="ofilter" style="background-color: #494a69; text-align: center;"><span id="offcount">0</span></td></tr>
 	</table>
 
-	<p style="margin-top: 20px;">
+	<p style="margin-top: 20px; margin-bottom: 0;">
 	<span id="verfilter" style="font-size: 15px; font-weight: bold;">Filter by Client Version:</span>
 	</p>
 	<table id="vertable">
@@ -333,7 +333,12 @@ function cstatusRefresh() {
 	btn.className = 'refresh';
 	btn.style.cursor = 'progress';
 	cstableEl.style.cursor = 'progress';
+	// Restart the footer clock: it ticks from the click and stops when the
+	// refresh's query completes (the poll's onData on success, done on a
+	// failed fetch).
+	cstatusStartClock();
 	var done = function () {
+		cstatusStopClock();
 		btn.className = '';
 		btn.style.cursor = 'pointer';
 		cstableEl.style.cursor = '';
@@ -444,9 +449,12 @@ document.getElementById('fapply').addEventListener('click', function () {
 // Starts when the page loads and ticks "Processing Query... X.XX Seconds"
 // (100 ms) until the first poll's database query completes, then reads
 // "Query Completed in X.XX Seconds" (the page-load-to-data duration). Later
-// polls keep the table live but leave the stopped clock alone.
+// polls keep the table live but leave the stopped clock alone. The manual
+// refresh button restarts the clock (cstatusStartClock): it ticks from the
+// click and stops when the refresh's query completes.
 var cstatusT0 = Date.now();
 var cstatusClockRunning = true;
+var cstatusTicker = null;
 var cstatusPrefixEl = document.getElementById('cstatusfootprefix');
 var cstatusMsEl = document.getElementById('queryms');
 
@@ -454,16 +462,25 @@ function cstatusSetFooter(prefix, seconds) {
 	if (cstatusPrefixEl) { cstatusPrefixEl.textContent = prefix; }
 	if (cstatusMsEl) { cstatusMsEl.textContent = seconds.toFixed(2); }
 }
+function cstatusTick() {
+	if (!cstatusClockRunning) { return; }
+	cstatusSetFooter('Processing Query...', (Date.now() - cstatusT0) / 1000);
+}
+function cstatusStartClock() {
+	cstatusT0 = Date.now();
+	if (!cstatusClockRunning) {
+		cstatusClockRunning = true;
+		cstatusTicker = setInterval(cstatusTick, 100);
+	}
+}
 function cstatusStopClock() {
 	if (!cstatusClockRunning) { return; }
 	cstatusClockRunning = false;
 	clearInterval(cstatusTicker);
+	cstatusTicker = null;
 	cstatusSetFooter('Query Completed in', (Date.now() - cstatusT0) / 1000);
 }
-var cstatusTicker = setInterval(function () {
-	if (!cstatusClockRunning) { return; }
-	cstatusSetFooter('Processing Query...', (Date.now() - cstatusT0) / 1000);
-}, 100);
+cstatusStartClock();
 
 // --- polling ----------------------------------------------------------------
 

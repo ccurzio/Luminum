@@ -43,7 +43,10 @@
 // deadline (the query timeout) or every online endpoint in the target
 // having answered or reported no match (protocol 7.3), then reads
 // "Query Completed in X.XX Seconds". A page opened on an already-finished
-// query shows the server-side duration instead of ticking.
+// query shows the server-side duration instead of ticking. The manual
+// refresh button restarts the clock from the click; it stops when the
+// refreshed query completes (for an already-finished query, when the
+// refresh fetch settles).
 //
 // The pure functions (cellValue, pivotResults, expandRow, buildConfig,
 // queryDone, doneElapsed) are DOM-free so they can be unit-tested under
@@ -276,12 +279,17 @@
 	// finishes), append the answer rows as they arrive, keep the "N of M
 	// items" count and the filter live, and run the footer clock (see the
 	// module header). Returns { refresh } (the manual refresh button's
-	// promise source).
+	// promise source; it also restarts the footer clock, which stops when
+	// the refreshed query completes).
 	function init(queryId) {
 		var table = document.getElementById('qrtable');
 		if (!table) { return null; }
 		var config = null;
 		var rows = [];
+		// The last query object render() saw (null before the first
+		// successful render, or when the query does not exist): the
+		// refresh's fetch-settled stop check (below) uses it.
+		var lastQ = null;
 		// sort: the active column sort ({ col: <physical column index>,
 		// dir: 1|-1 }, set by the header click wiring below); render()
 		// applies it. A split sensor's sub-columns sort the table - the
@@ -293,7 +301,10 @@
 		// Seconds" (100 ms) until render() reports the stop condition,
 		// then reads "Query Completed in X.XX Seconds". Once the first poll
 		// has published the command's deadline, the ticker stops the clock
-		// exactly on it rather than on the next poll.
+		// exactly on it rather than on the next poll. The manual refresh
+		// button restarts the clock (startClock): it ticks from the click
+		// and stops when the refreshed query reports done - for a query
+		// that has already finished, that is the refresh fetch settling.
 		var t0 = Date.now();
 		var clockRunning = true;
 		var deadlineMs = null;
@@ -305,20 +316,35 @@
 			if (prefixEl) { prefixEl.textContent = prefix; }
 			if (msEl) { msEl.textContent = seconds.toFixed(2); }
 		}
-		function stopClock(seconds) {
-			if (!clockRunning) { return; }
-			clockRunning = false;
-			if (ticker) { clearInterval(ticker); ticker = null; }
-			setFooter('Query Completed in', seconds);
-		}
-		var ticker = setInterval(function () {
+		function tick() {
 			if (!clockRunning) { return; }
 			if (deadlineMs !== null && Date.now() >= deadlineMs) {
 				stopClock((deadlineMs - t0) / 1000);
 				return;
 			}
 			setFooter('Processing Query...', (Date.now() - t0) / 1000);
-		}, 100);
+		}
+		function stopClock(seconds) {
+			if (!clockRunning) { return; }
+			clockRunning = false;
+			if (ticker) { clearInterval(ticker); ticker = null; }
+			setFooter('Query Completed in', seconds);
+		}
+		// Restart the clock from now (the manual refresh button's entry
+		// point): it ticks from the click and stops when the refreshed
+		// query reports done. A deadline that has already passed (a query
+		// that finished before the refresh) is dropped - it would stop the
+		// restarted clock immediately with a negative duration, and the
+		// refresh's own completion is the stop condition now.
+		function startClock() {
+			t0 = Date.now();
+			if (deadlineMs !== null && deadlineMs <= Date.now()) { deadlineMs = null; }
+			if (!clockRunning) {
+				clockRunning = true;
+				ticker = setInterval(tick, 100);
+			}
+		}
+		var ticker = setInterval(tick, 100);
 
 		function updateCounts() {
 			var visible = LuminumTable.filterRows(rows, config, state);
@@ -348,6 +374,7 @@
 			var topcell = document.getElementById('qrtopcell');
 			var footcell = document.getElementById('qrfootcell');
 			var q = data.count > 0 ? data.queries[0] : null;
+			lastQ = q;
 
 			if (!q) {
 				config = null;
@@ -492,7 +519,23 @@
 		poll.refresh();
 
 		return {
-			refresh: function () { return poll.refresh(); }
+			// The manual refresh button: restarts the footer clock (it
+			// ticks from the click) and fetches once. When the fetch
+			// settles on a query that is done, the clock stops with the
+			// refresh's duration - render() already stopped it on the
+			// success path, so this covers the failed-fetch path. A query
+			// still running keeps the clock ticking until render() reports
+			// it done.
+			refresh: function () {
+				startClock();
+				var p = poll.refresh();
+				if (p && p.then) {
+					p.then(function () {
+						if (lastQ && queryDone(lastQ, Date.now())) { stopClock((Date.now() - t0) / 1000); }
+					});
+				}
+				return p;
+			}
 		};
 	}
 

@@ -3,7 +3,8 @@
 // the results wiring of the query page's Results tab (modules/query.php).
 //
 // The pure functions (cellValue, pivotResults, buildConfig) are tested
-// directly; the DOM helper (init) only runs in the browser.
+// directly; the DOM helper (init)'s footer clock and manual refresh
+// behaviour are driven through a minimal DOM shim and a queued fetch stub.
 //
 // Usage: node tests/console_queryresults_test.js
 // Exit code: 0 if all checks pass, 1 otherwise.
@@ -665,9 +666,183 @@ ok("module: the clock stops exactly on the published deadline",
 ok("module: an already-finished query shows the server-side duration",
 	qrSrc.indexOf("doneElapsed(q)") >= 0);
 
-if (failures > 0) {
-	console.log("----------------------------------------");
-	console.log(failures + " check(s) failed");
-	process.exit(1);
+// --- init(): the footer clock and the manual refresh (DOM shim) ------------
+// The clock is DOM-only, so init() is driven through a minimal element shim
+// and a queued fetch stub: the clock ticks "Processing Query..." while the
+// query runs, stops with the server-side duration on an already-finished
+// query, and a manual refresh restarts it from the click - it stops when
+// the refreshed query completes (the fetch settling for a finished query,
+// the next poll reporting done for a running one).
+
+var realSetInterval = global.setInterval, realClearInterval = global.clearInterval;
+var realSetTimeout = global.setTimeout, realClearTimeout = global.clearTimeout;
+var liveTimers = [];
+global.setInterval = function (fn, ms) { var id = realSetInterval(fn, ms); liveTimers.push(["i", id]); return id; };
+global.clearInterval = function (id) { realClearInterval(id); };
+global.setTimeout = function (fn, ms) { var id = realSetTimeout(fn, ms); liveTimers.push(["t", id]); return id; };
+global.clearTimeout = function (id) { realClearTimeout(id); };
+function killTimers() {
+	liveTimers.forEach(function (t) { if (t[0] === "i") { realClearInterval(t[1]); } else { realClearTimeout(t[1]); } });
+	liveTimers.length = 0;
 }
-console.log("All checks passed.");
+function sleep(ms) { return new Promise(function (r) { realSetTimeout(r, ms); }); }
+
+// The selectors the module and LuminumTable.render actually use: tag,
+// tag.class, tag[attr], tag[attr="value"].
+function matchSel(el, sel) {
+	var m = sel.match(/^([a-zA-Z]+)(?:\.([a-zA-Z0-9_-]+)|\[([a-zA-Z0-9_-]+)(?:=["']?([^"'\]]*)["']?)?\])?$/);
+	if (!m) { return false; }
+	if (el.tagName.toLowerCase() !== m[1].toLowerCase()) { return false; }
+	if (m[2] && el.classes.indexOf(m[2]) === -1) { return false; }
+	if (m[3] && !(m[3] in el.attrs)) { return false; }
+	if (m[4] !== undefined && el.attrs[m[3]] !== m[4]) { return false; }
+	return true;
+}
+function El(tag, id) {
+	this.tagName = String(tag).toUpperCase();
+	this.id = id || "";
+	this.children = [];
+	this.attrs = {};
+	this.classes = [];
+	this.style = {};
+	this.textContent = "";
+	this.innerHTML = "";
+	this.colSpan = 1;
+	this._listeners = {};
+}
+El.prototype.addEventListener = function (ev, fn) { (this._listeners[ev] = this._listeners[ev] || []).push(fn); };
+El.prototype.insertBefore = function (child) { this.children.unshift(child); return child; };
+El.prototype.insertAdjacentHTML = function () {};
+El.prototype.querySelectorAll = function (sel) {
+	var out = [];
+	(function walk(el) {
+		el.children.forEach(function (c) { if (matchSel(c, sel)) { out.push(c); } walk(c); });
+	})(this);
+	return out;
+};
+El.prototype.querySelector = function (sel) { return this.querySelectorAll(sel)[0] || null; };
+
+// The Results tab's table shell: the elements init() and render() touch,
+// keyed by id. innerHTML is a plain property (no parsing) - the row queries
+// against the body return empty, and every use site guards for that.
+function freshDom() {
+	var byId = {};
+	function make(tag, id) { var el = new El(tag, id); if (id) { byId[id] = el; } return el; }
+	var table = make("table", "qrtable");
+	var head = make("tbody", "qrtable-head");
+	var body = make("tbody", "qrtable-body");
+	body.attrs["data-luminum-body"] = "";
+	table.children.push(head, body);
+	make("span", "qrfootprefix");
+	make("span", "queryms");
+	make("td", "qrtopcell");
+	make("td", "qrfootcell");
+	make("span", "qrcount");
+	make("span", "qrtotal");
+	make("span", "qrselcount");
+	make("input", "qrfilter");
+	global.document = {
+		getElementById: function (id) { return byId[id] || null; },
+		createElement: function (tag) { return new El(tag, ""); }
+	};
+	return byId;
+}
+
+var fetchQueue = [];
+global.fetch = function () {
+	var item = fetchQueue.length ? fetchQueue.shift() : { delay: 0, data: { count: 0, queries: [] } };
+	return new Promise(function (resolve) {
+		realSetTimeout(function () {
+			resolve({ ok: true, json: function () { return Promise.resolve(item.data); } });
+		}, item.delay);
+	});
+};
+
+global.LuminumTable = require(path.join(__dirname, "..", "server", "console", "html", "layout", "table.js"));
+
+function runClockTests() {
+	return (async function () {
+		try {
+			// --- a page opened on an already-finished query -------------------
+			var byId = freshDom();
+			var now = Math.floor(Date.now() / 1000);
+			var doneQ = {
+				status: "OK", deadline_ts: now - 10, created_ts: now - 12, sent_ts: now - 12,
+				last_answer_ts: now - 10, target_online: 2, answered: 2, no_match: 0,
+				sensors: [{ sid: 7, name: "Is Windows" }],
+				results: [res(1, 7, "OK", "TRUE", null), res(2, 7, "OK", "TRUE", null)]
+			};
+			fetchQueue.push({ delay: 150, data: { count: 1, queries: [doneQ] } }); // the page-load fetch
+			fetchQueue.push({ delay: 300, data: { count: 1, queries: [doneQ] } }); // the refresh fetch
+			var handle = Q.init(42);
+			await sleep(400);
+			ok("clock: an already-finished query shows the server-side duration",
+				byId.qrfootprefix.textContent === "Query Completed in" && byId.queryms.textContent === "2.00",
+				byId.qrfootprefix.textContent + " " + byId.queryms.textContent);
+
+			// The manual refresh restarts the clock from the click...
+			handle.refresh();
+			await sleep(150);
+			var mid = parseFloat(byId.queryms.textContent);
+			ok("clock: the refresh restarts the ticking clock",
+				byId.qrfootprefix.textContent === "Processing Query..." && mid >= 0 && mid < 0.5,
+				byId.qrfootprefix.textContent + " " + byId.queryms.textContent);
+			// ...and stops it when the refresh's query completes.
+			await sleep(300);
+			var end = parseFloat(byId.queryms.textContent);
+			ok("clock: the restarted clock stops when the refresh completes",
+				byId.qrfootprefix.textContent === "Query Completed in" && end >= 0 && end < 1,
+				byId.qrfootprefix.textContent + " " + byId.queryms.textContent);
+
+			// --- a page opened on a running query ------------------------------
+			killTimers();
+			byId = freshDom();
+			var now2 = Math.floor(Date.now() / 1000);
+			var runQ = {
+				status: "RUNNING", deadline_ts: now2 + 60, created_ts: now2 - 1, sent_ts: now2 - 1,
+				last_answer_ts: null, target_online: 2, answered: 1, no_match: 0,
+				sensors: [{ sid: 7, name: "Is Windows" }],
+				results: [res(1, 7, "OK", "TRUE", null)]
+			};
+			var doneQ2 = {
+				status: "OK", deadline_ts: now2 + 60, created_ts: now2 - 1, sent_ts: now2 - 1,
+				last_answer_ts: now2 + 2, target_online: 2, answered: 2, no_match: 0,
+				sensors: [{ sid: 7, name: "Is Windows" }],
+				results: [res(1, 7, "OK", "TRUE", null), res(2, 7, "OK", "TRUE", null)]
+			};
+			fetchQueue.push({ delay: 100, data: { count: 1, queries: [runQ] } });   // the page-load fetch
+			fetchQueue.push({ delay: 100, data: { count: 1, queries: [runQ] } });   // the refresh fetch
+			fetchQueue.push({ delay: 100, data: { count: 1, queries: [doneQ2] } }); // the next one-second poll
+			var handle2 = Q.init(43);
+			await sleep(500);
+			ok("clock: a running query keeps the clock ticking",
+				byId.qrfootprefix.textContent === "Processing Query..." && parseFloat(byId.queryms.textContent) > 0.3,
+				byId.qrfootprefix.textContent + " " + byId.queryms.textContent);
+			var before = parseFloat(byId.queryms.textContent);
+			handle2.refresh();
+			await sleep(200);
+			var after = parseFloat(byId.queryms.textContent);
+			ok("clock: the refresh restarts a running query's clock from the click",
+				byId.qrfootprefix.textContent === "Processing Query..." && after < before,
+				"before=" + before + " after=" + after);
+			await sleep(1200);
+			ok("clock: the restarted clock stops when the query completes",
+				byId.qrfootprefix.textContent === "Query Completed in",
+				byId.qrfootprefix.textContent + " " + byId.queryms.textContent);
+		} finally {
+			killTimers();
+			global.setInterval = realSetInterval; global.clearInterval = realClearInterval;
+			global.setTimeout = realSetTimeout; global.clearTimeout = realClearTimeout;
+			delete global.fetch; delete global.document; delete global.LuminumTable;
+		}
+	})();
+}
+
+runClockTests().then(function () {
+	if (failures > 0) {
+		console.log("----------------------------------------");
+		console.log(failures + " check(s) failed");
+		process.exit(1);
+	}
+	console.log("All checks passed.");
+});
