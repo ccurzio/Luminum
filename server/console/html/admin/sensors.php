@@ -377,7 +377,7 @@ $sensorcount = mysqli_num_rows($sensorquery);
 			<?php if ($sensor !== null && count($revisions) > 0): ?>
 			<div style="margin-top: 20px;">
 				<span style="color: #444; font-weight: bold;">Revisions:</span><br>
-				<select id="revisions" size="5" style="width: 250px; font-size: 15px;">
+				<select id="revisions" size="5" style="width: 250px; font-size: 15px; margin-top: 5px;">
 				<option value="Current" selected="selected">Current (<?php print htmlspecialchars($sensor['MODIFIED'], ENT_QUOTES); ?>)</option>
 				<?php foreach ($revisions as $r): ?>
 				<option value="<?php print $r['rev']; ?>"><?php print htmlspecialchars($r['ts'], ENT_QUOTES); ?></option>

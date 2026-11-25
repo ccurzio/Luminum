@@ -45,7 +45,7 @@
 
 	<hr style="margin-top: 20px;">
 
-	<p style="margin-top: 20px; margin-bottom: 10px;">
+	<p style="margin-top: 20px; margin-bottom: 5px;">
 	<span style="font-size: 15px; font-weight: bold;">Filter by Operating System:</span>
 	</p>
 	<table style="margin-bottom: 40px;">
@@ -55,7 +55,7 @@
 	<tr><td class="wfilter" style="background-color: #494a69; width: 15px;"><input type="checkbox" id="filterwin"></td><td class="wfilter" style="background-color: #494a69;">Windows</td><td class="wfilter" style="background-color: #494a69; text-align: center;"><span id="winpct">0</span>%</td><td class="wfilter" style="background-color: #494a69; text-align: center;"><span id="wincount">0</span></td></tr>
 	</table>
 
-	<p style="margin-top: 20px; margin-bottom: 10px;">
+	<p style="margin-top: 20px; margin-bottom: 5px;">
 	<span id="statfilter" style="font-size: 15px; font-weight: bold;">Filter by Status:</span>
 	</p>
 	<table style="margin-bottom: 40px;">
@@ -66,7 +66,7 @@
 	<tr><td class="ofilter" style="background-color: #494a69; width: 15px; text-align: center;"><input type="checkbox" id="filteroffline"></td><td class="ofilter" style="background-color: #494a69; text-align: center;"><img style="vertical-align: middle;" src="/icons/sysgray.png"></td><td class="ofilter" style="background-color: #494a69; text-align: center;"><span id="offlinepct">0</span>%</td><td class="ofilter" style="background-color: #494a69; text-align: center;"><span id="offcount">0</span></td></tr>
 	</table>
 
-	<p style="margin-top: 20px; margin-bottom: 10px;">
+	<p style="margin-top: 20px; margin-bottom: 5px;">
 	<span id="verfilter" style="font-size: 15px; font-weight: bold;">Filter by Client Version:</span>
 	</p>
 	<table id="vertable">
