@@ -1,8 +1,14 @@
 # Luminum P2P File Distribution — Design
 
-**Version:** 0.1-draft
+**Version:** 0.2-draft
 **Status:** PROPOSED — design for review; nothing here is built yet.
 **Depends on:** `docs/protocol.md` v1.0-draft (envelope, framing, signing, MQTT control plane).
+
+**Revisions:** 0.2 — swarm mechanics settled: ordered multi-source grants with
+in-session fallback (§5.1, §6.1), transfer progress monitoring
+(`p2p_progress`, `CLIENTS.P2PTRANSFERS`, §6.2, §7.5), transfer depth decided as
+file-level with a piece-ready grant/manifest structure (§1), and the client TLS
+implementation fixed to rustls (§4.4).
 
 ---
 
@@ -23,6 +29,24 @@ P2P is an extension of the existing bulk-data reference pattern (protocol §8.3)
 a new transport paradigm: same framing, same envelope, same signing, same trust
 roots. The only new ingredients are a peer listener port, a client TLS identity, and
 the transfer grant.
+
+### Swarm model: private tracker
+
+This is a **server-orchestrated swarm** — the "private tracker" variant of P2P
+distribution — deliberately not a public BitTorrent-style swarm. In a public swarm,
+possession of the metadata authorizes any peer to join; that violates requirement 1
+above. Here the server plays the tracker role: it knows who holds what, it selects
+the sources, and it signs a grant for every transfer. The swarm still grows
+exponentially — each finished downloader becomes a source for the next batch of the
+same deploy (fan-out), so the server uploads a small seed batch and the remainder of
+the fleet copies at LAN speed.
+
+**Transfer depth (decided):** v1 is **file-level** — whole-file streams with an
+ordered fallback source list in the grant, automatic seeding, and full progress
+monitoring. The grant and manifest structures are **piece-ready**: per-piece
+SHA-256 can be added later as a minor protocol version (protocol §10 unknown-field
+tolerance) to support BitTorrent-style parallel piece fetch if ~1 GB packages strain
+single-source transfers (§13). v1 does not do piece-level fetch.
 
 ---
 
@@ -123,6 +147,22 @@ server stops issuing grants for deactivated UIDs immediately. Certificate
 validity is set to 1 year at issuance; re-issuance on re-registration replaces the
 stored certificate. A revocation list is a documented v2 item.
 
+### 4.4 TLS implementation (client)
+
+The P2P channels (10464 in both directions, and the client-side acceptor of the
+10704 seed path) are implemented with **rustls** (0.23, already linked via
+`rumqttc`), not `native-tls`: the cached native-tls 0.2.18 acceptor cannot request
+or validate client certificates (no `request_client_auth`; the OpenSSL backend
+never sets `VerifyMode::PEER`), which the serving side requires. rustls provides
+`with_client_cert_verifier` (server side), `peer_certificates()` (UID extraction),
+and a custom server-cert verifier (client side). Because peers are addressed by IP
+and client certificates carry no IP SAN, both sides replace hostname verification
+with chain-to-root + validity + **cert UID == the grant's expected UID** — the
+identity binding §4.2 requires. Existing native-tls usage (bootstrap channel,
+MQTT) is unchanged. CSR generation: the `openssl` crate on Linux; hand-rolled CSR
+DER (`der` + `pkcs8` + `ring`, all already in the dependency graph) on
+macOS/Windows.
+
 ---
 
 ## 5. The transfer grant
@@ -153,20 +193,37 @@ validate a grant.
       { "fileid": 311, "path": "scripts/apply.sh", "size": 48213, "sha256": "ab12..." },
       { "fileid": 312, "path": "content/policy.xml", "size": 90211, "sha256": "cd34..." }
     ],
-    "src": { "uid": 208, "ip": "172.16.0.44", "port": 10464 },
+    "sources": [
+      { "uid": 208, "ip": "172.16.0.44", "port": 10464 },
+      { "uid": 114, "ip": "172.16.0.51", "port": 10464 },
+      { "uid": 0,   "ip": "luminum.example.net", "port": 10704 }
+    ],
     "exp": 1735689900
   },
   "sig": "base64..."
 }
 ```
 
-- `uid` is the **requester** UID. `data.src` is the **source**: a peer
-  (`uid` = peer's numeric UID, `ip` from `CLIENTS.STATUS.IPV4`, `port` = 10464) or
-  the server itself (`uid` = 0, `ip` = server address, `port` = 10704).
+- `uid` is the **requester** UID. `data.sources` is an **ordered list of
+  pre-authorized sources**: up to two peer entries (`uid` = peer's numeric UID,
+  `ip` from `CLIENTS.STATUS.IPV4`, `port` = 10464), always terminated by the server
+  entry (`uid` = 0, `ip` = server address, `port` = 10704). The requester walks the
+  list in-session (§6.1): the first source that completes the session wins; a
+  source that is down, busy, or fails mid-transfer is skipped to the next. The
+  server signature authorizes the whole list, so fallback needs no server
+  round-trip.
 - The grant covers **one package revision for one OS** — the full per-file list, so
-  a multi-file package is one grant and one connection, not N connections.
-- `exp` = `ts` + 300 s (same 5-minute lifetime as §8.3 data tokens).
-- `token` is single-use (one transfer session) and tracked server-side (§7.3).
+  a multi-file package is one grant and one connection per source attempt, not N
+  connections per file.
+- `exp` = `ts` + 300 s (same 5-minute lifetime as §8.3 data tokens); see §13 on
+  raising it for large packages.
+- `token` is single-use per grant (one completed transfer session; the requester
+  may walk the source list with it, §6.1) and tracked server-side (§7.3).
+- **Piece-ready:** each `files[]` entry carries `size` + whole-file `sha256` in
+  v1. The structure reserves a `pieces` member (piece size + per-piece SHA-256
+  array) for a later minor version; per protocol §10 a v1 client ignores the
+  unknown field and does whole-file transfer, and the broker only mints piece
+  grants to clients that advertise piece capability in the check-in.
 
 The grant travels to the requester inside the `deploy` command:
 
@@ -184,11 +241,13 @@ the grant form, including the server-seeded case, so there is one token mechanis
 2. For each target, the broker resolves a source (§7.1) and mints a grant
    (new token, `exp` = now + 300 s), recording it in `CLIENTS.P2PTOKENS`.
 3. The grant is embedded in that target's `deploy` command data.
-4. The requester presents it to the source (§6). The source verifies and consumes
-   it (locally, for the session).
+4. The requester presents it to the first source in the list (§6). The source
+   verifies it (§5.3) and serves the session.
 5. On completion the requester reports `p2p_fetch_ok`; the server marks the token
-   `USED` and records the requester as a holder. On failure the server may mint a
-   replacement grant with a different source (§7.2).
+   `USED` and records the requester as a holder. A token is consumed **on
+   completion, not on start**, so the requester may walk the source list (§6.1)
+   with the same token. If every source in the grant fails, the server mints a
+   replacement grant (§7.2).
 6. Unconsumed tokens expire after 5 minutes (broker sweep).
 
 ### 5.3 Source-side verification checklist
@@ -200,7 +259,9 @@ The serving peer accepts a transfer only if **all** hold:
 3. Grant signature verifies under the server signing key (the §7.1 anchor).
 4. `exp` is in the future.
 5. `token` has not been used on this endpoint (local used-token ring, same
-   pattern as the 1,000-entry message-ID dedup ring, protocol §9.2).
+   pattern as the 1,000-entry message-ID dedup ring, protocol §9.2). The ring is
+   local: a token completed at a *different* source is not visible here — §11
+   bounds the exposure.
 6. Every `fileid` in the grant is present in the local file manifest (§8.2) with
    matching `size` and `sha256` (a holder whose copy was modified locally cannot
    serve it; the mismatch is reported to the server).
@@ -245,6 +306,25 @@ Requester (R)                          Source (S)
   form, default 2 min) bounds the whole session; the per-file stream has no
   independent timeout in v1.
 
+### 6.1 Source fallback (in-session)
+
+If a session fails before completion (connect refused, `ERR` handshake, TLS
+failure, chunk error, source disconnect, or the requester's per-source read
+timeout), the requester discards staged data for that source and opens a new
+session with the **same grant** against the next `sources[]` entry. The grant's
+`exp` bounds the whole walk; if the list is exhausted or `exp` passes, the
+requester reports `p2p_fetch_fail` and the server re-mints (§7.2).
+
+### 6.2 Progress reporting
+
+Progress does not travel over the peer channel. The requester publishes throttled
+`p2p_progress` reports to the server over MQTT (resp topic, QoS 0 — loss is
+harmless, the next report is ≤ 5 s away): one per in-flight file when ≥ 5 s or
+≥ 10 % of that file has passed since the previous report, plus a final report at
+100 %. Payload: `aid`, `fileid`, `state` (`FETCHING` / `VERIFYING`), `received`,
+`total`, `srcuid`. The server folds each into `CLIENTS.P2PTRANSFERS` (§7.5); the
+terminal `p2p_fetch_ok` / `p2p_fetch_fail` reports close the row.
+
 ---
 
 ## 7. Server-side behavior
@@ -257,11 +337,12 @@ For each target endpoint and each file set in the deploy:
    holder UID ≠ target, the holder is online (`CSTATE` live, not `MISSING`, not
    `DEACT`), reports the P2P capability (§7.4), and `P2PENABLED` is `Enabled`.
    A candidate must hold **every** file in the grant's list.
-2. If candidates exist: pick one (v1: the least recently selected, tracked by
+2. If candidates exist: rank them (v1: least recently selected, tracked by
    `P2PTOKENS` history; same-/24 preference per `CLIENTS.STATUS.IPV4` is a v2
-   nicety) and mint a peer grant.
-3. Otherwise: mint a **server grant** (`src.uid = 0`, port 10704) — the seed path
-   over the existing server→client data channel.
+   nicety) and mint a grant whose `sources` list is the top two candidates
+   followed by the server entry.
+3. Otherwise: mint a grant whose `sources` list is the server entry alone — the
+   seed path over the existing server→client data channel.
 
 The server therefore de-loads itself automatically: the first endpoints to finish
 a deploy become sources for the rest of the target set, which the broker processes
@@ -269,14 +350,17 @@ row by row as reports arrive.
 
 ### 7.2 Failure re-routing
 
-On `p2p_fetch_fail` from target T naming source S:
+Two tiers. **In-session:** the requester walks the grant's `sources` list itself
+(§6.1) — no server involvement. **Cross-session:** on `p2p_fetch_fail` from
+target T (every source in the grant exhausted):
 
-1. Mark token used (a failed session consumes the grant).
-2. Re-run source selection for T excluding S (S is excluded for the remainder of
-   this deploy; repeated failures from S across deploys demote S — v1 simply
-   excludes per-deploy).
-3. Mint a fresh grant (new token) and enqueue a new `deploy` command for T.
-4. If no peer remains, the fresh grant is a server grant.
+1. Mark the grant's token used (a failed walk consumes the grant).
+2. Re-run source selection for T, excluding every source that appeared in the
+   failed grant (they are excluded for the remainder of this deploy; repeated
+   failures across deploys demote a source — v1 simply excludes per-deploy).
+3. Mint a fresh grant (new token, new source list) and enqueue a new `deploy`
+   command for T.
+4. If no peer remains, the fresh grant's list is the server entry alone.
 
 A target that fails against every source (and the server) is reported to the
 console as a failed deploy, same as any command timeout.
@@ -300,6 +384,18 @@ The check-in payload (protocol §6.1 `core/checkin`) gains one optional field:
 it in candidate selection, so pre-P2P clients are never selected as sources nor
 sent peer grants. The server itself is always a valid source regardless.
 
+### 7.5 Progress tracking
+
+`p2p_progress` reports are folded into `CLIENTS.P2PTRANSFERS` (one row per
+deploy, endpoint, and file — upserted on each report): `STATE`, `RECEIVED`,
+`TOTAL`, `SRCUID`, `TS`. Terminal reports set `STATE` = `DONE` / `FAILED` (with
+`ERR` on failure) and carry total bytes + duration for the action history. The
+console's deploy status view polls this table live (the query-results polling
+pattern) and renders, per deploy: endpoints done, in flight (with per-endpoint
+progress and current source), waiting, and failed. Stale rows (in flight but no
+report for 3× the report interval, or past the command deadline) are marked
+`FAILED` / `TIMEDOUT` by the broker sweep.
+
 ---
 
 ## 8. Client-side behavior
@@ -309,7 +405,7 @@ sent peer grants. The server itself is always a valid source regardless.
 | Component | Responsibility |
 |---|---|
 | P2P listener | Bind `PPORT` 10464 at startup (like `IPORT`); accept loop, one thread per connection; enforce a max of **1 concurrent serving session** (v1) — excess connections are refused with `ERR BUSY` |
-| Fetcher | On a `deploy` command with `ref.channel = "p2p"`: connect to `src` (mTLS, verify peer cert UID == grant `src.uid`), run the §6 session, stage in `Downloads/`, verify, install under `Packages/`, update manifest, report |
+| Fetcher | On a `deploy` command with `ref.channel = "p2p"`: walk the grant's `sources` list (§6.1) — mTLS to each, verify peer cert UID == the entry's `uid` — run the §6 session, stage in `Downloads/`, verify, install under `Packages/`, update manifest, emit `p2p_progress` (§6.2), report |
 | Grant/token state | Local used-token ring (in-memory, §5.3 item 5); in-flight session state |
 | File manifest | SQLite table (new `config/p2p.db`, mode 0600): `FILEID, PKGID, OS, PATH, SIZE, SHA256, TS` — the endpoint's record of what it holds |
 | Startup sync | After MQTT connect, publish a one-shot `p2p/have` event (events topic) listing manifest `FILEID`s, so the server can rebuild `PKGHOLDERS` after client or server restarts |
@@ -368,11 +464,27 @@ CREATE TABLE IF NOT EXISTS `P2PTOKENS` (
   `TOKEN` char(36) NOT NULL,
   `PKGID` int(20) NOT NULL,
   `REQUID` int(20) NOT NULL,
-  `SRCUID` int(20) NOT NULL,         -- 0 = server seed
+  `SOURCES` tinytext NOT NULL,       -- JSON: ordered [{uid,ip,port}], server entry last
   `EXPIRES` datetime NOT NULL,
   `USED` datetime DEFAULT NULL,
   PRIMARY KEY (`TOKEN`),
   KEY `IDX_P2PTOKENS_EXPIRES` (`EXPIRES`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- CLIENTS: live transfer progress per (deploy, endpoint, file)
+CREATE TABLE IF NOT EXISTS `P2PTRANSFERS` (
+  `ID` int(20) NOT NULL AUTO_INCREMENT,
+  `AID` char(36) NOT NULL,           -- the deploy command's QID
+  `UID` int(20) NOT NULL,
+  `FILEID` int(20) NOT NULL,
+  `STATE` tinytext NOT NULL,         -- FETCHING | VERIFYING | DONE | FAILED | TIMEDOUT
+  `RECEIVED` bigint(20) NOT NULL DEFAULT 0,
+  `TOTAL` bigint(20) NOT NULL DEFAULT 0,
+  `SRCUID` int(20) DEFAULT NULL,     -- current source (0 = server)
+  `ERR` tinytext DEFAULT NULL,
+  `TS` datetime NOT NULL,
+  PRIMARY KEY (`ID`),
+  UNIQUE KEY `UQ_P2PTRANSFERS` (`AID`,`UID`,`FILEID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 ```
 
@@ -391,9 +503,10 @@ service account).
 | c→s (bootstrap) | core | `register` | + `tls_csr` (base64 PEM) | Existing, extended (§4.1) |
 | s→c (bootstrap) | core | `register` | + `clientcert` (base64 PEM) | Existing, extended (§4.1) |
 | c→s (bootstrap) | core | `certrenew` | `fingerprint` | Re-issue client certificate for an existing fingerprint (UID unchanged) |
-| s→c | core | `p2pgrant` | `token`, `pkgid`, `os`, `files[]`, `src{uid,ip,port}`, `exp` | The transfer grant (§5.1); server-signed, forwarded to the source verbatim |
+| s→c | core | `p2pgrant` | `token`, `pkgid`, `os`, `files[]`, `sources[]`, `exp` | The transfer grant (§5.1); server-signed, forwarded to the source verbatim |
 | c→s | core | `deploy` (resp) | — | Unchanged; the command's `ref` carries the grant |
-| c→s | core | `report` | `event: "p2p_fetch_ok"` / `"p2p_fetch_fail"`, `pkgid`, `srcuid`, `files[]` (ok) or `err` (fail) | Transfer outcome; drives holder bookkeeping and re-routing |
+| c→s | core | `report` | `event: "p2p_fetch_ok"` / `"p2p_fetch_fail"`, `pkgid`, `srcuid`, `files[]` (ok) or `err` (fail) | Terminal transfer outcome; drives holder bookkeeping and re-routing |
+| c→s | core | `report` | `event: "p2p_progress"`, `aid`, `fileid`, `state`, `received`, `total`, `srcuid` | Throttled in-transfer progress (QoS 0, §6.2); drives `P2PTRANSFERS` |
 | c→s (events) | core | `p2p/have` | `files` (array of fileids) | One-shot startup sync of the local manifest |
 | peer | core | `p2pfetch` | req: `token`, `fileid`; resp: `token`, `fileid`, `status`, `size`/`err` | Per-file handshake inside a grant session (§6) |
 | c→s | core | `checkin` | + `p2p` (boolean) | Capability advertisement (§7.4) |
@@ -413,6 +526,7 @@ New client config DB values: none (certificates are files: `config/client.crt`,
 | Client receives a file it was not directed to fetch | Impossible without a valid grant; grants are server-signed, single-use, 5-min expiry, name the exact file set (SHA-256 each) and the exact requester |
 | Malicious peer serves tampered content | Receiver verifies size + SHA-256; the hashes are inside the server-signed grant, so substitution fails verification. Source-side manifest check (§5.3 item 6) stops a *corrupted holder* from poisoning others |
 | Grant replay / forwarding to a third party | Single-use token (server table + local ring); channel identity binding — peer cert UID must equal grant `uid` (§4.2) |
+| Grant replay across sources after completion | Token consumed on completion (§5.2); a source's used-ring is local, so a token completed at peer A is not visible to peer B. Bounded: the requester is a managed endpoint (a compromised one already holds the file and its keys), serving is capped at 1 concurrent session, grants expire in 5 minutes, and the file set is named in the grant |
 | Impersonation of a peer | mTLS with CA-issued client certificates; both ends verify the full chain and the UID |
 | Eavesdropping on transfers | TLS 1.2+ on 10464; no plaintext fallback (protocol §2 rule extended to P2P) |
 | Deactivated client keeps serving | No CRL in v1 (documented limitation, §4.3); exposure bounded by grant lifetime, and the server stops minting grants for deactivated UIDs |
@@ -428,10 +542,10 @@ New client config DB values: none (certificates are files: `config/client.crt`,
 | **0. Package file store** | Console upload flow: store per-OS files under `content/packages/`, compute SHA-256, fill `PKGFILES`; wire the existing (stub) package form | — |
 | **1. Schema + config** | `PKGFILES`, `PKGHOLDERS`, `P2PTOKENS`, `STATUS.P2P`, `P2PENABLED`; protocol.md v1.1 section | 0 |
 | **2. Client certificates** | Broker: CSR signing at registration + `certrenew`; client: keypair/CSR generation, `clientcert` storage, `certrenew` on upgrade | 1 |
-| **3. Seed path (10704)** | Implement the existing TODO: client inbound data handler + broker push, using the grant form with `src.uid = 0`. This makes `deploy` work end-to-end before any peer is involved | 1 |
+| **3. Seed path (10704)** | Implement the existing TODO: client inbound data handler + broker push, using the grant form with a server-only `sources` list (`uid = 0`). This makes `deploy` work end-to-end before any peer is involved | 1 |
 | **4. Client P2P (Linux)** | `PPORT` listener, fetcher, manifest, staging/install, `p2p/have` sync, `p2p` check-in flag | 2, 3 |
-| **5. Broker P2P** | Source selection, grant minting, `p2p_fetch_ok/fail` handling, re-routing, token/holder sweeps | 4 |
-| **6. Console deploy wiring** | Deploy action against selected clients (outbox already exists); per-endpoint transfer status in the action history | 5 |
+| **5. Broker P2P** | Source selection, grant minting (source lists), `p2p_fetch_ok/fail` + `p2p_progress` handling, re-routing, token/holder/progress sweeps | 4 |
+| **6. Console deploy wiring** | Deploy action against selected clients (outbox already exists); live deploy progress view (polling `P2PTRANSFERS`); per-endpoint transfer status in the action history | 5 |
 | **7. macOS + Windows parity** | Same client components on the other two platforms | 6 |
 | **8. Tests** | Extend `tests/deploy_test.sh`: two-client P2P transfer, tampered-hash rejection, grant replay rejection, seed fallback when peer offline | 7 (Linux-only variant after 5) |
 
@@ -444,16 +558,23 @@ deploy before any peer-to-peer traffic exists.
 
 1. **`certrenew` vs. forced re-registration on upgrade** — design recommends
    `certrenew` (§8.3); needs confirmation.
-2. **Source selection policy** — v1 is least-recently-selected among online
-   holders; same-subnet preference and per-client serving rate caps are v2.
-3. **Serving concurrency** — v1 fixes 1 concurrent session per client; a config
+2. **Piece-level trigger** — transfer depth is decided as file-level,
+   piece-ready (§1). If ~1 GB packages show single-source strain (slow uplinks,
+   mid-transfer source death), v2 adds per-piece SHA-256 in the grant,
+   have-bitfield exchange, and parallel multi-source piece fetch as a minor
+   protocol version; the grant/manifest structure is already reserved for it.
+3. **Source selection policy** — v1: least-recently-selected, top two candidates
+   + server entry in the grant; same-subnet preference and per-client serving
+   rate caps are v2.
+4. **Serving concurrency** — v1 fixes 1 concurrent session per client; a config
    key (`P2PSEEDMAX`?) only if operators ask for more.
-4. **Non-package files** — the grant mechanism is file-set-generic, but v1 mints
+5. **Non-package files** — the grant mechanism is file-set-generic, but v1 mints
    grants only for package deploys. Ad-hoc "send this file to that client" would
    be a thin console feature on the same machinery, deferred.
-5. **Grant lifetime** — 300 s matches §8.3; large packages on slow links may need
-   the package Download Timeout to govern instead (the client-side session bound
-   already does; the grant `exp` could be raised to the larger of the two).
+6. **Grant lifetime vs. the source walk** — 300 s matches §8.3, but with ~1 GB
+   packages a walk across the source list can outlive 300 s on slow links. The
+   grant `exp` should be the larger of 300 s and the package Download Timeout
+   (open).
 
 ---
 
