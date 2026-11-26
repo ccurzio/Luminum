@@ -67,7 +67,7 @@ else {
 				<div class="column" style="width: 15%; min-width: 220px; pointer-events: none; user-select: none;"><img src="/images/Luminum.png" style="width: 200px; height: 200px;"></div>
 				<div class="column" style="width: 40%; text-align: left; padding-right: 20px;">
 					<table style="border: 0; width: 800px;">
-						<tr><td style="color: #444; background-color: transparent; border: 0;">Luminum Server Version:</td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;">0.0.1</td></tr>
+						<tr><td style="color: #444; background-color: transparent; border: 0;">Luminum Server Version:</td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;">0.0.2</td></tr>
 						<?php print "<tr><td style=\"color: #444; background-color: transparent; border: 0; font-weight: bold;\">Server ID:</td><td style=\"color: #444; background-color: transparent; border: 0; font-weight: normal;\">$serverid</td></tr>\n"; ?>
 						<tr><td style="color: #444; background-color: transparent; border: 0;">License:</td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;">Community</td></tr>
 						<tr><td style="color: #444; background-color: transparent; border: 0;">Original Install Date:</td><td style="color: #444; background-color: transparent; border: 0; font-weight: normal;"><?php print $installdate; ?></td></tr>

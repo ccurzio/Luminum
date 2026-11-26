@@ -15,8 +15,9 @@
 #     and the per-sensor result is stored in QUERYRESULTS
 #   - an unanswered query is marked TIMEDOUT at its deadline (not republished)
 #   - a console-queued deregistration (DEREGS PENDING row) is processed by
-#     the worker: CSTATE=DEACT, the client's secret leaves the password_file,
-#     the row is marked DONE, and other clients are untouched
+#     the worker: the AUTH and STATUS rows are deleted, the client's secret
+#     leaves the password_file, the row is marked DONE, and other clients
+#     are untouched
 #   - the offline LWT on client death flips STATUS.CSTATE to OFFLINE
 #   - the startup missing-client sweep (protocol 7.5) marks a stale offline
 #     client MISSING per MISSINGAFTER, skips deactivated and recently-seen
@@ -546,13 +547,14 @@ PERL5LIB="$PERL_LIBS" perl -e '
 ' 43 "$SCRATCH/passwd" "$SCRATCH/mosquitto.pid"
 check "on_deactivate removed the client from the password_file" "$(! grep -q '^43:' "$SCRATCH/passwd"; echo $?)"
 
-# --- console-queued deregistration (protocol 6.1, core/unregister) -----------
+# --- console-queued deregistration (protocol 6.1) ----------------------------
 # The console's Deregister action inserts a PENDING DEREGS row; the worker
-# performs the deactivation (STATUS.CSTATE = 'DEACT' + password_file removal
-# + broker reload) and marks the row DONE. The scratch database has no
-# DEREGS table, so this also exercises the worker's _ensure_schema. UID 47
-# is a spare endpoint (in the password_file, CSTATE OK); the live client
-# (42) must be untouched.
+# removes the endpoint (AUTH + STATUS row deletes + password_file removal +
+# broker reload) and marks the row DONE. The scratch database has no DEREGS
+# table, so this also exercises the worker's _ensure_schema. UID 47 is a
+# spare endpoint (in the password_file, CSTATE OK); the live client (42)
+# must be untouched.
+dbq "insert into AUTH (ID,NAME,FINGERPRINT,PUBKEY,MQTTSECRET) values (47,'dereg-host','4747474747474747474747474747474747474747474747474747474747474747','dGVzdA==','4747474747474747474747474747474747474747474747474747474747474747');"
 dbq "insert into STATUS (ID,HOSTNAME,IPV4,OSPLATFORM,OSRELEASE,CLIENTVER,CSTATE,REGDATE,LASTSEEN) values (47,'dereg-host','127.0.0.1','Linux','6.1','0.0.1','OK',now(),now());"
 mosquitto_passwd -b "$SCRATCH/passwd" 47 "deregsecret47"
 dbq "insert into DEREGS (UID,REQUESTED,STATUS) values (47,now(),'PENDING');"
@@ -564,7 +566,8 @@ for i in $(seq 1 40); do
 done
 check "dereg: queued row processed to DONE" "$DREG" "final status: $(dbq "select STATUS from DEREGS where UID=47;") see $SCRATCH/worker.log"
 check "dereg: DONE row carries a DONE timestamp" $([ -n "$(dbq "select DONE from DEREGS where UID=47;")" ]; echo $?)
-check "dereg: STATUS.CSTATE set to DEACT" $([ "$(dbq "select CSTATE from STATUS where ID=47;")" = "DEACT" ]; echo $?) "cstate: $(dbq "select CSTATE from STATUS where ID=47;")"
+check "dereg: STATUS row removed" $([ -z "$(dbq "select ID from STATUS where ID=47;")" ]; echo $?) "rows: $(dbq "select ID from STATUS where ID=47;")"
+check "dereg: AUTH row removed" $([ -z "$(dbq "select ID from AUTH where ID=47;")" ]; echo $?) "rows: $(dbq "select ID from AUTH where ID=47;")"
 check "dereg: client removed from the password_file" "$(! grep -q '^47:' "$SCRATCH/passwd"; echo $?)"
 check "dereg: the live client was not touched" $([ "$(dbq "select CSTATE from STATUS where ID=$UID_TEST;")" = "OK" ]; echo $?) "cstate: $(dbq "select CSTATE from STATUS where ID=$UID_TEST;")"
 

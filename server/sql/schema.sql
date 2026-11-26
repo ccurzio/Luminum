@@ -544,13 +544,15 @@ CREATE TABLE IF NOT EXISTS `COMMANDS` (
 --
 -- Table structure for table `DEREGS`
 --
--- Queue of console-initiated endpoint deregistrations (protocol 6.1, the
--- core/unregister deactivation). The console's Deregister action inserts a
--- PENDING row; the broker's MQTT worker performs the deactivation -
--- STATUS.CSTATE = 'DEACT' plus removal of the client's secret from the
--- mosquitto password_file (the web console cannot maintain that file) - and
--- marks the row DONE. A client-initiated unregister over the bootstrap
--- channel performs the same deactivation directly in the broker.
+-- Queue of console-initiated endpoint deregistrations (protocol 6.1). The
+-- console's Deregister action inserts a PENDING row; the broker's MQTT
+-- worker removes the endpoint - the client's secret from the mosquitto
+-- password_file (the web console cannot maintain that file) plus the
+-- CLIENTS.AUTH and CLIENTS.STATUS rows - and marks the row DONE. A
+-- client-initiated unregister over the bootstrap channel instead
+-- deactivates the record (STATUS.CSTATE = 'DEACT') directly in the broker,
+-- leaving it in place so the fingerprint cannot be silently re-registered;
+-- the console's Deregister can still remove such a deactivated record.
 --
 
 CREATE TABLE IF NOT EXISTS `DEREGS` (

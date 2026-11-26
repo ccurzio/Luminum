@@ -326,7 +326,11 @@ sub _sweep_missing {
 	my $dbh = _dbh($db);
 	my $n = $dbh->do("update STATUS set MISSING = 1 where MISSING = 0 and CSTATE != 'DEACT' and LASTSEEN is not null and LASTSEEN < date_sub(now(), interval $days day)")
 		or do { $log->("missing: sweep update failed: " . $dbh->errstr); return; };
-	if ($n && $n != -1) {
+	# DBI reports affected-row counts in scientific notation ("0E0", "3E0"),
+	# and the string "0E0" is true in a boolean context - normalize so the
+	# count prints plainly and the guard below is numeric.
+	$n = 0 + $n;
+	if ($n > 0) {
 		$log->("missing: marked $n client(s) missing (no check-in for $days day(s))");
 	}
 }
@@ -493,14 +497,19 @@ sub _pump_outbox {
 	}
 }
 
-# Process console-queued endpoint deregistrations (protocol 6.1, the
-# core/unregister deactivation). The console's Deregister action inserts a
-# PENDING DEREGS row; each row here performs the same deactivation the
-# broker's client-initiated path does - STATUS.CSTATE = 'DEACT' plus removal
-# of the client's secret from the mosquitto password_file (the web console
-# cannot maintain that file) - and marks the row DONE. passwd_remove is
-# idempotent for an absent user, so a row whose client was already
-# deactivated (or whose secret was already removed) still completes.
+# Process console-queued endpoint deregistrations (protocol 6.1). The
+# console's Deregister action inserts a PENDING DEREGS row; each row here
+# removes the endpoint from the server - the client's secret from the
+# mosquitto password_file (the web console cannot maintain that file) plus
+# the CLIENTS.AUTH and CLIENTS.STATUS rows - and marks the row DONE. Unlike
+# the broker's client-initiated path (which deactivates, leaving the record
+# so the fingerprint cannot be silently re-registered), the console action
+# deletes the record: with the AUTH row gone the bootstrap channel rejects
+# the client (no stored public key to verify its signature against) and
+# MQTT login fails (no password_file entry). The secret is removed before
+# the rows are deleted, so on the success path the credentials are gone
+# first. Both deletes and passwd_remove are idempotent, so a row whose
+# client was already removed still completes.
 sub _pump_deregs {
 	my ($db, $log, $passwd_file, $pid_file) = @_;
 	my $dbh = _dbh($db);
@@ -508,15 +517,16 @@ sub _pump_deregs {
 	$sth->execute();
 	while (my @row = $sth->fetchrow_array()) {
 		my ($id, $uid) = @row;
-		$dbh->do("update STATUS set CSTATE = 'DEACT' where ID = ?", undef, $uid);
 		if (passwd_remove($passwd_file, $uid)) {
 			reload($pid_file);
 		}
 		else {
-			$log->("dereg: UID $uid deactivated, but the MQTT password_file removal failed ($passwd_file)");
+			$log->("dereg: UID $uid removal proceeded, but the MQTT password_file removal failed ($passwd_file)");
 		}
+		$dbh->do("delete from AUTH where ID = ?", undef, $uid);
+		$dbh->do("delete from STATUS where ID = ?", undef, $uid);
 		$dbh->do("update DEREGS set STATUS = 'DONE', DONE = now() where ID = ?", undef, $id);
-		$log->("dereg: deregistered client ID $uid (console request $id)");
+		$log->("dereg: removed client ID $uid (console request $id)");
 	}
 }
 

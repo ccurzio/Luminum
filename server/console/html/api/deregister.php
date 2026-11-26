@@ -1,19 +1,19 @@
 <?php
 //
-// Endpoint deregistration endpoint (protocol 6.1, the core/unregister
-// deactivation). POST JSON only:
+// Endpoint deregistration endpoint (protocol 6.1). POST JSON only:
 //
 //   { "target": "42" }
 //
 // Administrator-only (USERS.ROLE = 1), enforced here server-side as well
 // as in the browser (the Client Status page renders the Deregister button
-// only for administrators). The deactivation itself is performed by the
+// only for administrators). The removal itself is performed by the
 // broker's MQTT worker, not here: the web console cannot maintain the
 // mosquitto password_file (owned by the mosquitto user), so this endpoint
 // only queues the request - a PENDING row in CLIENTS.DEREGS - and the
-// worker sets STATUS.CSTATE = 'DEACT', removes the client's MQTT secret,
-// and reloads the broker. The endpoint is idempotent: a second request
-// for a UID already queued answers ok without queueing a duplicate.
+// worker removes the client's MQTT secret, deletes the CLIENTS.AUTH and
+// CLIENTS.STATUS rows, and reloads the broker. The endpoint is idempotent:
+// a second request for a UID already queued answers ok without queueing a
+// duplicate.
 //
 require_once __DIR__ . '/_init.php';
 require_once __DIR__ . '/commandmap.php';
@@ -48,18 +48,20 @@ if ($uid === null) {
 	json_error('Invalid target: must be a numeric client ID', 400);
 }
 
-// The endpoint must exist and not already be deactivated.
-$result = api_query($db, "select ID,CSTATE from STATUS where ID = '$uid'", 'CLIENTS');
+// The endpoint must still have a record. A client already removed by a
+// processed deregistration has no STATUS row and is a 404. A client that is
+// merely deactivated (CSTATE = 'DEACT', the client-initiated path) is
+// offline and can never check in again, so it is removable: the worker's
+// deletes are idempotent and finish the job the deactivation left half
+// done (the AUTH and STATUS rows still present).
+$result = api_query($db, "select ID from STATUS where ID = '$uid'", 'CLIENTS');
 $client = mysqli_fetch_assoc($result);
 if ($client === null) {
 	json_error('No such client: ' . $uid, 404);
 }
-if ($client['CSTATE'] === 'DEACT') {
-	json_error('Client ' . $uid . ' is already deactivated', 400);
-}
 
 // Idempotent queueing: a request already in flight for this UID is not
-// duplicated (the worker's deactivation is itself idempotent, but one row
+// duplicated (the worker's removal is itself idempotent, but one row
 // per request keeps the queue auditable).
 $result = api_query($db, "select ID from DEREGS where UID = '$uid' and STATUS = 'PENDING'", 'CLIENTS');
 if (mysqli_fetch_assoc($result) !== null) {

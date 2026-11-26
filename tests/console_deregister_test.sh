@@ -7,9 +7,11 @@
 #   - a POST without the session's CSRF token is a 403 (CSRF gate)
 #   - a non-Administrator session is a 403 (role gate: only ROLE = 1)
 #   - an unknown target is a 404, an invalid target a 400
-#   - an already-deactivated client is a 400 (nothing to queue)
+#   - an already-deactivated client (CSTATE = 'DEACT', the client-initiated
+#     path) is accepted and queued: the console's Deregister removes the
+#     record the deactivation left behind
 #   - a valid request queues exactly one PENDING row in CLIENTS.DEREGS
-#     (the broker's MQTT worker performs the deactivation) and a repeat
+#     (the broker's MQTT worker performs the removal) and a repeat
 #     request is idempotent (ok, queued=false, no duplicate row)
 #   - a non-POST request is a 405
 #
@@ -240,8 +242,15 @@ check "non-numeric target rejected (400)" $([ "$code" = "400" ]; echo $?) "got: 
 code=$(post "$JAR_ADMIN" "$ADMIN_CSRF" "{\"target\": \"1; drop table STATUS\"}")
 check "injection-style target rejected (400)" $([ "$code" = "400" ]; echo $?) "got: $code $(cat "$SCRATCH/last.json")"
 code=$(post "$JAR_ADMIN" "$ADMIN_CSRF" "{\"target\": \"$UID_DEACT\"}")
-check "already-deactivated client rejected (400)" $([ "$code" = "400" ]; echo $?) "got: $code $(cat "$SCRATCH/last.json")"
-check "the deactivation rejection names the client" $(grep -q "Client $UID_DEACT is already deactivated" "$SCRATCH/last.json"; echo $?)
+check "already-deactivated client accepted (200)" $([ "$code" = "200" ]; echo $?) "got: $code $(cat "$SCRATCH/last.json")"
+python3 - "$SCRATCH/last.json" "$UID_DEACT" <<'EOF'
+import json, sys
+data = json.load(open(sys.argv[1]))
+assert data == {"ok": True, "queued": True, "target": sys.argv[2]}, data
+EOF
+check "deactivated client answers ok/queued" $? "$(cat "$SCRATCH/last.json")"
+check "a PENDING row was queued for the deactivated client" \
+    $([ "$(dbq "select count(*) from CLIENTS.DEREGS where UID=$UID_DEACT and STATUS='PENDING';")" = "1" ]; echo $?)
 
 # --- the happy path: one PENDING row is queued --------------------------------
 code=$(post "$JAR_ADMIN" "$ADMIN_CSRF" "{\"target\": \"$UID_OK\"}")

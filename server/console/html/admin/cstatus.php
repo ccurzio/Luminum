@@ -144,27 +144,21 @@ function cstatusButtons(n) {
 	if (der) { der.disabled = n < 1; }
 }
 
-// Deregister the selected endpoints (protocol 6.1, core/unregister): a
-// confirmation names what will happen, then each selected UID is queued
-// for the broker's MQTT worker, which deactivates it (CSTATE = 'DEACT')
-// and removes its MQTT credentials. The table's next poll shows the
-// deactivated state; the selection is cleared for the deregistered UIDs.
+// Deregister the selected endpoints (protocol 6.1): a confirmation names
+// what will happen, then each selected UID is queued for the broker's MQTT
+// worker, which removes the endpoint - its MQTT credentials and its AUTH
+// and STATUS rows. The table's next poll no longer lists the deregistered
+// UIDs; the selection is cleared for them.
 function cstatusDeregister() {
 	var uids = [];
 	for (var k in cstatusState.selected) {
 		if (cstatusState.selected[k]) { uids.push(k); }
 	}
 	if (uids.length === 0) { return; }
-	var names = [];
-	if (cstatusData) {
-		cstatusData.rows.forEach(function (r) {
-			if (cstatusState.selected[r.id]) { names.push(r.hostname); }
-		});
-	}
-	var label = uids.length === 1 ? names[0] : uids.length + ' endpoints';
+	var plural = uids.length > 1;
 	LuminumOverlay.show({
-		title: 'Deregister Endpoint',
-		message: 'Deregister ' + label + '? The endpoint will be deactivated and will no longer be able to communicate with the server. This cannot be undone from the console.',
+		title: plural ? 'Deregister ' + uids.length + ' Endpoints' : 'Deregister Endpoint',
+		message: (plural ? 'The endpoints' : 'The endpoint') + ' will be removed from the server and will no longer be able to communicate with it. This cannot be undone.',
 		buttons: [
 			{ label: 'Cancel', onclick: function () { LuminumOverlay.hide(); } },
 			{
