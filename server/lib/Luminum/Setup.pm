@@ -237,6 +237,48 @@ sub run {
 	# trees left 0700 by a previous install on re-runs.
 	fix_traversal($root) if $> == 0;
 
+	# --- File repository content/ tree (docs/p2p.md Phase 0) -----------------
+	# The broker (root) runs the discovery scan and owns the content-addressed
+	# store; the web user (php-fpm) writes chunked-upload temp files into
+	# staging/http/. Both must write under content/, so the tree is
+	# root:<webgroup> with group-write on staging/http. Set up here rather than
+	# by the broker's runtime bootstrap because only the installer knows the
+	# web user; the runtime bootstrap is a fallback for a deleted tree and
+	# cannot set cross-user ownership.
+	{
+		my @content = (
+			"$root/content",
+			"$root/content/files",
+			"$root/content/staging",
+			"$root/content/staging/http",
+			"$root/content/staging/nfs",
+			"$root/content/staging/smb",
+			);
+		for my $d (@content) {
+			make_path($d, { mode => 0700, verbose => 0 }) unless -d $d;
+			return $fail->("cannot create directory: $d") unless -d $d;
+			}
+		if ($> == 0) {
+			my ($webuser, $webgroup, $webuid, $webgid) = eval { detect_web_user() };
+			if ($@) {
+				$log->("warning: cannot determine the web user; the content/ tree stays root-only (HTTP uploads will need manual permissions): $@");
+				chmod(0750, @content);
+				}
+			else {
+				chown(0, $webgid, @content);
+				# Broker-only paths: the web user traverses/reads but does not
+				# write the CAS store or the nfs/smb staging drops.
+				chmod(0750, "$root/content", "$root/content/files",
+					"$root/content/staging", "$root/content/staging/nfs",
+					"$root/content/staging/smb");
+				# Group-writable: php-fpm (the web user) creates and renames
+				# upload temp files here; the broker (root, the owner) moves
+				# them into the store.
+				chmod(0770, "$root/content/staging/http");
+				}
+			}
+		}
+
 	# --- Step 1: sync code from the source tree ------------------------------
 	$step->("Synchronizing server files...");
 	$log->("Synchronizing server files from $srcdir ...");
@@ -2024,9 +2066,11 @@ pm.min_spare_servers = 1
 pm.max_spare_servers = 3
 ; Repository chunked uploads (docs/p2p.md Phase 0): raw chunk POSTs up to
 ; 8 MB, so the POST body cap sits well above a single chunk (the PHP
-; default of 8M would reject them).
-post_max_size = 16M
-upload_max_filesize = 16M
+; default of 8M would reject them). PHP ini settings in a pool must use
+; php_value[]/php_admin_value[] - a bare "post_max_size =" line is an
+; "unknown entry" and fails FPM startup.
+php_value[post_max_size] = 16M
+php_value[upload_max_filesize] = 16M
 env[LUMINUM_CONSOLE_CONF] = $p->{consoleconf}
 env[LUMINUM_DB_SOCKET] = $p->{dbsocket}
 env[LUMINUM_DB_HOST] = $dbhost

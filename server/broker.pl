@@ -28,6 +28,7 @@ use JSON::PP;
 use MIME::Base64;
 use Digest::SHA qw(sha256_hex);
 use IO::Socket::SSL;
+use IO::Select;
 use Crypt::Perl::Ed25519::PrivateKey;
 use Crypt::Perl::Ed25519::PublicKey;
 use lib "$Bin/lib";
