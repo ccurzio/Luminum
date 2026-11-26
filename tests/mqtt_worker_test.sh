@@ -19,6 +19,9 @@
 #     leaves the password_file, the row is marked DONE, and other clients
 #     are untouched
 #   - the offline LWT on client death flips STATUS.CSTATE to OFFLINE
+#   - a restarted client whose credentials were revoked (console
+#     deregistration) probes the bootstrap channel, logs the deregistration
+#     verdict, and stops the MQTT retry loop instead of flapping every 30s
 #   - the startup missing-client sweep (protocol 7.5) marks a stale offline
 #     client MISSING per MISSINGAFTER, skips deactivated and recently-seen
 #     clients, and a live check-in clears the flag again
@@ -62,7 +65,7 @@ SCRATCH="$HOME/.lumworker-mqtt-test.$$"
 CERTDIR="$SCRATCH/certs"
 HOME_TEST="$SCRATCH/home"
 FAILURES=0
-MOSQ_PID=""; CLIENT_PID=""; WORKER_PID=""
+MOSQ_PID=""; CLIENT_PID=""; WORKER_PID=""; FAKE_PID=""
 
 check() {
     local name="$1" ok="$2" detail="${3:-}"
@@ -78,6 +81,7 @@ cleanup() {
     [ -n "$CLIENT_PID" ] && kill -9 "$CLIENT_PID" 2>/dev/null
     [ -n "$WORKER_PID" ] && kill "$WORKER_PID" 2>/dev/null
     [ -n "$MOSQ_PID" ] && kill "$MOSQ_PID" 2>/dev/null
+    [ -n "$FAKE_PID" ] && kill "$FAKE_PID" 2>/dev/null
     mysql --socket="$DBSOCK" -u root -e "drop database if exists \`$DBNAME\`;" 2>/dev/null
     # Leave the scratch dir (worker.log, mosquitto.log, client.log) behind on
     # failure so the run can be inspected; remove it on success.
@@ -274,7 +278,10 @@ check "Mosquitto is listening on port $PORT" "$ready" "see $SCRATCH/mosquitto.lo
 # --- client home + pre-seeded config DB --------------------------------------
 # UID/SID/MQTT* are pre-seeded so the client skips registration and goes
 # straight to the MQTT control channel. SRVPUB is the worker's signing key so
-# the client accepts the worker's commands.
+# the client accepts the worker's commands. SHOST/SPORT (the bootstrap
+# channel) are seeded like a provisioned install carries them: the
+# deregistration probe (protocol §4.1) needs them to ask the server what
+# happened to the endpoint.
 mkdir -p "$HOME_TEST/config"
 python3 - "$HOME_TEST" "$PORT" "$SRVPUB_B64" <<'EOF'
 import sqlite3, sys
@@ -284,6 +291,7 @@ conn.execute("create table if not exists CONFIG (KEY text not null, VALUE text n
 for k, v in [
     ("UID", "42"), ("SID", "1"),
     ("MQTTSECRET", "testsecret123"), ("MQTTHOST", "127.0.0.1"), ("MQTTPORT", port),
+    ("SHOST", "127.0.0.1"), ("SPORT", "18885"),
     ("GROUPS", "testgrp"), ("SRVPUB", srvpub),
 ]:
     conn.execute("insert into CONFIG (KEY,VALUE) values (?,?)", (k, v))
@@ -581,6 +589,100 @@ for i in $(seq 1 40); do
     sleep 0.5
 done
 check "offline LWT flipped STATUS.CSTATE to OFFLINE" "$LWT_OK" "final cstate: $(dbq "select CSTATE from STATUS where ID=$UID_TEST;")"
+
+# --- Deregistration probe (protocol §4.1): a client whose credentials were
+# --- revoked stops retrying instead of flapping every 30s ------------------
+# Simulates a console deregistration of the live client (UID 42): the AUTH
+# and STATUS rows are deleted, the secret leaves the password_file, and
+# mosquitto reloads. The restarted client's MQTT CONNECT is refused (bad
+# credentials); its bootstrap probe gets BAD_SIGNATURE (no AUTH row to
+# verify against), so it logs the deregistration verdict once and breaks the
+# retry loop instead of reconnecting every 30s.
+#
+# The probe's bootstrap endpoint is a one-shot fake broker: it answers the
+# probe's check-in the way the real broker would for a deleted AUTH record -
+# ERR BAD_SIGNATURE, signed with the server key (the client verifies the
+# response signature, protocol §3.3).
+cat > "$SCRATCH/fakebootstrap.pl" <<'PERL'
+use strict;
+use warnings;
+use IO::Socket::SSL;
+use Luminum::Protocol;
+
+my ($port, $cert, $key, $seedfile, $issued, $ready) = @ARGV;
+open(my $sf, "<", $seedfile) or die "fake bootstrap: seed: $!\n";
+binmode($sf);
+read($sf, my $seed, 32);
+close($sf);
+my $srv = IO::Socket::SSL->new(
+    LocalAddr => "127.0.0.1:$port",
+    Proto => 'tcp',
+    Listen => 1,
+    SSL_cert_file => $cert,
+    SSL_key_file => $key,
+) or die "fake bootstrap: cannot listen: $SSL_ERROR\n";
+open(my $rf, ">", $ready) or die "fake bootstrap: ready: $!\n";
+close($rf);
+my $cs = $srv->accept();
+die "fake bootstrap: accept failed\n" unless $cs;
+$cs->timeout(10);
+my $lenbuf;
+my $n = $cs->sysread($lenbuf, 4);
+die "fake bootstrap: no frame length\n" unless $n == 4;
+my ($len) = unpack("N", $lenbuf);
+my $payload = "";
+my $got = 0;
+while ($got < $len) {
+    my $chunk;
+    $n = $cs->sysread($chunk, $len - $got);
+    last unless $n;
+    $payload .= $chunk;
+    $got += $n;
+}
+my ($ok, $req) = Luminum::Protocol::frame_decode($lenbuf . $payload);
+die "fake bootstrap: bad request frame\n" unless $ok;
+my $resp = Luminum::Protocol::new_envelope(
+    src => "server", uid => $req->{uid}, lumy => $req->{lumy},
+    action => $req->{action}, status => "ERR");
+$resp->{err} = "BAD_SIGNATURE";
+Luminum::Protocol::sign_envelope($resp, $seed);
+$cs->syswrite(Luminum::Protocol::frame_encode($resp, 64*1024));
+$cs->close();
+open(my $out, ">", $issued) or die "fake bootstrap: issued: $!\n";
+print $out "ACTION=", ($req->{action} // ""), "\n";
+print $out "UID=", ($req->{uid} // ""), "\n";
+close($out);
+PERL
+PERL5LIB="$PERL_LIBS" perl "$SCRATCH/fakebootstrap.pl" 18885 \
+    "$CERTDIR/tls.crt" "$CERTDIR/tls.key" "$CERTDIR/srv.seed" \
+    "$SCRATCH/probe-issued" "$SCRATCH/probe-ready" &
+FAKE_PID=$!
+for i in $(seq 1 20); do [ -f "$SCRATCH/probe-ready" ] && break; sleep 0.25; done
+
+dbq "delete from AUTH where ID=$UID_TEST;"
+dbq "delete from STATUS where ID=$UID_TEST;"
+mosquitto_passwd -D "$SCRATCH/passwd" "$UID_TEST"
+kill -HUP "$(cat "$SCRATCH/mosquitto.pid")" 2>/dev/null
+LUMINUM_HOME="$HOME_TEST" LUMINUM_CHECKIN_SECS=2 "$CLIENT_BIN" >> "$SCRATCH/client.log" 2>&1 &
+CLIENT_PID=$!
+PROBE_OK=1
+for i in $(seq 1 60); do
+    grep -q "it has been deregistered" "$SCRATCH/client.log" && { PROBE_OK=0; break; }
+    sleep 0.5
+done
+check "probe: client logged the deregistration verdict" "$PROBE_OK" "see $SCRATCH/client.log"
+check "probe: the probe was a check-in under the client's UID" \
+    "$(grep -q "ACTION=checkin" "$SCRATCH/probe-issued" 2>/dev/null && grep -q "UID=$UID_TEST" "$SCRATCH/probe-issued" 2>/dev/null; echo $?)" "see $SCRATCH/probe-issued"
+check "probe: no generic 'connection refused' retry log" "$(grep -q 'MQTT connection refused' "$SCRATCH/client.log"; test $? -eq 1; echo $?)"
+# The old behavior re-attempted the MQTT connect every 30s; span that
+# interval and require the log to stay put (the loop is broken, not just
+# quiet).
+before=$(wc -l < "$SCRATCH/client.log")
+sleep 35
+after=$(wc -l < "$SCRATCH/client.log")
+check "probe: no retry activity across the old 30s interval" $([ "$before" = "$after" ]; echo $?) "log grew $before -> $after lines"
+check "probe: the client process is still running (idle)" "$(kill -0 "$CLIENT_PID" 2>/dev/null; echo $?)"
+[ -n "$FAKE_PID" ] && kill "$FAKE_PID" 2>/dev/null
 
 echo "------------------------------------------------------------"
 if [ "$FAILURES" -gt 0 ]; then

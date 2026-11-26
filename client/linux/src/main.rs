@@ -42,7 +42,7 @@ use std::sync::Arc;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::io::{self, Read, Write};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use rusqlite::{params, Connection};
 use serde::{Serialize, Deserialize};
 use std::path::Path;
@@ -51,7 +51,7 @@ use base64ct::Encoding;
 use ed25519_dalek::{Signer, Verifier, SigningKey, VerifyingKey, Signature};
 use sha2::{Digest, Sha256};
 
-const VER: &str = "0.0.5";
+const VER: &str = "0.0.6";
 const IPORT: u16 = 10704;
 const DPORT: u16 = 10465;
 const LPORT: u16 = 10461;
@@ -66,6 +66,11 @@ const SENSOR_TIMEOUT_SECS: u64 = 30;
 // (30s) bounds the handshake + one request/response, so these match it.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 const IO_TIMEOUT: Duration = Duration::from_secs(30);
+// Deregistration probe pacing (protocol §4.1): after the MQTT broker refuses
+// the client's credentials, the bootstrap probe may re-ask at most this
+// often, and this is the retry interval while the probe reaches no verdict.
+const PROBE_EVERY: Duration = Duration::from_secs(900);
+const SLOW_RETRY: Duration = Duration::from_secs(900);
 // This client's OS platform (protocol §4.2 / §6.1). Used both in the check-in
 // payload (osplat) and to build the OS group topic luminum/{SID}/os/{os}/cmd.
 const OSPLAT: &str = "Linux";
@@ -415,12 +420,35 @@ fn server_signing_key(debug: bool) -> Option<[u8; 32]> {
 // Server channel (bootstrap/direct, TLS + framed JSON)
 // ---------------------------------------------------------------------------
 
+// A hostname may resolve to several addresses (e.g. both IPv6 and IPv4);
+// dial each in turn so a family the broker does not listen on cannot wedge
+// the connection.
+fn connect_any(addrs: &[SocketAddr], debug: bool) -> Result<TcpStream, Box<dyn Error>> {
+	let mut last_err = String::new();
+	for addr in addrs {
+		match TcpStream::connect_timeout(addr, CONNECT_TIMEOUT) {
+			Ok(sconn) => {
+				dbout(debug, 4, &format!("Connected to Luminum server at {}", addr));
+				return Ok(sconn);
+			}
+			Err(err) => {
+				dbout(debug, 4, &format!("Connection to Luminum server failed ({}): {}", addr, err));
+				last_err = err.to_string();
+			}
+		}
+	}
+	Err(last_err.into())
+}
+
 fn server_connect(server_host: &str, server_port: &str, cert_path: &str, debug: bool) -> Result<TlsStream<TcpStream>, Box<dyn Error>> {
 	let server_addr_str = format!("{}:{}", server_host, server_port);
-	let server_addr = server_addr_str.to_socket_addrs()?.next().ok_or("No addresses found for hostname")?;
+	let server_addrs: Vec<SocketAddr> = server_addr_str.to_socket_addrs()?.collect();
+	if server_addrs.is_empty() {
+		return Err("No addresses found for hostname".into());
+	}
 
 	let sconn = loop {
-		match TcpStream::connect_timeout(&server_addr, CONNECT_TIMEOUT) {
+		match connect_any(&server_addrs, debug) {
 			Ok(sconn) => break sconn,
 			Err(err) => {
 				dbout(debug, 2, &format!("Connection to Luminum server failed: {}", err));
@@ -555,8 +583,11 @@ fn register_with_server(debug: bool, ccfg: &HashMap<String, String>) {
 // until interrupted.
 fn server_send_once(server_host: &str, server_port: &str, cert_path: &str, message: &Envelope) -> Result<Envelope, Box<dyn Error>> {
 	let server_addr_str = format!("{}:{}", server_host, server_port);
-	let server_addr = server_addr_str.to_socket_addrs()?.next().ok_or("No addresses found for hostname")?;
-	let mut sconn = TcpStream::connect_timeout(&server_addr, CONNECT_TIMEOUT)
+	let server_addrs: Vec<SocketAddr> = server_addr_str.to_socket_addrs()?.collect();
+	if server_addrs.is_empty() {
+		return Err("No addresses found for hostname".into());
+	}
+	let mut sconn = connect_any(&server_addrs, false)
 		.map_err(|err| format!("Connection to Luminum server failed: {}", err))?;
 	// Same I/O bounds as server_connect: a stalled handshake or a silent
 	// server must not hang a one-shot command (deregistration) forever.
@@ -570,6 +601,41 @@ fn server_send_once(server_host: &str, server_port: &str, cert_path: &str, messa
 	frame_write(&mut server_stream, message)?;
 	let response = frame_read(&mut server_stream)?;
 	Ok(response)
+}
+
+// Deregistration probe (protocol §4.1): the MQTT broker's credential
+// rejection alone cannot say why the credentials were refused, so ask the
+// bootstrap channel - authenticated by per-message signature against the
+// stored public key, independent of mosquitto's password_file - whether the
+// server still recognizes this endpoint. A signed check-in under the
+// client's UID receives:
+//   OK                the endpoint is active; the server's MQTT credential
+//                     store is out of sync (keep retrying; self-heals)
+//   ERR DEACTIVATED   the record was deactivated (client-initiated
+//                     unregister)
+//   ERR BAD_SIGNATURE the AUTH record is gone (console Deregister)
+// A connection that fails, times out, or answers anything else is
+// undecidable. As with every server->client message (protocol §3.3), the
+// response must verify against the server signing key; an unverifiable
+// response is undecidable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DeregProbe { Active, Gone, Unknown }
+
+fn dereg_probe(shost: &str, sport: &str, uid: &str, seed: &[u8; 32], checkin: u64, srvpub: Option<&[u8; 32]>) -> DeregProbe {
+	let probe = build_checkin_envelope(uid, seed, checkin);
+	match server_send_once(shost, sport, &crt_path(), &probe) {
+		Ok(resp) if srvpub.map_or(false, |k| verify_envelope(&resp, k)) => {
+			if resp.status == "OK" {
+				DeregProbe::Active
+			} else {
+				match resp.err.as_deref() {
+					Some("DEACTIVATED") | Some("BAD_SIGNATURE") => DeregProbe::Gone,
+					_ => DeregProbe::Unknown,
+				}
+			}
+		}
+		_ => DeregProbe::Unknown,
+	}
 }
 
 // Deregistration (protocol §6.1, core/unregister): the sanctioned uninstall
@@ -1057,10 +1123,10 @@ fn checkin_secs(ccfg: &HashMap<String, String>) -> u64 {
 }
 
 // Build and sign a check-in envelope (protocol §6.1: action=checkin,
-// status=OK) and return its JSON wire bytes. checkin is the interval the
-// client is currently using (seconds); the server compares it with its own
-// CHECKININT and pushes a correction when they differ (protocol §7.2).
-fn build_checkin(uid: &str, seed: &[u8; 32], checkin: u64) -> Vec<u8> {
+// status=OK). checkin is the interval the client is currently using
+// (seconds); the server compares it with its own CHECKININT and pushes a
+// correction when they differ (protocol §7.2).
+fn build_checkin_envelope(uid: &str, seed: &[u8; 32], checkin: u64) -> Envelope {
 	let endpointname = gethostname().to_string_lossy().into_owned();
 	let ip_address = local_ip().map(|a| a.to_string()).unwrap_or_default();
 	let data = serde_json::json!({
@@ -1073,7 +1139,12 @@ fn build_checkin(uid: &str, seed: &[u8; 32], checkin: u64) -> Vec<u8> {
 	});
 	let mut msg = new_envelope("client", uid, "core", "checkin", "OK", Some(data));
 	sign_envelope(&mut msg, seed);
-	serde_json::to_vec(&msg).expect("Error: unable to serialize check-in envelope")
+	msg
+}
+
+// The check-in envelope's JSON wire bytes (the MQTT status topic payload).
+fn build_checkin(uid: &str, seed: &[u8; 32], checkin: u64) -> Vec<u8> {
+	serde_json::to_vec(&build_checkin_envelope(uid, seed, checkin)).expect("Error: unable to serialize check-in envelope")
 }
 
 // The client's long-lived MQTT control channel (protocol §4): connects to the
@@ -1082,7 +1153,7 @@ fn build_checkin(uid: &str, seed: &[u8; 32], checkin: u64) -> Vec<u8> {
 // check-ins on the status topic; and processes incoming commands. Reconnects
 // automatically on failure (poll() re-establishes the connection).
 async fn mqtt_run(debug: bool, ccfg: HashMap<String, String>) {
-	use rumqttc::{AsyncClient, ConnectionError, Event, LastWill, MqttOptions, Packet, QoS, Transport};
+	use rumqttc::{AsyncClient, ConnectReturnCode, ConnectionError, Event, LastWill, MqttOptions, Packet, QoS, Transport};
 	use std::collections::VecDeque;
 
 	// MQTT connection parameters (protocol §4.1). A missing value means the
@@ -1173,6 +1244,12 @@ async fn mqtt_run(debug: bool, ccfg: HashMap<String, String>) {
 	// Command deduplication (protocol §9.2): bounded ring of recent message ids.
 	let mut seen: VecDeque<String> = VecDeque::with_capacity(1024);
 
+	// Deregistration probe state (protocol §4.1): last probe time and the
+	// verdict it reached, so a persistent credential refusal neither re-logs
+	// nor re-probes on every 30s retry.
+	let mut last_probe: Option<Instant> = None;
+	let mut last_verdict: DeregProbe = DeregProbe::Unknown;
+
 	dbout(debug, 3, &format!("MQTT control channel starting ({}:{}, UID {})", host, port, uid));
 	loop {
 		match eventloop.poll().await {
@@ -1228,8 +1305,60 @@ async fn mqtt_run(debug: bool, ccfg: HashMap<String, String>) {
 			Ok(_) => {}
 			Err(ConnectionError::ConnectionRefused(code)) => {
 				connected.store(false, Ordering::SeqCst);
-				dbout(debug, 1, &format!("MQTT connection refused (code {:?}); check credentials.", code));
-				time::sleep(Duration::from_secs(30)).await;
+				// Both credential-refusal connack codes: 4 (bad username or
+				// password) and 5 (not authorized) - brokers differ on which
+				// they send for a rejected password_file entry.
+				let credential_refusal = matches!(code, ConnectReturnCode::BadUserNamePassword | ConnectReturnCode::NotAuthorized);
+				if !credential_refusal {
+					// Protocol version, client id, or broker unavailability:
+					// a configuration or broker-state problem, not a
+					// credential revocation - retry as before.
+					dbout(debug, 1, &format!("MQTT connection refused (code {:?}); check credentials.", code));
+					time::sleep(Duration::from_secs(30)).await;
+					continue;
+				}
+				// A credential refusal is the broker's authoritative "this
+				// identity is not accepted"; retrying the same secret cannot
+				// change it. Ask the bootstrap channel (signature-
+				// authenticated, independent of the MQTT password store)
+				// what the server thinks of this endpoint, rate-limited so a
+				// persistent refusal cannot turn the probe into its own
+				// retry loop.
+				let due = last_probe.map_or(true, |t| Instant::now().duration_since(t) >= PROBE_EVERY);
+				if due {
+					last_probe = Some(Instant::now());
+					let (shost, sport) = (ccfg.get("SHOST").cloned(), ccfg.get("SPORT").cloned());
+					last_verdict = match (shost, sport) {
+						(Some(h), Some(p)) => {
+							let (uid, seed, checkin, srv) = (uid.clone(), seed, checkin_interval.load(Ordering::SeqCst), srvpub);
+							// server_send_once is blocking (bounded by
+							// CONNECT_TIMEOUT/IO_TIMEOUT); keep it off the
+							// async runtime.
+							tokio::task::spawn_blocking(move || dereg_probe(&h, &p, &uid, &seed, checkin, srv.as_ref()))
+								.await
+								.unwrap_or(DeregProbe::Unknown)
+						}
+						_ => DeregProbe::Unknown,
+					};
+				}
+				match last_verdict {
+					DeregProbe::Gone => {
+						dbout(debug, 1, "MQTT credentials rejected and the server no longer recognizes this endpoint: it has been deregistered. The MQTT control channel will not retry; reinstall or re-provision the client to register a new endpoint.");
+						break;
+					}
+					DeregProbe::Active => {
+						if due {
+							dbout(debug, 1, "MQTT credentials rejected, but the server accepted the bootstrap check-in: the server's MQTT credential store is likely out of sync. Retrying.");
+						}
+						time::sleep(Duration::from_secs(30)).await;
+					}
+					DeregProbe::Unknown => {
+						if due {
+							dbout(debug, 1, "MQTT credentials rejected and the bootstrap probe reached no verdict. Retrying slowly.");
+						}
+						time::sleep(SLOW_RETRY).await;
+					}
+				}
 			}
 			Err(err) => {
 				connected.store(false, Ordering::SeqCst);
@@ -2151,5 +2280,39 @@ mod provision_cert_tests {
 		assert!(err.contains("not a valid X.509"), "a non-certificate must be reported as invalid, got: {}", err);
 
 		let _ = fs::remove_dir_all(&d);
+	}
+}
+
+#[cfg(test)]
+mod connect_any_tests {
+	use super::*;
+
+	#[test]
+	fn falls_back_to_next_address_when_first_fails() {
+		// An IPv4-only listener: the address list leads with the IPv6
+		// loopback on the same port (refused, or unreachable on a box
+		// without IPv6), so the dial must fall through to the IPv4 one.
+		let listener = TcpListener::bind("127.0.0.1:0").expect("bind IPv4 loopback");
+		let port = listener.local_addr().expect("listener addr").port();
+		let v6: SocketAddr = format!("[::1]:{}", port).parse().expect("parse IPv6 addr");
+		let v4: SocketAddr = format!("127.0.0.1:{}", port).parse().expect("parse IPv4 addr");
+		let mut sconn = connect_any(&[v6, v4], false).expect("must fall back to the IPv4 address");
+		let (mut peer, _) = listener.accept().expect("accept");
+		sconn.write_all(b"x").expect("write");
+		let mut buf = [0u8; 1];
+		assert_eq!(peer.read(&mut buf).expect("read"), 1);
+		assert_eq!(buf, [b'x']);
+	}
+
+	#[test]
+	fn all_addresses_failing_returns_err() {
+		// A port nothing listens on (taken and released by a listener):
+		// every dial is refused and the error surfaces.
+		let listener = TcpListener::bind("127.0.0.1:0").expect("bind IPv4 loopback");
+		let port = listener.local_addr().expect("listener addr").port();
+		drop(listener);
+		let a: SocketAddr = format!("127.0.0.1:{}", port).parse().expect("parse addr");
+		let b: SocketAddr = format!("[::1]:{}", port).parse().expect("parse addr");
+		assert!(connect_any(&[a, b], false).is_err());
 	}
 }
