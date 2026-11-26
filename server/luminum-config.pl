@@ -55,6 +55,7 @@ my @ORDER = qw(
 	UTIMEOUT UTIMEOUTWARN PASSKEYS USERLOGGING
 	SENREVS PKGREVS
 	REPOHTTP REPONFS REPOSMB
+	P2PENABLED
 	PNETCHECK SNETCHECK
 );
 
@@ -82,6 +83,7 @@ my %SPEC = (
 	REPOHTTP       => { type => 'enum',     values => ['Enabled','Disabled'],              def => 'Enabled',  desc => 'File repository: HTTP chunked upload vector' },
 	REPONFS        => { type => 'enum',     values => ['Enabled','Disabled'],              def => 'Disabled', desc => 'File repository: NFS staging drop vector' },
 	REPOSMB        => { type => 'enum',     values => ['Enabled','Disabled'],              def => 'Disabled', desc => 'File repository: SMB staging drop vector' },
+	P2PENABLED     => { type => 'enum',     values => ['Enabled','Disabled'],              def => 'Enabled',  desc => 'P2P file distribution (Disabled: server grants only)' },
 	PNETCHECK      => { type => 'host',                                                   def => '',       desc => 'Primary internet connectivity check host' },
 	SNETCHECK      => { type => 'host',                                                   def => '',       desc => 'Secondary internet connectivity check host' },
 );

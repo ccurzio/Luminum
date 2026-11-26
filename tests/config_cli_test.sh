@@ -6,7 +6,7 @@
 #   - set of a valid value, persisted to the DB
 #   - set normalizes enum case (required -> Required)
 #   - set of multiple KEY=VALUE pairs in one call
-#   - set upserts a key the installer did not seed (PASSKEYS)
+#   - set upserts a key the installer did not seed (PASSKEYS, P2PENABLED)
 #   - duration validation (UTIMEOUT=30M)
 #   - an out-of-range value is rejected (rc 1) and nothing is written
 #   - a mixed valid+invalid set is all-or-nothing (the valid one is not written)
@@ -109,6 +109,12 @@ check "set multiple pairs" $([ "$val1" = "60" ] && [ "$val2" = "100" ] && echo 0
 run set PASSKEYS=Enabled >/dev/null
 val=$(m "select CVAL from SYSTEM.CONFIG where CKEY='PASSKEYS'")
 check "set inserts unseeded key" $([ "$val" = "Enabled" ] && echo 0 || echo 1) "$val"
+
+# P2PENABLED (the P2P master switch, docs/p2p.md Phase 1) is not seeded in
+# this scratch DB: the set must upsert it and normalize the enum case.
+run set P2PENABLED=disabled >/dev/null
+val=$(m "select CVAL from SYSTEM.CONFIG where CKEY='P2PENABLED'")
+check "set P2PENABLED upserts unseeded key normalized" $([ "$val" = "Disabled" ] && echo 0 || echo 1) "$val"
 
 # --- set: duration --------------------------------------------------------------
 run set UTIMEOUT=30M >/dev/null

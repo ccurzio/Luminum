@@ -1,8 +1,8 @@
 # Luminum Wire Protocol Specification
 
-**Version:** 1.0-draft
-**Status:** PROPOSED — v1.0-draft. Core transport decisions locked: Ed25519 (Crypt::Perl::Ed25519), Mosquitto, MQTT 3.1.1, TLS-bound signing certificate, data ports 10465 + 10704, JSON everywhere.
-**Scope:** All client↔server communication for Luminum Server and Luminum Clients (all platforms), including Lumy module traffic.
+**Version:** 1.1-draft
+**Status:** PROPOSED — v1.1-draft. Core transport decisions locked: Ed25519 (Crypt::Perl::Ed25519), Mosquitto, MQTT 3.1.1, TLS-bound signing certificate, data ports 10465 + 10704, JSON everywhere. v1.1 adds the P2P file distribution channel (port 10464), CA-issued client TLS certificates, and the transfer grant (see `docs/p2p.md` for the swarm mechanics; the wire-level additions here are §2, §3.1, §6.1, §7.1, §7.4, §8.4, §11).
+**Scope:** All client↔server communication for Luminum Server and Luminum Clients (all platforms), including Lumy module traffic, plus the client↔client P2P transfer channel (v1.1).
 
 This document supersedes the ad-hoc message exchange currently implemented in `client/linux/src/main.rs` (MessagePack over raw TCP) and `server/broker.pl` (JSON envelope over raw TCP). Both ends must conform to this specification. Where this document makes a choice that is not yet settled, it is marked **[DECISION]**.
 
@@ -16,7 +16,7 @@ This document supersedes the ad-hoc message exchange currently implemented in `c
 4. **Every message is authenticated and integrity-protected** by per-message signature, independent of transport encryption. A compromised transport must not allow message forgery.
 5. **Mosquitto is the broker.** The server-side MQTT broker is Mosquitto, running as its own service. The Luminum broker process (`broker.pl`) is the application layer: it authenticates clients (Mosquitto auth hook → DB check of the secret hash), subscribes to all `luminum/{SID}/#` traffic, processes messages, and publishes commands. The exact Mosquitto auth and ACL mechanisms are confirmed against the deployed version (§4.1, §4.3).
 
-Non-goals: user-facing web console traffic (nginx/PHP), inter-endpoint communication.
+Non-goals: user-facing web console traffic (nginx/PHP). (Inter-endpoint communication is a non-goal *except* the server-orchestrated P2P file transfer channel, §2/§8.4 — a client never initiates P2P traffic on its own; every transfer happens under a server-signed grant.)
 
 ---
 
@@ -26,13 +26,15 @@ Non-goals: user-facing web console traffic (nginx/PHP), inter-endpoint communica
 |---|---|---|---|
 | Control | MQTT over TLS 1.2+ | 8883 (`MPORT`) | Commands, responses, check-ins, events, LWT |
 | Bootstrap/Data (server) | TLS 1.2+ over TCP, length-prefixed frames | 10465 (`LPORT`) | Registration, client→server bulk data |
-| Data (client inbound) | TLS 1.2+ over TCP, length-prefixed frames | 10704 (`IPORT`) | Server→client bulk data (package delivery) |
+| Data (client inbound) | TLS 1.2+ over TCP, length-prefixed frames | 10704 (`IPORT`) | Server→client bulk data (package delivery, P2P seed path) |
+| P2P (client↔client) | **Mutual** TLS 1.2+ over TCP, length-prefixed frames | 10464 (`PPORT`) | Peer-to-peer file transfer under a server-signed grant (§8.4) |
 | Local IPC (client-side only) | TCP, length-prefixed frames | 10461 (`LPORT_LOCAL`) | Lumy ↔ client process communication on the endpoint |
 
 - The MQTT port is the standard mqtts port to simplify firewalling; it is configurable via the `MPORT` server config key.
 - **10465 (`LPORT`)** is the server's listener. The client connects out to `server:10465` for registration and for client→server bulk data (oversized sensor results).
 - **10704 (`IPORT`)** is the client's inbound listener. The server connects to `client:10704` for server→client bulk data (package delivery). The MQTT `deploy` command carries the data reference; the server then opens a TLS connection to the client's 10704 to push the package. The client must be reachable on this port (NAT/firewall rules are the operator's responsibility).
-- All TLS channels: TLS 1.2 minimum, TLS 1.3 preferred. Certificate verification is mandatory on both ends; no fallback to plaintext on any channel.
+- **10464 (`PPORT`)** is the P2P peer listener (v1.1). Every registered client binds it at startup, exactly like `IPORT`. Any client may connect to any other client's 10464, but the connection is only useful if the initiator presents a valid transfer grant (§8.4); the serving side performs mutual TLS and verifies the peer's client certificate (§3.1, §4.2 of `docs/p2p.md`). Reachability (NAT/firewall) is the operator's responsibility, as with 10704.
+- All TLS channels: TLS 1.2 minimum, TLS 1.3 preferred. Certificate verification is mandatory on both ends; no fallback to plaintext on any channel. The P2P channel is the only one with **mutual** TLS: both endpoints present the CA-issued client certificate (§3.1).
 
 ---
 
@@ -45,6 +47,7 @@ Non-goals: user-facing web console traffic (nginx/PHP), inter-endpoint communica
 | Server TLS certificate + private key | Server (setup) | Server; cert distributed to clients at registration | Transport encryption, server identity |
 | Server signing keypair (Ed25519) | Server (setup) | Private: server only. Public: carried in the server signing certificate (§7.1) | Signing server→client messages |
 | Client signing keypair (Ed25519) | Client, at first run | Private: client config DB (file mode 0600). Public: sent at registration, stored server-side in `CLIENTS.AUTH.PUBKEY` | Signing client→server messages |
+| Client TLS keypair (P-256 ECDSA) + certificate | Keypair: client, at first run (CSR, §7.1). Certificate: server, at registration (signed by the key that issued the server TLS certificate) | Private: client `config/client.key` (0600). Certificate: client `config/client.crt` (0600). The server does not store the certificate | Peer identity on the P2P channel: mutual TLS on 10464 (§2, §8.4). Subject `CN = luminum-client-{UID}` — the UID is the identity, and the serving peer requires peer-cert UID == grant requester UID so a grant cannot be forwarded to a third party |
 | Client fingerprint | Client, at first run | Client config DB; server `CLIENTS.AUTH.FINGERPRINT` | Client identity binding |
 | Client UUID (UUIDv4) | Client, at first run | Client config DB (`CLUUID`); server `CLIENTS.AUTH.UUID` | Per-install endpoint identifier; a reinstalled client (fresh keypair, fresh UUID) registers as a new endpoint and never overwrites its predecessor's record |
 | Client MQTT secret | Server, at registration | Client config DB (0600); server stores SHA-256 hash only | MQTT broker authentication |
@@ -293,17 +296,22 @@ Both implementations MUST include a shared test vector (a fixed envelope with it
 
 | Direction | lumy | action | `data` fields | Description |
 |---|---|---|---|---|
-| c→s (bootstrap) | core | `register` | `hostname`, `uuid` (UUIDv4, §3.1), `fingerprint`, `pubkey` (base64 SPKI/DER), `osplat`, `osrel`, `clientver`, `ipv4`, `ipv6` (opt), `serverkey` | First-time registration. Only valid with `uid` = `"0"`. |
-| s→c (bootstrap) | core | `register` | `uid`, `sid`, `mqtthost`, `mqttport`, `mqttsecret`, `serverpubkey` (base64 SPKI/DER) | Registration response. Only valid over the bootstrap channel. `sid` is the Luminum Server ID used to build MQTT topics (§4.2). |
-| c→s | core | `checkin` | `hostname`, `osplat`, `osrel`, `clientver`, `ipv4` (opt), `ipv6` (opt), `checkin_secs` (the client's current interval, seconds) | Periodic liveness + state refresh. Interval = `CHECKININT`; the reported `checkin_secs` lets the server detect drift and push a correction (§7.2). |
+| c→s (bootstrap) | core | `register` | `hostname`, `uuid` (UUIDv4, §3.1), `fingerprint`, `pubkey` (base64 SPKI/DER), `osplat`, `osrel`, `clientver`, `ipv4`, `ipv6` (opt), `serverkey`, `tls_csr` (v1.1, base64 PEM CSR for the client TLS certificate, §7.1) | First-time registration. Only valid with `uid` = `"0"`. |
+| s→c (bootstrap) | core | `register` | `uid`, `sid`, `mqtthost`, `mqttport`, `mqttsecret`, `serverpubkey` (base64 SPKI/DER), `clientcert` (v1.1, base64 PEM — the CSR signed by the server, §7.1) | Registration response. Only valid over the bootstrap channel. `sid` is the Luminum Server ID used to build MQTT topics (§4.2). |
+| c→s (bootstrap) | core | `certrenew` (v1.1) | `fingerprint` | Re-issue the client TLS certificate for an already-registered endpoint (fleet upgrade of pre-P2P clients without re-registering): the server verifies the fingerprint against an existing `CLIENTS.AUTH` row and returns the signed certificate. |
+| s→c (bootstrap) | core | `certrenew` (v1.1) | `clientcert` (base64 PEM) | `certrenew` response. `err: "UNKNOWN_FINGERPRINT"` when the fingerprint matches no active row. |
+| c→s | core | `checkin` | `hostname`, `osplat`, `osrel`, `clientver`, `ipv4` (opt), `ipv6` (opt), `checkin_secs` (the client's current interval, seconds), `p2p` (v1.1, opt boolean — the P2P capability flag) | Periodic liveness + state refresh. Interval = `CHECKININT`; the reported `checkin_secs` lets the server detect drift and push a correction (§7.2). The server stores `p2p` in `CLIENTS.STATUS.P2P` and uses it for P2P source selection (§8.4) — an absent field means not capable. |
 | c→s | core | `unregister` | — | Client-initiated deactivation request (sanctioned uninstall flow): the record is deactivated (`CSTATE = 'DEACT'`), not deleted, so the fingerprint cannot be silently re-registered. The console's Deregister action (Administrator role only) removes the endpoint instead: it queues a `CLIENTS.DEREGS` row and the MQTT worker deletes the `CLIENTS.AUTH` and `CLIENTS.STATUS` rows and the client's MQTT secret (it can also remove a record left behind by a client-initiated deactivation). The client side of both paths — how a client learns its credentials were revoked — is the deregistration probe (§4.1). |
 | s→c | core | `query` | `qid`, `sensors` (array of `{sid, params}`), `conditions` (optional, §7.3) | Run named sensors, return results. Definitions arrive via `config` (§7.3). When `conditions` is present, only endpoints on which the condition tree evaluates true answer (§7.3). |
 | c→s | core | `answer` | `qid`, `results` (array of `{sid, output}` on success or `{sid, err}` on per-sensor failure) or `ref` (§8.3); no `results` when `status` is `NO_MATCH` | Response to `query`. `status` is `OK` (all succeeded), `PARTIAL` (some failed), `ERR` (malformed/none succeeded), or `NO_MATCH` (the query's condition tree evaluated false on this endpoint; no `results`, §7.3). Correlated by `qid` inside `data`; message `id` still unique per message. |
-| s→c | core | `deploy` | `aid`, `pkgid`, `ref` (§8.3), `profile` (opt) | Deploy a package. |
-| c→s | core | `report` | `event` (string), `detail` (object) | Unsolicited client report (e.g., deploy completion, local error). |
+| s→c | core | `deploy` | `aid`, `pkgid`, `ref` (§8.3, or the v1.1 grant form `{ "channel": "p2p", "grant": <p2pgrant envelope> }`, §8.4), `profile` (opt) | Deploy a package. The deploy flow always uses the grant form, including the server-seeded case, so there is one token mechanism. |
+| c→s | core | `report` | `event` (string), `detail` (object) | Unsolicited client report (e.g., deploy completion, local error). v1.1 P2P events: `p2p_fetch_ok` (`pkgid`, `srcuid`, `files[]` — the terminal success; drives holder bookkeeping), `p2p_fetch_fail` (`pkgid`, `err` — every source in the grant exhausted; drives re-routing), and `p2p_progress` (`aid`, `fileid`, `state` `FETCHING`/`VERIFYING`, `received`, `total`, `srcuid` — throttled in-transfer progress, published QoS 0, loss harmless). |
 | s→c | core | `config` | Lumy-specific key/value set; for `lumy` = `core`, `data.sensors` (array of sensor definitions: `sid`, `name`, and the per-OS script type/script fields) | Push configuration to a Lumy (replaces the current IPC `newconfig`/`setconfig` round-trip as the server-side source of truth). Core sensor definitions are upserted by the client into its local sensor table (§7.3). |
 | s→c | core | `setgroups` | `groups` (array of names; the full replacement list, may be empty) | Update the endpoint's group membership (§4.2): the client re-subscribes its group `cmd` topics, persists the list, and responds `OK`; a name outside `[A-Za-z0-9_.-]` is rejected as a whole with `err: "INVALID_DATA"`. |
 | s→c | core | `setcheckinint` | `checkin_secs` (the directed interval, seconds) | Direct the endpoint's check-in interval (§7.2): the client persists it (`CHECKIN_SECS`) and applies it to its check-in cadence, and responds `OK`; a value outside 1–86400 seconds is rejected with `err: "INVALID_DATA"`. |
+| s→c | core | `p2pgrant` (v1.1) | `token`, `pkgid`, `os`, `files[]` (`{fileid, path, size, sha256}`), `sources[]` (`{uid, ip, port}` — ordered, always terminated by the server entry `{uid: 0, …, port: 10704}`), `exp` | The P2P transfer grant (§8.4): *requester `uid` may fetch file set `files` from the sources in `sources`, once, before `exp`.* Server-signed; embedded in the `deploy` command's `ref` and forwarded to the serving peer verbatim. |
+| peer | core | `p2pfetch` (v1.1) | req: `token`, `fileid`; resp: `token`, `fileid`, `status`, `size` / `err` | Per-file handshake inside a grant session on 10464 (§8.4). Signed by its sender (the grant envelope itself is server-signed and not re-signed). |
+| c→s (events) | core | `p2p/have` (v1.1) | `files` (array of `fileid`) | One-shot startup sync of the client's local file manifest, published after MQTT connect; the server uses it to rebuild `CONTENT.PKGHOLDERS` after client or server restarts. |
 
 ### 6.2 Lumy-defined actions
 
@@ -339,6 +347,7 @@ Client                              Server
 - The `register` response is signed with the server's Ed25519 key. **Bootstrap trust anchor (TLS-bound signing certificate, confirmed):** the server holds a dedicated Ed25519 signing certificate issued by the same CA that issues the server TLS certificate. The client validates this signing certificate against its trusted CA — the same trust root it already uses for the TLS handshake — extracts the Ed25519 public key, and uses it to verify all server→client signatures. The `serverpubkey` field in the register response is retained as a convenience and is cross-checked against the key in the validated signing certificate; a mismatch is a fatal error. Setup must therefore generate the Ed25519 signing keypair and signing certificate and distribute the CA (or the signing certificate) to clients — this extends the existing Certificate/Key Setup work.
 - The MQTT secret is transmitted only inside the signed, TLS-protected bootstrap response. The server stores only its SHA-256 hash.
 - Re-registration with an existing fingerprint is rejected (`status: "ERR"`, `err: "ALREADY_REGISTERED"`).
+- **Client TLS certificate (v1.1).** Alongside the Ed25519 signing keypair, the client generates a dedicated P-256 ECDSA keypair and CSR at first run (the private key never leaves the endpoint) and carries the CSR in `data.tls_csr`. The server signs it with **the key that issued the server TLS certificate** — `luminum-ca.key` in generate mode, or the server certificate's own key in import/self-signed mode — with subject `CN = luminum-client-{UID}`, and returns the signed certificate in `data.clientcert`. The client stores it at `config/client.crt` next to `config/client.key` (both mode 0600). No new trust material reaches the client: the certificate chains to the same root the client already trusts for the server, which is what makes mutual TLS on the P2P channel (§8.4) possible. Certificate validity is 1 year; a client that registered before v1.1 obtains its certificate via `certrenew` on upgrade (existing fingerprint, same UID — no endpoint-record churn). v1 has no CRL/OCSP; the exposure window for a de-registered certificate is bounded by grant lifetime (§8.4).
 
 ### 7.2 Check-in
 
@@ -369,6 +378,8 @@ Server                          Client
 ### 7.4 Deploy
 
 Same shape as query/answer with `deploy`/`report`. Package bytes travel via the data channel reference pattern (§8.3); the `deploy` command carries only the reference and metadata.
+
+**P2P grant form (v1.1).** The deploy flow always carries the grant form: `ref = { "channel": "p2p", "grant": <p2pgrant envelope> }`. The broker mints one grant per target (new single-use token, `exp` = now + 300 s, the ordered source list — up to two ranked peers always terminated by the server entry — recorded in `CLIENTS.P2PTOKENS`) and embeds it in that target's command. The requester walks the source list in-session (§8.4); the server is always a valid source, so a grant whose peer list is empty is simply the seed path over 10704. The plain-token `ref` form of §8.3 remains for the client→server direction and oversized sensor output.
 
 ### 7.5 Offline detection (LWT) and missing clients
 
@@ -416,6 +427,35 @@ Direction determines which port is used (§2):
 
 In both cases the initiator presents the signed `data/fetch`/`data/push` handshake first; the receiver verifies before accepting any payload frames.
 
+### 8.4 P2P peer channel (v1.1)
+
+Port 10464 (`PPORT`), **mutual** TLS 1.2+ (both endpoints present the CA-issued client certificate, §3.1/§7.1), then the existing length-prefixed framing (§8.2). One connection per (requester, source) grant session. The swarm mechanics — source selection, re-routing, holder bookkeeping, progress tracking — are specified in `docs/p2p.md` (§5–§7); this section is the wire contract.
+
+```
+Requester (R)                          Source (S)
+  |=== mTLS (both present client certs) =>|
+  |-- frame: p2pgrant envelope (the grant) ->|
+  |                                       | verify (checklist below)
+  |<-- frame: core/p2pfetch resp ----------|  {token, status: OK, files: [sizes]}
+  |                                       |
+  |  for each file in grant order:        |
+  |  |-- frame: core/p2pfetch req -------->|  {token, fileid}
+  |  |<-- frame: core/p2pfetch resp -------|  {token, fileid, status: OK, size}
+  |  |<-- raw chunks (4B len + bytes) ---->|  up to 1 MiB per chunk
+  |  |<-- frame: zero-length (EOF) --------|
+  |                                       |
+  |-- TLS close -------------------------->|
+```
+
+- The grant envelope is server-signed and forwarded verbatim; the per-file `p2pfetch` req/resp envelopes are signed by their sender.
+- Raw chunks are plain file bytes in the §8.2 framing — not JSON. A zero-length frame terminates a file's stream.
+- **Source-side verification checklist.** The serving peer accepts a transfer only if all hold: (1) mTLS succeeded and the peer certificate validated against the trusted root; (2) peer certificate UID == grant `uid` (the channel identity is bound to the grant — a holder cannot forward its grant to a third party over its own connection); (3) the grant signature verifies under the server signing key (§7.1 anchor); (4) `exp` is in the future; (5) `token` has not been used on this endpoint (local used-token ring, same pattern as the §9.2 message-ID dedup ring); (6) every `fileid` in the grant is present in the local file manifest with matching `size` and `sha256` (a holder whose copy was modified locally cannot serve it). Any failure ⇒ `ERR` response with a machine-readable code (`BAD_GRANT`, `GRANT_EXPIRED`, `GRANT_USED`, `UID_MISMATCH`, `FILE_MISSING`, `FILE_MISMATCH`) and the connection closes.
+- **Receiving.** The requester writes each file to `Downloads/` (staging), verifies total size and SHA-256, then moves it to its final path under `Packages/` and records it in the local manifest. A hash mismatch aborts the whole session: staged files are deleted, `p2p_fetch_fail` is reported, nothing is installed.
+- **Source fallback (in-session).** If a session fails before completion (connect refused, `ERR` handshake, TLS failure, chunk error, source disconnect, read timeout), the requester discards staged data for that source and opens a new session with the **same grant** against the next `sources[]` entry — the server signature authorizes the whole list, so fallback needs no server round-trip. The grant's `exp` bounds the whole walk; a token is consumed on completion, not on start. If the list is exhausted or `exp` passes, the requester reports `p2p_fetch_fail` and the server re-mints a replacement grant.
+- **Progress.** Progress does not travel over the peer channel: the requester publishes throttled `p2p_progress` reports over MQTT (§6.2 of `docs/p2p.md`) and the terminal `p2p_fetch_ok` / `p2p_fetch_fail` report.
+- **Serving concurrency.** v1: one concurrent serving session per client; excess connections are refused with `ERR BUSY`.
+- **Hostname verification.** Peers are addressed by IP and client certificates carry no IP SAN, so both sides replace hostname verification with chain-to-root + validity + cert-UID-equals-expected-UID (the identity binding item 2 above).
+
 ---
 
 ## 9. Reliability, Deduplication, Timeouts
@@ -438,6 +478,7 @@ In both cases the initiator presents the signed `data/fetch`/`data/push` handsha
 | Command deadline (query) | 120 s | `CMDTIMEOUT` **[NEW]** |
 | Command deadline (deploy) | 3600 s | `DEPLTIMEOUT` **[NEW]** |
 | Data channel token lifetime | 300 s | — (fixed) |
+| P2P grant lifetime (v1.1) | 300 s | — (fixed; bounds the in-session source walk, §8.4) |
 | Check-in interval | 5 min | `CHECKININT` (existing; delivered to clients via `setcheckinint`, §7.2) |
 | Missing threshold | 90 days | `MISSINGAFTER` (existing) |
 
@@ -462,6 +503,7 @@ Server (primary config, `SYSTEM.CONFIG`):
 | `MPORT` | 8883 | MQTT listener port (TLS) |
 | `CMDTIMEOUT` | 120 | Query command deadline (seconds) |
 | `DEPLTIMEOUT` | 3600 | Deploy command deadline (seconds) |
+| `P2PENABLED` (v1.1) | Enabled | P2P distribution master switch: when `Disabled` the broker mints only server grants (the seed path) |
 
 Client (config DB):
 
@@ -486,6 +528,7 @@ Client (config DB):
 6. **Wire encoding** — JSON everywhere; MessagePack dropped (§5.4).
 7. **Lumy IPC identity** — `src` enum extended with `"lumy"`; same envelope, signed with the client key (§8.2).
 8. **Mosquitto auth + ACL mechanism** — built-in `password_file` (PBKDF2-SHA512, kept in sync with `CLIENTS.AUTH` and reloaded via `SIGHUP`) for login, and static `pattern` rules with `%u` substitution in an `acl_file` for access control. No C plugin or dynamic callback (§4.1, §4.3).
+9. **P2P file distribution (v1.1)** — port 10464 (`PPORT`) as the client↔client listener; mutual TLS with CA-issued client certificates (CSR at registration, `certrenew` for pre-v1.1 clients); server-signed single-use 5-minute transfer grants carrying an ordered source list always terminated by the server entry, walked in-session by the requester; file-level transfers with a piece-ready grant/manifest structure. Client-side P2P TLS is rustls (the cached native-tls acceptor cannot request or validate client certificates) (§2, §3.1, §7.1, §8.4; swarm mechanics in `docs/p2p.md`).
 
 ### Still open / to verify
 - **`CHECKININT` vs. keepalive** — keepalive 60 s, check-in 5 min; confirm the Mosquitto session timeout is not shorter than the check-in interval plus margin (§4.1, §9.3).

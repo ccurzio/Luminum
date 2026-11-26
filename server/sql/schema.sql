@@ -156,6 +156,28 @@ CREATE TABLE IF NOT EXISTS `PKGFILES` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
+-- Table structure for table `PKGHOLDERS`
+--
+-- P2P holder tracking (docs/p2p.md 7.3, Phase 1): which endpoints currently
+-- hold which repository files. The broker upserts a row when a client
+-- reports p2p_fetch_ok (or p2p/have at startup) and deletes an endpoint's
+-- rows on deregistration and the missing sweep. A holder is a P2P source
+-- candidate for the same file's next deploy (docs/p2p.md 7.1). SOURCE is
+-- 'server' (seeded from the server), 'local' (the client's own prior
+-- install), or the serving peer's UID.
+--
+
+CREATE TABLE IF NOT EXISTS `PKGHOLDERS` (
+  `ID` int(20) NOT NULL AUTO_INCREMENT,
+  `FILEID` int(20) NOT NULL,
+  `UID` int(20) NOT NULL,
+  `SOURCE` tinytext NOT NULL,
+  `TS` datetime NOT NULL,
+  PRIMARY KEY (`ID`),
+  UNIQUE KEY `UQ_PKGHOLDERS` (`FILEID`,`UID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
 -- Table structure for table `SENSORHISTORY`
 --
 
@@ -511,6 +533,7 @@ CREATE TABLE IF NOT EXISTS `STATUS` (
   `REGDATE` datetime NOT NULL,
   `LASTSEEN` datetime DEFAULT NULL,
   `MISSING` tinyint(1) DEFAULT 0,
+  `P2P` tinyint(1) DEFAULT 0,
   PRIMARY KEY (`ID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -563,6 +586,56 @@ CREATE TABLE IF NOT EXISTS `DEREGS` (
   `DONE` datetime DEFAULT NULL,
   PRIMARY KEY (`ID`),
   KEY `IDX_DEREGS_STATUS` (`STATUS`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table structure for table `P2PTOKENS`
+--
+-- Single-use P2P transfer grants (docs/p2p.md 5, Phase 1). The broker mints
+-- one row per deploy target: a new token, the ordered source list (JSON:
+-- [{uid, ip, port}], always terminated by the server entry), and a 5-minute
+-- expiry. The token rides inside the signed grant envelope embedded in the
+-- deploy command; the requester presents it to the first source in the list
+-- and may walk the list with the same token. The broker marks the row USED
+-- on the terminal report (completion or an exhausted walk) and sweeps
+-- expired unused rows.
+--
+
+CREATE TABLE IF NOT EXISTS `P2PTOKENS` (
+  `TOKEN` char(36) NOT NULL,
+  `PKGID` int(20) NOT NULL,
+  `REQUID` int(20) NOT NULL,
+  `SOURCES` tinytext NOT NULL,
+  `EXPIRES` datetime NOT NULL,
+  `USED` datetime DEFAULT NULL,
+  PRIMARY KEY (`TOKEN`),
+  KEY `IDX_P2PTOKENS_EXPIRES` (`EXPIRES`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table structure for table `P2PTRANSFERS`
+--
+-- Live P2P transfer progress per (deploy, endpoint, file) (docs/p2p.md 7.5,
+-- Phase 1). The broker upserts one row per throttled p2p_progress report
+-- (STATE FETCHING/VERIFYING, RECEIVED/TOTAL bytes, the current source); the
+-- terminal p2p_fetch_ok / p2p_fetch_fail report sets DONE/FAILED. The
+-- console's deploy status view polls this table. The broker sweep marks
+-- stale in-flight rows TIMEDOUT.
+--
+
+CREATE TABLE IF NOT EXISTS `P2PTRANSFERS` (
+  `ID` int(20) NOT NULL AUTO_INCREMENT,
+  `AID` char(36) NOT NULL,
+  `UID` int(20) NOT NULL,
+  `FILEID` int(20) NOT NULL,
+  `STATE` tinytext NOT NULL,
+  `RECEIVED` bigint(20) NOT NULL DEFAULT 0,
+  `TOTAL` bigint(20) NOT NULL DEFAULT 0,
+  `SRCUID` int(20) DEFAULT NULL,
+  `ERR` tinytext DEFAULT NULL,
+  `TS` datetime NOT NULL,
+  PRIMARY KEY (`ID`),
+  UNIQUE KEY `UQ_P2PTRANSFERS` (`AID`,`UID`,`FILEID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --

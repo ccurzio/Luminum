@@ -4,14 +4,15 @@
 # default-only SYSTEM.CONFIG rows (ENDPOINTCOMM, MISSINGAFTER,
 # CMDTIMEOUT, DEPLTIMEOUT, CHECKININT, TARGETCONF, TCONFTHRESHOLD, 2FA,
 # MINPASS, COMPLEXPASS, UTIMEOUT, UTIMEOUTWARN, SENREVS, PKGREVS,
-# INVESTIGATE) and the schema's default row (PASSKEYS):
+# INVESTIGATE, P2PENABLED) and the schema's default row (PASSKEYS):
 #   1. fresh install: ENDPOINTCOMM is seeded to "mqtt", MISSINGAFTER to
 #      "90" (days), CMDTIMEOUT to "120" (s), DEPLTIMEOUT to "3600" (s),
 #      CHECKININT to "5" (min), TARGETCONF to "Enabled", TCONFTHRESHOLD
 #      to "250" (endpoints), 2FA to "Optional", MINPASS to "8",
 #      COMPLEXPASS to "Disabled", UTIMEOUT to "15M" (minutes),
 #      UTIMEOUTWARN to "Enabled", SENREVS to "5", PKGREVS to "5",
-#      INVESTIGATE to "Enabled", PASSKEYS to "Disabled" (schema.sql)
+#      INVESTIGATE to "Enabled", P2PENABLED to "Enabled",
+#      PASSKEYS to "Disabled" (schema.sql)
 #   2. values later changed "in the console" (simulated with direct
 #      UPDATEs) survive a re-run of the installer - the defaults must
 #      not clobber them
@@ -183,6 +184,8 @@ $val = q1("select CVAL from SYSTEM.CONFIG where CKEY = 'PKGREVS'");
 check("fresh install: PKGREVS seeded to '5' (revisions, > 0 = enabled)", $val eq "5", "val=[$val]");
 $val = q1("select CVAL from SYSTEM.CONFIG where CKEY = 'INVESTIGATE'");
 check("fresh install: INVESTIGATE seeded to 'Enabled'", $val eq "Enabled", "val=[$val]");
+$val = q1("select CVAL from SYSTEM.CONFIG where CKEY = 'P2PENABLED'");
+check("fresh install: P2PENABLED seeded to 'Enabled'", $val eq "Enabled", "val=[$val]");
 $val = q1("select CVAL from SYSTEM.CONFIG where CKEY = 'PASSKEYS'");
 check("fresh install: PASSKEYS seeded to 'Disabled' (schema.sql)", $val eq "Disabled", "val=[$val]");
 
@@ -203,6 +206,7 @@ my %changed = (
 	SENREVS        => "10",
 	PKGREVS        => "0",
 	INVESTIGATE    => "Disabled",
+	P2PENABLED     => "Disabled",
 	# PASSKEYS is seeded by schema.sql (not the installer's defaults);
 	# the schema's NOT EXISTS guard must preserve a console change too.
 	PASSKEYS       => "Enabled",

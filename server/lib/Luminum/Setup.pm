@@ -327,6 +327,9 @@ sub run {
 	unless (migrate_clients_auth($dbh, $log)) {
 		return $fail->("CLIENTS.AUTH migration failed");
 		}
+	unless (migrate_clients_status($dbh, $log)) {
+		return $fail->("CLIENTS.STATUS migration failed");
+		}
 	unless (migrate_commands($dbh, $log)) {
 		return $fail->("CLIENTS.COMMANDS migration failed");
 		}
@@ -538,12 +541,14 @@ EOF
 	# endpoints, 2FA = Optional, MINPASS = 8, COMPLEXPASS = Disabled,
 	# UTIMEOUT = 15M, UTIMEOUTWARN = Enabled, SENREVS = 5, PKGREVS = 5,
 	# INVESTIGATE = Enabled, REPOHTTP = Enabled, REPONFS = Disabled,
-	# REPOSMB = Disabled), but a
+	# REPOSMB = Disabled, P2PENABLED = Enabled), but a
 	# value later changed in the console survives re-runs. SENREVS and
 	# PKGREVS are revision counts; any value > 0 is "Enabled" in the
 	# console, 0 is "Disabled". The REPO* keys are the file repository
 	# ingestion vectors (docs/p2p.md Phase 0): HTTP chunked upload is the
-	# default; NFS/SMB staging drops are opt-in.
+	# default; NFS/SMB staging drops are opt-in. P2PENABLED is the P2P
+	# distribution master switch (docs/p2p.md Phase 1): when Disabled the
+	# broker mints only server grants.
 	my %defaults = (
 		ENDPOINTCOMM    => "mqtt",
 		MISSINGAFTER    => "90",
@@ -563,6 +568,7 @@ EOF
 		REPOHTTP        => "Enabled",
 		REPONFS         => "Disabled",
 		REPOSMB         => "Disabled",
+		P2PENABLED      => "Enabled",
 		);
 	unless (seed_config($dbh, \%rows, \%defaults)) {
 		return $fail->("SYSTEM.CONFIG seeding failed");
@@ -1275,6 +1281,24 @@ sub migrate_clients_auth {
 		unless ($rc) { $log->("  CLIENTS.AUTH migration failed for $col: $@"); return 0; }
 		$log->("  CLIENTS.AUTH: added missing column $col");
 		}
+	return 1;
+	}
+
+# P2P (the P2P capability flag, docs/p2p.md 7.4) was added to CLIENTS.STATUS
+# after the first production installs: the client's check-in sets it from
+# the p2p capability field. Pre-existing rows default to 0 (not capable),
+# which is correct - a client that has not checked in since the upgrade has
+# not advertised the capability, and the broker never selects it as a P2P
+# source until it does.
+#
+sub migrate_clients_status {
+	my ($dbh, $log) = @_;
+	my ($have) = map { $_->[0] }
+		@{ $dbh->selectall_arrayref(qq{select COLUMN_NAME from information_schema.COLUMNS where TABLE_SCHEMA = 'CLIENTS' and TABLE_NAME = 'STATUS' and COLUMN_NAME = 'P2P'}) || [] };
+	return 1 if defined $have;
+	my $rc = eval { $dbh->do("alter table CLIENTS.STATUS add P2P tinyint(1) NOT NULL DEFAULT 0"); 1 };
+	unless ($rc) { $log->("  CLIENTS.STATUS migration failed for P2P: $@"); return 0; }
+	$log->("  CLIENTS.STATUS: added missing column P2P");
 	return 1;
 	}
 
