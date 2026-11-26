@@ -18,6 +18,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 		mysqli_query($db, "delete from SESSION where ID = (select ID from USERS where USERNAME = '" . $_SESSION['USER'] . "')");
 		session_unset();
 		session_destroy();
+		// Restart a live session: the login form rendered below stores its
+		// CSRF token in the session, but a destroyed session never saves
+		// $_SESSION data on shutdown, so without this the first login POST
+		// after a logout fails the CSRF gate (the form's token was never
+		// persisted and a different one is generated at verification).
+		session_start();
+		session_regenerate_id(true);
 		}
 	if (!isset($_SESSION['SID'])) {
 		include ("login.php");
