@@ -72,6 +72,8 @@ my $certtitle;
 my $certgen;
 my $certgenkey;
 my $certimport;
+my $certuseexisting;
+my $certnewcawarn;
 my $certfilel;
 my $keyfilel;
 my $keypassl;
@@ -118,6 +120,8 @@ if ($ENV{LANG} =~ /en_/ || $ENV{LANG} eq "") {
 	$certgen = "Generate a new certificate (new private key)";
 	$certgenkey = "Generate a new certificate (existing private key)";
 	$certimport = "Import an existing certificate and private key";
+	$certuseexisting = "Use the existing certificate";
+	$certnewcawarn = "NOTE: a new certificate creates a new CA; existing clients will no longer verify the server and must be re-provisioned.";
 	$certfilel = "Certificate File";
 	$keyfilel = "Private Key File";
 	$keypassl = "Key Passphrase";
@@ -164,6 +168,8 @@ elsif ($ENV{LANG} =~ /de_/) {
 	$certgen = "Neues Zertifikat erstellen (neuer privater Schlüssel)";
 	$certgenkey = "Neues Zertifikat erstellen (vorhandener privater Schlüssel)";
 	$certimport = "Vorhandenes Zertifikat und privaten Schlüssel importieren";
+	$certuseexisting = "Vorhandenes Zertifikat verwenden";
+	$certnewcawarn = "HINWEIS: Ein neues Zertifikat erzeugt eine neue CA; bestehende Endpunkte müssen neu provisioniert werden.";
 	$certfilel = "Zertifikatsdatei";
 	$keyfilel = "Private Schlüsseldatei";
 	$keypassl = "Schlüsselkennwort";
@@ -224,6 +230,8 @@ elsif ($ENV{LANG} =~ /it_/) {
 	$certgen = "Genera un nuovo certificato (nuova chiave privata)";
 	$certgenkey = "Genera un nuovo certificato (chiave privata esistente)";
 	$certimport = "Importa un certificato e una chiave privata esistenti";
+	$certuseexisting = "Usa il certificato esistente";
+	$certnewcawarn = "NOTA: un nuovo certificato crea una nuova CA; gli endpoint esistenti dovranno essere riprovisionati.";
 	$certfilel = "File Certificato";
 	$keyfilel = "File Chiave Privata";
 	$keypassl = "Passphrase Chiave";
@@ -284,6 +292,8 @@ elsif ($ENV{LANG} =~ /fr_/) {
 	$certgen = "Générer un nouveau certificat (nouvelle clé privée)";
 	$certgenkey = "Générer un nouveau certificat (clé privée existante)";
 	$certimport = "Importer un certificat et une clé privée existants";
+	$certuseexisting = "Utiliser le certificat existant";
+	$certnewcawarn = "REMARQUE : un nouveau certificat crée une nouvelle CA ; les points de terminaison existants devront être reprovisionnés.";
 	$certfilel = "Fichier Certificat";
 	$keyfilel = "Fichier Clé Privée";
 	$keypassl = "Passphrase de Clé";
@@ -344,6 +354,8 @@ elsif ($ENV{LANG} =~ /es_/) {
 	$certgen = "Generar un nuevo certificado (nueva clave privada)";
 	$certgenkey = "Generar un nuevo certificado (clave privada existente)";
 	$certimport = "Importar un certificado y una clave privada existentes";
+	$certuseexisting = "Usar el certificado existente";
+	$certnewcawarn = "NOTA: un nuevo certificado crea una nueva CA; los puntos de terminación existentes deberán reprovisionarse.";
 	$certfilel = "Archivo de Certificado";
 	$keyfilel = "Archivo de Clave Privada";
 	$keypassl = "Passphrase de Clave";
@@ -404,6 +416,8 @@ else {
 	$certgen = "Generate a new certificate (new private key)";
 	$certgenkey = "Generate a new certificate (existing private key)";
 	$certimport = "Import an existing certificate and private key";
+	$certuseexisting = "Use the existing certificate";
+	$certnewcawarn = "NOTE: a new certificate creates a new CA; existing clients will no longer verify the server and must be re-provisioned.";
 	$certfilel = "Certificate File";
 	$keyfilel = "Private Key File";
 	$keypassl = "Key Passphrase";
@@ -422,11 +436,12 @@ else {
 # ---------------------------------------------------------------------------
 
 my %opt = (
-	textonly       => 0,
-	noninteractive => 0,
-	yes            => 0,
-	start          => 1,
-	install_root   => $path,
+	textonly         => 0,
+	noninteractive   => 0,
+	yes              => 0,
+	start            => 1,
+	preserve_signing => 0,
+	install_root     => $path,
 	);
 my @valueopts = qw(shost laddr lport waddr wport dbpass dbsocket dbhost dbuser dbadmin dbadminpass adminuser adminpass adminemail perl5lib srcdir certmode keymode cert key keypass);
 
@@ -438,6 +453,7 @@ while ($i < scalar(@ARGV)) {
 	elsif ($arg eq "--noninteractive") { $opt{noninteractive} = 1; }
 	elsif ($arg eq "--yes") { $opt{yes} = 1; }
 	elsif ($arg eq "--no-start") { $opt{start} = 0; }
+	elsif ($arg eq "--preserve-signing") { $opt{preserve_signing} = 1; }
 	elsif ($arg eq "--help" || $arg eq "-h") { usage(); exit 0; }
 	elsif ($arg =~ /^--([a-z0-9-]+)$/) {
 		my $name = $1;
@@ -524,6 +540,9 @@ Options:
   --cert PATH        existing certificate to import
   --key PATH         existing private key (import, or keymode existing)
   --keypass PASS     passphrase for an encrypted private key
+  --preserve-signing reuse the installed Ed25519 signing keypair on
+                     reconfigure, so existing clients keep verifying
+                     the server's signatures
 EOF
 	}
 
@@ -673,6 +692,7 @@ if ($opt{noninteractive}) {
 	$ssl{cert} = $opt{cert} if defined $opt{cert};
 	$ssl{key} = $opt{key} if defined $opt{key};
 	$ssl{keypass} = $opt{keypass} if defined $opt{keypass};
+	$ssl{preserve_signing} = 1 if $opt{preserve_signing};
 	if ($certmode eq "import") {
 		die "Import mode requires --cert and --key\n" unless $ssl{cert} && $ssl{key};
 		}
@@ -775,11 +795,51 @@ sub collect_params_text {
 	return %v;
 	}
 
+# The certificate/key a previous install placed in the install tree's ssl
+# directory, when present and not expired: ($cert, $key). Reconfigure offers
+# these for reuse instead of the standard certificate options. An expired
+# certificate is not offered (the import would fail).
+#
+sub detect_existing_cert {
+	my $ssl = "$opt{install_root}/config/ssl";
+	my ($cert, $key) = ("$ssl/server.crt", "$ssl/server.key");
+	return () unless -e $cert && -e $key;
+	return () unless system("openssl", "x509", "-in", $cert,
+		"-noout", "-checkend", "0") == 0;
+	return ($cert, $key);
+	}
+
 # Text-mode certificate configuration. Returns a spec hash for
-# Luminum::Setup (mode/keymode/cert/key/keypass).
+# Luminum::Setup (mode/keymode/cert/key/keypass). When ($excert, $exkey)
+# are given (a previous install's certificate was detected) the standard
+# options are replaced by use-existing / create-new.
 #
 sub collect_cert_text {
+	my ($excert, $exkey) = @_;
 	print "\n$certtitle\n\n";
+	if (defined $excert) {
+		print "[1] $certuseexisting ($excert)\n";
+		print "[2] $certgen\n";
+		my $sel = "";
+		while ($sel ne "1" && $sel ne "2") {
+			print "$badoplabel: $sel\n\n" if $sel ne "";
+			print "(1|2) [1]: ";
+			$sel = <STDIN>;
+			$sel = "" unless defined $sel;
+			chomp($sel);
+			$sel = "1" if $sel eq "";
+			}
+		if ($sel eq "1") {
+			# The installed key is always unencrypted (install_key
+			# decrypts on install), so no passphrase prompt is needed.
+			# preserve_signing keeps the installed Ed25519 signing
+			# keypair, so existing clients keep verifying signatures.
+			return (mode => "import", cert => $excert, key => $exkey,
+				keypass => "", preserve_signing => 1);
+			}
+		print "$certnewcawarn\n\n";
+		return (mode => "generate", keymode => "new");
+		}
 	print "[1] $certgen\n";
 	print "[2] $certgenkey\n";
 	print "[3] $certimport\n";
@@ -948,7 +1008,7 @@ if ($text == 1) {
 		}
 
 	my %v = collect_params_text();
-	my %c = collect_cert_text();
+	my %c = collect_cert_text(detect_existing_cert());
 	print "\nReview:\n";
 	print "  Install root:  $v{install_root}\n";
 	print "  Server host:   $v{shost}\n";
@@ -1656,6 +1716,8 @@ $doInstall = sub {
 # the paths and passphrase.
 #
 my $cradio;
+my $cusecert;
+my $cusekey;
 my $cerr;
 my $cfsel;
 my $cfcert;
@@ -1672,7 +1734,17 @@ my $certNextAction = sub {
 		}
 	$win->delete('certdialog');
 	$win->draw();
-	if ($sel eq "gen") {
+	if ($sel eq "use") {
+		# Reuse the previous install's certificate/key. The installed
+		# key is always unencrypted (install_key decrypts on install),
+		# so no passphrase is needed. preserve_signing keeps the
+		# installed Ed25519 signing keypair, so existing clients keep
+		# verifying signatures.
+		$doInstall->(buildparams(%$paramsref,
+			{ mode => "import", cert => $cusecert, key => $cusekey,
+			  keypass => "", preserve_signing => 1 }));
+		}
+	elsif ($sel eq "gen") {
 		$doInstall->(buildparams(%$paramsref,
 			{ mode => "generate", keymode => "new" }));
 		}
@@ -1792,6 +1864,9 @@ $showCertFilesDialog = sub {
 
 $showCertDialog = sub {
 	$changed = 1;
+	my ($excert, $exkey) = detect_existing_cert();
+	$cusecert = $excert;
+	$cusekey  = $exkey;
 	my $dlg = $win->add('certdialog', 'Window',
 		-centered	=> 1,
 		-width		=> 78,
@@ -1806,19 +1881,42 @@ $showCertDialog = sub {
 		-text => $certtitle, -bold => 1,
 		-x => 2, -y => 1,
 		);
-	# -height is mandatory: an auto-height listbox takes ALL remaining
-	# parent rows, so its window would overlap the button row and erase
-	# the buttons whenever the listbox is redrawn (i.e. while focused).
-	$cradio = $dlg->add('c_radio', 'Radiobuttonbox',
-		-values => ["gen", "genkey", "import"],
-		-labels => {
-			gen    => $certgen,
-			genkey => $certgenkey,
-			import => $certimport,
-			},
-		-selected => 0,
-		-x => 2, -y => 3, -height => 3,
-		);
+	if (defined $excert) {
+		# Reconfigure: a previous install's certificate was found -
+		# offer reuse or create-new instead of the standard options.
+		$dlg->add('c_found', 'Label',
+			-text => $excert,
+			-x => 2, -y => 2,
+			);
+		$cradio = $dlg->add('c_radio', 'Radiobuttonbox',
+			-values => ["use", "gen"],
+			-labels => {
+				use => $certuseexisting,
+				gen => $certgen,
+				},
+			-selected => 0,
+			-x => 2, -y => 3, -height => 2,
+			);
+		$dlg->add('c_cawarn', 'Label',
+			-text => wrap('', '', $certnewcawarn),
+			-x => 2, -y => 6, -height => 2,
+			);
+		}
+	else {
+		# -height is mandatory: an auto-height listbox takes ALL remaining
+		# parent rows, so its window would overlap the button row and erase
+		# the buttons whenever the listbox is redrawn (i.e. while focused).
+		$cradio = $dlg->add('c_radio', 'Radiobuttonbox',
+			-values => ["gen", "genkey", "import"],
+			-labels => {
+				gen    => $certgen,
+				genkey => $certgenkey,
+				import => $certimport,
+				},
+			-selected => 0,
+			-x => 2, -y => 3, -height => 3,
+			);
+		}
 	$cerr = $dlg->add('c_err', 'Label',
 		-text => "", -fg => 'red', -width => -1, -height => 1,
 		-x => 2, -y => 7,

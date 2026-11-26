@@ -1554,6 +1554,15 @@ sub key_pubkey {
 sub install_key {
 	my ($src, $dst, $pass) = @_;
 	my $rc;
+	# cp refuses to copy a file onto itself - the reconfigure "use
+	# existing" case, where the imported key already sits at the
+	# installed path. The key is already in place.
+	my @ksrc = stat($src);
+	my @kdst = stat($dst);
+	if (@ksrc && @kdst && $ksrc[0] == $kdst[0] && $ksrc[1] == $kdst[1]) {
+		chmod(0600, $dst);
+		return 1;
+		}
 	if (defined $pass && $pass ne "") {
 		my $pf = passtofile($pass) or return 0;
 		$rc = system("openssl pkey -in \"$src\" -passin file:$pf -out \"$dst\" 2>/dev/null");
@@ -1593,6 +1602,20 @@ sub cert_covers {
 	return 0;
 	}
 
+# Seed (32 bytes) of an installed server-signing.key, or undef if the file
+# is not the fixed 48-byte PKCS#8 structure prepare_signing writes.
+#
+sub signing_seed {
+	my ($file) = @_;
+	my $pem = "";
+	if (open(my $fh, "<", $file)) { $pem = do { local $/; <$fh> }; close($fh); }
+	return undef unless $pem =~ /-----BEGIN PRIVATE KEY-----\n(.*?)\n-----END PRIVATE KEY-----/s;
+	my $der = decode_base64($1);
+	return undef unless length($der) == 48
+		&& substr($der, 0, 16) eq pack("H*", "302e020100300506032b657004220420");
+	return substr($der, 16);
+	}
+
 # Generate the Ed25519 signing keypair and signing certificate
 # (protocol 7.1 bootstrap trust anchor): server-signing.key (0600) and
 # server-signing.crt in $ssldir. The signing certificate is the client's
@@ -1600,23 +1623,39 @@ sub cert_covers {
 # is true it is issued by the server TLS certificate (the same trust root
 # the client already uses for the handshake); otherwise - import mode,
 # where the operator's CA is not available - it is self-signed and travels
-# to the client as a standalone anchor.
+# to the client as a standalone anchor. When $preserve is true and an
+# installed server-signing.key is present and readable, its seed is reused:
+# the keypair (and thus the clients' anchor public key) is unchanged, only
+# the certificate is reissued.
 #
 # Returns (1, $seed, $pub, $signcert, $signkey) on success,
 # (0, undef, undef, undef, undef, $err) on failure.
 #
 sub prepare_signing {
-	my ($shost, $ssldir, $tls_cert, $tls_key, $tls_issued, $log) = @_;
+	my ($shost, $ssldir, $tls_cert, $tls_key, $tls_issued, $log, $preserve) = @_;
 	my $signkey  = "$ssldir/server-signing.key";
 	my $signcert = "$ssldir/server-signing.crt";
 	my $csr      = "$ssldir/server-signing.csr";
 	my $ext      = "$ssldir/server-signing.ext";
 	my $fail = sub { return (0, undef, undef, undef, undef, $_[0]) };
 
-	my $priv = eval {
-		require Crypt::Perl::Ed25519::PrivateKey;
-		Crypt::Perl::Ed25519::PrivateKey->new();
-		};
+	my $priv;
+	my $oldseed = ($preserve && -e $signkey) ? signing_seed($signkey) : undef;
+	if (defined $oldseed) {
+		$priv = eval {
+			require Crypt::Perl::Ed25519::PrivateKey;
+			Crypt::Perl::Ed25519::PrivateKey->new($oldseed);
+			};
+		}
+	if (!defined $priv) {
+		if ($preserve && -e $signkey) {
+			$log->("  warning: the existing signing key could not be reused; a new signing keypair is generated (existing clients will need the new anchor)");
+			}
+		$priv = eval {
+			require Crypt::Perl::Ed25519::PrivateKey;
+			Crypt::Perl::Ed25519::PrivateKey->new();
+			};
+		}
 	return $fail->("Crypt::Perl::Ed25519 is not available (PERL5LIB missing the module)")
 		unless $priv;
 	my $seed = $priv->get_private();
@@ -1676,6 +1715,9 @@ sub prepare_signing {
 #   cert    => existing certificate path      (import)
 #   key     => existing private key path      (import, generate/existing)
 #   keypass => passphrase for an encrypted key (optional)
+#   preserve_signing => reuse the installed Ed25519 signing keypair when
+#               present (reconfigure "use existing"), so already-provisioned
+#               clients keep verifying the server's signatures
 #
 # Returns (1, $cert, $key, $pub, $cacert, $cakey, $signseed, $signpub) on
 # success ($cacert/$cakey are undef in import mode, where the imported
@@ -1722,7 +1764,16 @@ sub prepare_ssl {
 		unless (cert_covers($spec->{cert}, $shost)) {
 			$log->("  WARNING: certificate does not list $shost in its subject/SAN; clients verifying the hostname will reject it");
 			}
-		copy($spec->{cert}, $cert) or return $fail->("cannot copy certificate to $cert");
+		# File::Copy::copy() returns false when source and destination
+		# are the same file - the reconfigure "use existing" case, where
+		# the imported certificate already sits at the installed path.
+		my @csrc = stat($spec->{cert});
+		my @cdst = stat($cert);
+		my $cert_same = @csrc && @cdst
+			&& $csrc[0] == $cdst[0] && $csrc[1] == $cdst[1];
+		unless ($cert_same || copy($spec->{cert}, $cert)) {
+			return $fail->("cannot copy certificate to $cert");
+			}
 		chmod(0644, $cert);
 		unless (install_key($spec->{key}, $key, $spec->{keypass})) {
 			return $fail->("cannot install private key");
@@ -1732,7 +1783,8 @@ sub prepare_ssl {
 		# not available, so the signing certificate is self-signed and the
 		# imported certificate itself is the client's anchor.
 		my ($sok, $sseed, $spub, $scert, $skey, $serr) =
-			prepare_signing($shost, $ssldir, $cert, $key, 0, $log);
+			prepare_signing($shost, $ssldir, $cert, $key, 0, $log,
+				$spec->{preserve_signing});
 		return $fail->("signing certificate setup failed: $serr") unless $sok;
 		return (1, $cert, $key, $pub, undef, undef, $sseed, $spub);
 		}
@@ -1824,7 +1876,8 @@ sub prepare_ssl {
 
 	unless (derive_pub($cert, $pub)) { return $fail->("cannot derive public key"); }
 	my ($sok, $sseed, $spub, $scert, $skey, $serr) =
-		prepare_signing($shost, $ssldir, $cacert, $cakey, 1, $log);
+		prepare_signing($shost, $ssldir, $cacert, $cakey, 1, $log,
+			$spec->{preserve_signing});
 	return $fail->("signing certificate setup failed: $serr") unless $sok;
 	return (1, $cert, $key, $pub, $cacert, $cakey, $sseed, $spub);
 	}
