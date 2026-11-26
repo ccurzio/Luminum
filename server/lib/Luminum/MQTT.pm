@@ -29,6 +29,7 @@ use MIME::Base64;
 use IO::Socket::SSL qw(SSL_VERIFY_PEER);
 use Net::MQTT::Simple::SSL;
 use Luminum::Protocol;
+use Luminum::Repo;
 
 # --- Pure helpers -------------------------------------------------------------
 
@@ -596,6 +597,13 @@ sub worker {
 		params => { dbname => ($a{sysdb_name} // "SYSTEM"), dbuser => $a{dbuser}, dbpass => $a{dbpass}, dbsock => $a{dbsock}, dbhost => $a{dbhost} },
 		h => undef,
 	};
+	# The CONTENT database holds the file repository catalog (docs/p2p.md
+	# Phase 0); the discovery scan registers files dropped into the
+	# staging area. Same credentials/socket as the other databases.
+	my $contentdb = {
+		params => { dbname => "CONTENT", dbuser => $a{dbuser}, dbpass => $a{dbpass}, dbsock => $a{dbsock}, dbhost => $a{dbhost} },
+		h => undef,
+	};
 	my $cmd_timeout = ($a{cmd_timeout} && $a{cmd_timeout} =~ /^[0-9]+$/) ? $a{cmd_timeout} : 120;
 	my $depl_timeout = ($a{depl_timeout} && $a{depl_timeout} =~ /^[0-9]+$/) ? $a{depl_timeout} : 3600;
 
@@ -613,6 +621,11 @@ sub worker {
 	# value makes the first sweep happen at startup, so clients that went
 	# dark while the server was down are caught as soon as it comes back.
 	my $last_sweep = 0;
+	# The repository discovery scan (docs/p2p.md Phase 0) runs every 60 s;
+	# the zero start value makes the first scan happen at startup, so files
+	# dropped while the server was down are caught as soon as it comes
+	# back. Skipped when no content root is configured (tests).
+	my $last_repo_scan = 0;
 	while (1) {
 		eval {
 			$m->tick(0.25);
@@ -628,6 +641,17 @@ sub worker {
 			if (time() - $last_sweep >= 3600) {
 				$last_sweep = time();
 				_sweep_missing($db, $sysdb, $log);
+			}
+			if (defined $a{content_root} && time() - $last_repo_scan >= 60) {
+				$last_repo_scan = time();
+				eval {
+					Luminum::Repo::scan(
+						root => $a{content_root},
+						contentdbh => _dbh($contentdb),
+						sysdbh => _dbh($sysdb),
+						log => $log,
+						);
+				} or do { $log->("repo: scan failed: $@"); };
 			}
 			1;
 		} or do { $log->("worker: " . $@); sleep 2; };

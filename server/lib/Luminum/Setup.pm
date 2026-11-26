@@ -495,10 +495,13 @@ EOF
 	# CHECKININT = 5 min, TARGETCONF = Enabled, TCONFTHRESHOLD = 250
 	# endpoints, 2FA = Optional, MINPASS = 8, COMPLEXPASS = Disabled,
 	# UTIMEOUT = 15M, UTIMEOUTWARN = Enabled, SENREVS = 5, PKGREVS = 5,
-	# INVESTIGATE = Enabled), but a
+	# INVESTIGATE = Enabled, REPOHTTP = Enabled, REPONFS = Disabled,
+	# REPOSMB = Disabled), but a
 	# value later changed in the console survives re-runs. SENREVS and
 	# PKGREVS are revision counts; any value > 0 is "Enabled" in the
-	# console, 0 is "Disabled".
+	# console, 0 is "Disabled". The REPO* keys are the file repository
+	# ingestion vectors (docs/p2p.md Phase 0): HTTP chunked upload is the
+	# default; NFS/SMB staging drops are opt-in.
 	my %defaults = (
 		ENDPOINTCOMM    => "mqtt",
 		MISSINGAFTER    => "90",
@@ -515,6 +518,9 @@ EOF
 		SENREVS         => "5",
 		PKGREVS         => "5",
 		INVESTIGATE     => "Enabled",
+		REPOHTTP        => "Enabled",
+		REPONFS         => "Disabled",
+		REPOSMB         => "Disabled",
 		);
 	unless (seed_config($dbh, \%rows, \%defaults)) {
 		return $fail->("SYSTEM.CONFIG seeding failed");
@@ -1952,6 +1958,9 @@ http {
 	include $p->{root}/console/nginx/mime.types;
 	default_type application/octet-stream;
 	access_log $p->{root}/log/nginx-access.log;
+	# Repository chunked uploads (docs/p2p.md Phase 0): raw chunk POSTs up
+	# to 8 MB, so the body cap sits well above a single chunk.
+	client_max_body_size 16m;
 	client_body_temp_path $ntmp/client;
 	fastcgi_temp_path $ntmp/fastcgi;
 	proxy_temp_path $ntmp/proxy;
@@ -2013,6 +2022,11 @@ pm.max_children = 5
 pm.start_servers = 2
 pm.min_spare_servers = 1
 pm.max_spare_servers = 3
+; Repository chunked uploads (docs/p2p.md Phase 0): raw chunk POSTs up to
+; 8 MB, so the POST body cap sits well above a single chunk (the PHP
+; default of 8M would reject them).
+post_max_size = 16M
+upload_max_filesize = 16M
 env[LUMINUM_CONSOLE_CONF] = $p->{consoleconf}
 env[LUMINUM_DB_SOCKET] = $p->{dbsocket}
 env[LUMINUM_DB_HOST] = $dbhost

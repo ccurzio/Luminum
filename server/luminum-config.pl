@@ -54,6 +54,7 @@ my @ORDER = qw(
 	2FA MINPASS COMPLEXPASS PCUPPERLOWER PCLETNUM PCSPECIAL
 	UTIMEOUT UTIMEOUTWARN PASSKEYS USERLOGGING
 	SENREVS PKGREVS
+	REPOHTTP REPONFS REPOSMB
 	PNETCHECK SNETCHECK
 );
 
@@ -78,6 +79,9 @@ my %SPEC = (
 	USERLOGGING    => { type => 'enum',     values => ['Enabled','Disabled'],              def => 'Disabled', desc => 'Account-specific server logging' },
 	SENREVS        => { type => 'int',      min => 0,                                      def => '5',      desc => 'Sensor revision history (0 disables)' },
 	PKGREVS        => { type => 'int',      min => 0,                                      def => '5',      desc => 'Package revision history (0 disables)' },
+	REPOHTTP       => { type => 'enum',     values => ['Enabled','Disabled'],              def => 'Enabled',  desc => 'File repository: HTTP chunked upload vector' },
+	REPONFS        => { type => 'enum',     values => ['Enabled','Disabled'],              def => 'Disabled', desc => 'File repository: NFS staging drop vector' },
+	REPOSMB        => { type => 'enum',     values => ['Enabled','Disabled'],              def => 'Disabled', desc => 'File repository: SMB staging drop vector' },
 	PNETCHECK      => { type => 'host',                                                   def => '',       desc => 'Primary internet connectivity check host' },
 	SNETCHECK      => { type => 'host',                                                   def => '',       desc => 'Secondary internet connectivity check host' },
 );

@@ -89,6 +89,73 @@ CREATE TABLE IF NOT EXISTS `PACKAGES` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
+-- Table structure for table `FILES`
+--
+-- File repository catalog (docs/p2p.md, Phase 0 "Repository model"). One
+-- row per content-addressed blob stored under <install root>/content/files/
+-- {aa}/{bb}/{sha256}. Files arrive via an ingestion vector (http chunked
+-- upload, nfs, or smb drop into content/staging/{vector}/) and are
+-- registered by the broker's discovery scan. A file is cataloged, not
+-- authorized: it becomes distributable only when attached to a package
+-- (PKGFILES). VIA is the vector's name; the column is not called VECTOR
+-- because MariaDB 11.7+ reserves that word for the vector data type.
+--
+
+CREATE TABLE IF NOT EXISTS `FILES` (
+  `ID` int(20) NOT NULL AUTO_INCREMENT,
+  `SHA256` char(64) NOT NULL,
+  `SIZE` bigint(20) NOT NULL,
+  `NAME` tinytext NOT NULL,
+  `VIA` tinytext NOT NULL,
+  `STAGED` datetime NOT NULL,
+  PRIMARY KEY (`ID`),
+  UNIQUE KEY `UQ_FILES_SHA` (`SHA256`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table structure for table `UPLOADS`
+--
+-- In-flight chunked HTTP uploads (docs/p2p.md, Phase 0). The console API
+-- (api/upload.php) appends raw chunk POSTs to
+-- content/staging/http/.up-{ID}.part and tracks progress here; on finish
+-- the temp file is renamed into the staging directory and the discovery
+-- scan registers it like any other drop. Abandoned sessions are swept by
+-- the same scan.
+--
+
+CREATE TABLE IF NOT EXISTS `UPLOADS` (
+  `ID` char(36) NOT NULL,
+  `NAME` tinytext NOT NULL,
+  `SIZE` bigint(20) NOT NULL,
+  `RECEIVED` bigint(20) NOT NULL DEFAULT 0,
+  `VIA` tinytext NOT NULL DEFAULT 'http',
+  `CREATED` datetime NOT NULL,
+  `DONE` datetime DEFAULT NULL,
+  PRIMARY KEY (`ID`),
+  KEY `IDX_UPLOADS_CREATED` (`CREATED`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table structure for table `PKGFILES`
+--
+-- Package attachment (docs/p2p.md, Phase 0): links a repository file
+-- (FILES.ID) into a package (PACKAGES.ID) for one OS, with the file's
+-- relative install path inside the package. Size and hash come from
+-- FILES.
+--
+
+CREATE TABLE IF NOT EXISTS `PKGFILES` (
+  `ID` int(20) NOT NULL AUTO_INCREMENT,
+  `PKGID` int(20) NOT NULL,
+  `OS` tinytext NOT NULL,
+  `FILEID` int(20) NOT NULL,
+  `PATH` tinytext NOT NULL,
+  PRIMARY KEY (`ID`),
+  KEY `IDX_PKGFILES_PKG` (`PKGID`),
+  KEY `IDX_PKGFILES_FILE` (`FILEID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
 -- Table structure for table `SENSORHISTORY`
 --
 
