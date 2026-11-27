@@ -34,6 +34,7 @@ use Crypt::Perl::Ed25519::PublicKey;
 use lib "$Bin/lib";
 use Luminum::Protocol;
 use Luminum::MQTT;
+use Luminum::Cert;
 
 our $debug = 0;
 our $writelog = 1;
@@ -821,9 +822,17 @@ sub routemessage {
 				sendresponse($cs,$env,"ERR","ALREADY_REGISTERED",undef);
 				return;
 				}
+			# Client TLS CSR (protocol 7.1 v1.1): base64 PEM, signed into a
+			# client certificate inside newreg once the UID exists. Absent
+			# on pre-P2P clients - registration proceeds without one.
+			my $csr;
+			if (defined $data->{tls_csr} && !ref($data->{tls_csr})) {
+				$csr = eval { decode_base64($data->{tls_csr}) };
+				$csr = undef unless defined $csr && $csr =~ /-----BEGIN CERTIFICATE REQUEST-----/;
+				}
 			# Store the base64 SPKI/DER as sent (schema: PUBKEY is base64;
 			# getpubkey() decodes it on read).
-			newreg($cs,$env,$EPNAME,$EPUUID,$EPFPNT,$data->{pubkey},$ipv4,$osplat,$osrel,$clientver,$EPADDR);
+			newreg($cs,$env,$EPNAME,$EPUUID,$EPFPNT,$data->{pubkey},$ipv4,$osplat,$osrel,$clientver,$EPADDR,$csr);
 			return;
 			}
 		elsif ($action eq "checkin") {
@@ -844,6 +853,49 @@ sub routemessage {
 		elsif ($action eq "unregister") {
 			Broker::debugout(0,"Received deregistration request from client ID $uid on $EPADDR");
 			dereg($cs,$env,$uid,$EPADDR);
+			return;
+			}
+		elsif ($action eq "certrenew") {
+			# Client TLS certificate re-issue (protocol 7.1 v1.1): the fleet
+			# upgrade path for endpoints registered before P2P - the message
+			# already verified against the stored PUBKEY for this UID
+			# (handleconnection), so the fingerprint is cross-checked against
+			# the AUTH row and a fresh certificate is signed for the same UID.
+			if ($uid eq "0") {
+				Broker::debugout(2,"certrenew from an unregistered client on $EPADDR");
+				sendresponse($cs,$env,"ERR","INVALID_UID",undef);
+				return;
+				}
+			my $EPFPNT = validstr($data->{fingerprint},'^[a-f0-9]{64}$');
+			my $csr;
+			if (defined $data->{tls_csr} && !ref($data->{tls_csr})) {
+				$csr = eval { decode_base64($data->{tls_csr}) };
+				$csr = undef unless defined $csr && $csr =~ /-----BEGIN CERTIFICATE REQUEST-----/;
+				}
+			if (!$EPFPNT || !defined $csr) {
+				Broker::debugout(2,"certrenew with missing data from $EPADDR");
+				sendresponse($cs,$env,"ERR","MISSING_DATA",undef);
+				return;
+				}
+			my $storedfp = getfingerprint($uid);
+			if (!defined $storedfp) {
+				Broker::debugout(2,"certrenew for unknown endpoint ID $uid on $EPADDR");
+				sendresponse($cs,$env,"ERR","UNKNOWN_FINGERPRINT",undef);
+				return;
+				}
+			if ($storedfp ne $EPFPNT) {
+				Broker::debugout(2,"FINGERPRINT_MISMATCH: certrenew from $EPADDR (UID $uid) rejected");
+				sendresponse($cs,$env,"ERR","FINGERPRINT_MISMATCH",undef);
+				return;
+				}
+			my ($sok, $res) = Luminum::Cert::sign_client_csr($csr,$uid,$sslcert,$sslprvkey,sub { Broker::debugout(2,$_[0]) });
+			unless ($sok) {
+				Broker::debugout(2,"certrenew: certificate issuance failed for UID $uid: $res");
+				sendresponse($cs,$env,"ERR","ISSUANCE_FAILED",undef);
+				return;
+				}
+			Broker::debugout(0,"Re-issued the client TLS certificate for client ID $uid on $EPADDR");
+			sendresponse($cs,$env,"OK",undef,{ clientcert => encode_base64($res,"") });
 			return;
 			}
 		elsif ($action eq "report") {
@@ -979,6 +1031,21 @@ sub getpubkey {
 	return $pubkey;
 	}
 
+# Stored fingerprint for a client UID (protocol 3.1).
+#
+sub getfingerprint {
+	my $uid = shift;
+	my $fpnt;
+	if ($uid =~ /^[0-9]+$/) {
+		my $dbh = dbconnect("CLIENTS");
+		my $sth = $dbh->prepare("select FINGERPRINT from AUTH where ID = '$uid'");
+		$sth->execute();
+		my @row = $sth->fetchrow_array();
+		if (scalar(@row) > 0 && defined $row[0]) { $fpnt = $row[0]; }
+		}
+	return $fpnt;
+	}
+
 # Connection state for a client UID (OK, DEACT, ...).
 #
 sub getcstate {
@@ -1075,6 +1142,7 @@ sub newreg {
 	my $osrel = shift;
 	my $clientver = shift;
 	my $EPADDR = shift;
+	my $csr = shift;
 	my $EPID;
 
 	# MQTT client secret (protocol 3.1): 32 random bytes, base64.
@@ -1097,14 +1165,30 @@ sub newreg {
 	if ($@) { Broker::debugout(2,"Unable to regenerate the MQTT ACL file: $@"); }
 	Broker::debugout(0,"Registered Client ID $EPID\: $EPNAME ($EPADDR)");
 
-	sendresponse($cs,$env,"OK",undef,{
+	# Client TLS certificate (protocol 7.1 v1.1): sign the presented CSR
+	# with the key that issued the server TLS certificate, subject
+	# CN = luminum-client-{UID}. Issuance failure is not fatal to the
+	# registration - the client retries via certrenew on a later start.
+	my $clientcert;
+	if (defined $csr) {
+		my ($sok, $res) = Luminum::Cert::sign_client_csr($csr,$EPID,$sslcert,$sslprvkey,sub { Broker::debugout(2,$_[0]) });
+		if ($sok) {
+			$clientcert = encode_base64($res,"");
+			Broker::debugout(0,"Issued the client TLS certificate for client ID $EPID");
+			}
+		else { Broker::debugout(2,"Client certificate issuance failed for UID $EPID: $res"); }
+		}
+
+	my %resp = (
 		uid => "$EPID",
 		sid => $SID,
 		mqtthost => $MADDR,
 		mqttport => "$MPORT",
 		mqttsecret => $secret,
 		serverpubkey => $srvpubspki
-		});
+		);
+	$resp{clientcert} = $clientcert if defined $clientcert;
+	sendresponse($cs,$env,"OK",undef,\%resp);
 	}
 
 # Client De-Registration (protocol 3.1): the record is deactivated,

@@ -201,9 +201,10 @@ and a custom server-cert verifier (client side). Because peers are addressed by 
 and client certificates carry no IP SAN, both sides replace hostname verification
 with chain-to-root + validity + **cert UID == the grant's expected UID** — the
 identity binding §4.2 requires. Existing native-tls usage (bootstrap channel,
-MQTT) is unchanged. CSR generation: the `openssl` crate on Linux; hand-rolled CSR
-DER (`der` + `pkcs8` + `ring`, all already in the dependency graph) on
-macOS/Windows.
+MQTT) is unchanged. CSR generation: the `openssl` crate on Linux; on
+macOS/Windows the P-256 keypair, SPKI encoding, and CSR signature come from
+`aws-lc-rs` (already in the dependency graph via rustls) and the CSR's DER is
+assembled by hand (RFC 2986).
 
 ---
 
@@ -573,7 +574,7 @@ service account).
 |---|---|---|---|---|
 | c→s (bootstrap) | core | `register` | + `tls_csr` (base64 PEM) | Existing, extended (§4.1) |
 | s→c (bootstrap) | core | `register` | + `clientcert` (base64 PEM) | Existing, extended (§4.1) |
-| c→s (bootstrap) | core | `certrenew` | `fingerprint` | Re-issue client certificate for an existing fingerprint (UID unchanged) |
+| c→s (bootstrap) | core | `certrenew` | `fingerprint`, `tls_csr` (base64 PEM) | Re-issue client certificate for an existing fingerprint (UID unchanged); the server signs the presented CSR |
 | s→c | core | `p2pgrant` | `token`, `pkgid`, `os`, `files[]`, `sources[]`, `exp` | The transfer grant (§5.1); server-signed, forwarded to the source verbatim |
 | c→s | core | `deploy` (resp) | — | Unchanged; the command's `ref` carries the grant |
 | c→s | core | `report` | `event: "p2p_fetch_ok"` / `"p2p_fetch_fail"`, `pkgid`, `srcuid`, `files[]` (ok) or `err` (fail) | Terminal transfer outcome; drives holder bookkeeping and re-routing |

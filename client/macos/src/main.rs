@@ -50,7 +50,7 @@ use base64ct::Encoding;
 use ed25519_dalek::{Signer, Verifier, SigningKey, VerifyingKey, Signature};
 use sha2::{Digest, Sha256};
 
-const VER: &str = "0.0.6";
+const VER: &str = "0.0.7";
 const IPORT: u16 = 10704;
 const DPORT: u16 = 10465;
 const LPORT: u16 = 10461;
@@ -82,6 +82,8 @@ fn base_path() -> String {
 fn cfg_path() -> String { format!("{}/config/client.conf.db", base_path()) }
 fn crt_path() -> String { format!("{}/config/server.crt", base_path()) }
 fn signing_crt_path() -> String { format!("{}/config/server-signing.crt", base_path()) }
+fn client_key_path() -> String { format!("{}/config/client.key", base_path()) }
+fn client_crt_path() -> String { format!("{}/config/client.crt", base_path()) }
 fn mod_path() -> String { format!("{}/modules", base_path()) }
 fn outq_path() -> String { format!("{}/config/outqueue.db", base_path()) }
 
@@ -655,6 +657,230 @@ fn server_signing_key(debug: bool) -> Option<[u8; 32]> {
 }
 
 // ---------------------------------------------------------------------------
+// Client TLS keypair + certificate (protocol §7.1 v1.1, docs/p2p.md 4.1)
+// ---------------------------------------------------------------------------
+
+// The P2P peer channel (10464) is mutual TLS: the endpoint presents a
+// certificate the server issued, with subject CN = luminum-client-{UID}.
+// The P-256 keypair is generated here on first use (the private key never
+// leaves the endpoint - config/client.key, 0600) and the public key travels
+// to the server inside a CSR, which the server signs into the channel
+// certificate. The CSR subject is a placeholder: the server overrides it at
+// issuance with the UID it assigns (x509 -req -subj).
+//
+// macOS has no system OpenSSL, so the keypair, the SPKI encoding, and the
+// CSR signature come from aws-lc-rs (already in the tree via rustls) and
+// the CSR's DER is assembled by hand (RFC 2986).
+
+// Decode the first PEM block with the given label (e.g. "PRIVATE KEY",
+// "CERTIFICATE REQUEST") to DER.
+fn pem_block_to_der(pem: &[u8], label: &str) -> Result<Vec<u8>, String> {
+	let begin = format!("-----BEGIN {}-----", label);
+	let end = format!("-----END {}-----", label);
+	let text = std::str::from_utf8(pem).map_err(|_| String::from("not UTF-8"))?;
+	let start = text.find(&begin).ok_or_else(|| format!("missing {}", begin))?;
+	let rest = &text[start + begin.len()..];
+	let fin = rest.find(&end).ok_or_else(|| format!("missing {}", end))?;
+	let b64: String = rest[..fin].chars().filter(|c| !c.is_whitespace()).collect();
+	base64ct::Base64::decode_vec(&b64).map_err(|_| String::from("invalid base64"))
+}
+
+// Encode DER as a PEM block with the given label (64-column base64).
+fn der_to_pem(der: &[u8], label: &str) -> String {
+	let b64 = base64ct::Base64::encode_string(der);
+	let mut out = format!("-----BEGIN {}-----\n", label);
+	for chunk in b64.as_bytes().chunks(64) {
+		out.push_str(std::str::from_utf8(chunk).expect("base64 is ASCII"));
+		out.push('\n');
+	}
+	out.push_str(&format!("-----END {}-----\n", label));
+	out
+}
+
+// A DER length encoding (short form under 128, long form above).
+fn der_len(n: usize) -> Vec<u8> {
+	if n < 0x80 {
+		return vec![n as u8];
+	}
+	let mut bytes = Vec::new();
+	let mut v = n;
+	while v > 0 {
+		bytes.insert(0, (v & 0xff) as u8);
+		v >>= 8;
+	}
+	let mut out = vec![0x80 | bytes.len() as u8];
+	out.extend(bytes);
+	out
+}
+
+// A DER TLV: tag, length, content.
+fn der_tlv(tag: u8, content: &[u8]) -> Vec<u8> {
+	let mut out = vec![tag];
+	out.extend(der_len(content.len()));
+	out.extend(content);
+	out
+}
+
+// The CertificationRequestInfo of a v1 CSR (RFC 2986):
+//   SEQUENCE { INTEGER 0, subject Name, subjectPublicKeyInfo, [0] {} }
+// The subject is the placeholder CN the server overrides at issuance.
+fn csr_tbs(spki: &[u8]) -> Vec<u8> {
+	let mut attr = vec![0x06u8, 0x03, 0x55, 0x04, 0x03]; // OID 2.5.4.3 (commonName)
+	attr.push(0x0C); // UTF8String
+	attr.push(b"luminum-client-pending".len() as u8);
+	attr.extend_from_slice(b"luminum-client-pending");
+	let name = der_tlv(0x30, &der_tlv(0x31, &der_tlv(0x30, &attr)));
+
+	let mut tbs = vec![0x02u8, 0x01, 0x00]; // version v1 = 0
+	tbs.extend(name);
+	tbs.extend_from_slice(spki);
+	tbs.push(0xA0);
+	tbs.push(0x00); // attributes [0] IMPLICIT, empty
+	der_tlv(0x30, &tbs)
+}
+
+fn tls_keypair_csr(debug: bool) -> Result<String, String> {
+	use aws_lc_rs::encoding::AsDer;
+	use aws_lc_rs::rand::SystemRandom;
+	use aws_lc_rs::signature::{EcdsaKeyPair, ECDSA_P256_SHA256_ASN1_SIGNING, KeyPair};
+
+	let rng = SystemRandom::new();
+	let stored = fs::read(client_key_path())
+		.ok()
+		.and_then(|pem| pem_block_to_der(&pem, "PRIVATE KEY").ok())
+		.and_then(|der| EcdsaKeyPair::from_pkcs8(&ECDSA_P256_SHA256_ASN1_SIGNING, &der).ok());
+	let keypair = match stored {
+		Some(k) => k,
+		None => {
+			if Path::new(&client_key_path()).exists() {
+				dbout(debug, 1, "Stored client TLS key is unreadable; generating a new keypair (the stored certificate, if any, will no longer match it).");
+			}
+			let doc = EcdsaKeyPair::generate_pkcs8(&ECDSA_P256_SHA256_ASN1_SIGNING, &rng)
+				.map_err(|e| format!("unable to generate the client TLS keypair: {}", e))?;
+			let path = client_key_path();
+			fs::write(&path, der_to_pem(doc.as_ref(), "PRIVATE KEY").as_bytes())
+				.map_err(|e| format!("unable to save the client TLS key: {}", e))?;
+			fs::set_permissions(&path, fs::Permissions::from_mode(0o600))
+				.map_err(|e| format!("unable to secure the client TLS key: {}", e))?;
+			dbout(debug, 3, "Generated the client TLS keypair (config/client.key).");
+			EcdsaKeyPair::from_pkcs8(&ECDSA_P256_SHA256_ASN1_SIGNING, doc.as_ref())
+				.map_err(|e| format!("unable to load the generated client TLS keypair: {}", e))?
+		}
+	};
+
+	let spki = keypair.public_key().as_der()
+		.map_err(|e| format!("unable to encode the client TLS public key: {}", e))?;
+	let tbs = csr_tbs(spki.as_ref());
+	let sig = keypair.sign(&rng, &tbs)
+		.map_err(|e| format!("unable to sign the CSR: {}", e))?;
+
+	// signatureAlgorithm: ecdsa-with-SHA256 (1.2.840.10045.4.3.2), NULL
+	// parameters; signatureValue: BIT STRING { 0 unused bits, DER signature }.
+	let sigalg = der_tlv(0x30, &[
+		0x06, 0x08, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x04, 0x03, 0x02, 0x05, 0x00,
+	]);
+	let mut sigval = vec![0x03u8];
+	sigval.extend(der_len(sig.as_ref().len() + 1));
+	sigval.push(0x00);
+	sigval.extend_from_slice(sig.as_ref());
+
+	let mut req = tbs;
+	req.extend(sigalg);
+	req.extend(sigval);
+	Ok(der_to_pem(&der_tlv(0x30, &req), "CERTIFICATE REQUEST"))
+}
+
+// Store the server-issued client TLS certificate (config/client.crt, 0600)
+// after checking it parses and carries this endpoint's TLS public key - a
+// certificate for a different key would be useless on the P2P channel and
+// indicates a server/client desync worth surfacing.
+fn store_client_cert(debug: bool, cert_pem: &str) -> Result<(), String> {
+	use aws_lc_rs::signature::{EcdsaKeyPair, ECDSA_P256_SHA256_ASN1_SIGNING, KeyPair};
+
+	let der = pem_to_der(cert_pem.as_bytes())
+		.map_err(|_| String::from("the issued certificate is not a valid X.509 certificate"))?;
+	let (tbs, _sigalg, _sig) = cert_parts(&der)
+		.ok_or_else(|| String::from("the issued certificate is not a valid X.509 certificate"))?;
+	let (_issuer, _subject, spki) = tbs_names_and_spki(tbs)
+		.ok_or_else(|| String::from("the issued certificate is not a valid X.509 certificate"))?;
+	let certpub = spki_raw_key(spki)
+		.ok_or_else(|| String::from("the issued certificate has no usable public key"))?;
+	let keypem = fs::read(client_key_path())
+		.map_err(|e| format!("client TLS key not found: {}", e))?;
+	let keyder = pem_block_to_der(&keypem, "PRIVATE KEY")
+		.map_err(|e| format!("client TLS key is unreadable: {}", e))?;
+	let keypair = EcdsaKeyPair::from_pkcs8(&ECDSA_P256_SHA256_ASN1_SIGNING, &keyder)
+		.map_err(|e| format!("client TLS key is unreadable: {}", e))?;
+	if certpub != keypair.public_key().as_ref() {
+		return Err(String::from("the issued certificate does not match the client TLS key"));
+	}
+	let path = client_crt_path();
+	fs::write(&path, cert_pem.as_bytes()).map_err(|e| format!("unable to save the client certificate: {}", e))?;
+	fs::set_permissions(&path, fs::Permissions::from_mode(0o600))
+		.map_err(|e| format!("unable to secure the client certificate: {}", e))?;
+	dbout(debug, 3, "Client TLS certificate stored (config/client.crt).");
+	Ok(())
+}
+
+// Client TLS certificate re-issue (protocol §7.1 v1.1): the fleet upgrade
+// path for endpoints registered before P2P. Sent at startup when the
+// endpoint is registered but has no client certificate on file. One-shot:
+// a failure is logged and retried on the next start.
+fn certrenew_with_server(debug: bool, ccfg: &HashMap<String, String>) {
+	let uid = match ccfg.get("UID") { Some(u) => u.clone(), None => return };
+	let (seed, pubb) = client_keypair(debug, ccfg);
+	let csr = match tls_keypair_csr(debug) {
+		Ok(c) => c,
+		Err(err) => { dbout(debug, 2, &format!("Client TLS certificate re-issue skipped: {}", err)); return; }
+	};
+	let data = serde_json::json!({
+		"fingerprint": fingerprint(&pubb),
+		"tls_csr": base64ct::Base64::encode_string(csr.as_bytes())
+	});
+	let mut msg = new_envelope("client", &uid, "core", "certrenew", "noreg", Some(data));
+	sign_envelope(&mut msg, &seed);
+	let server_host = ccfg.get("SHOST").unwrap();
+	let server_port = ccfg.get("SPORT").unwrap();
+
+	match server_send_once(server_host, server_port, &crt_path(), &msg) {
+		Ok(response) => {
+			if response.action != "certrenew" {
+				dbout(debug, 1, "Unexpected response to certificate re-issue request.");
+				return;
+			}
+			// The response must be signed by the validated server signing
+			// key (bootstrap trust anchor, protocol §7.1).
+			let anchor = match server_signing_key(debug) {
+				Some(k) => k,
+				None => return,
+			};
+			if !verify_envelope(&response, &anchor) {
+				dbout(debug, 1, "MSG_AUTH_FAIL: certificate re-issue response signature verification failed.");
+				return;
+			}
+			if response.status != "OK" {
+				dbout(debug, 2, &format!("Client TLS certificate re-issue failed: {} {}", response.status, response.err.unwrap_or_default()));
+				return;
+			}
+			let b64cert = match response.data.as_ref().and_then(|d| d.get("clientcert")).and_then(|v| v.as_str()) {
+				Some(b) => b,
+				None => { dbout(debug, 1, "Certificate re-issue response did not include a certificate."); return; }
+			};
+			match base64ct::Base64::decode_vec(b64cert) {
+				Ok(raw) => {
+					let pem = String::from_utf8_lossy(&raw).into_owned();
+					if let Err(err) = store_client_cert(debug, &pem) {
+						dbout(debug, 1, &format!("Client TLS certificate not stored: {}", err));
+					}
+				}
+				Err(_) => dbout(debug, 1, "Client TLS certificate in the re-issue response is not valid base64."),
+			}
+		}
+		Err(err) => dbout(debug, 2, &format!("Unable to send certificate re-issue to server: {}", err)),
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Server channel (bootstrap/direct, TLS + framed JSON)
 // ---------------------------------------------------------------------------
 
@@ -735,7 +961,19 @@ fn register_with_server(debug: bool, ccfg: &HashMap<String, String>) {
 	let ip_address = local_ip().map(|a| a.to_string()).unwrap_or_default();
 	let (seed, pubb) = client_keypair(debug, ccfg);
 
-	let data = serde_json::json!({
+	// Client TLS CSR (protocol §7.1 v1.1): the server signs it into the
+	// endpoint's P2P channel certificate at registration. A failure here
+	// does not block registration - the server completes it without a
+	// clientcert and the client retries via certrenew on a later start.
+	let tls_csr = match tls_keypair_csr(debug) {
+		Ok(csr) => Some(base64ct::Base64::encode_string(csr.as_bytes())),
+		Err(err) => {
+			dbout(debug, 2, &format!("Client TLS CSR unavailable ({}); the certificate will be requested via certrenew on a later start.", err));
+			None
+		}
+	};
+
+	let mut data = serde_json::json!({
 		"hostname": endpointname,
 		"uuid": client_uuid(debug, ccfg),
 		"serverkey": ccfg.get("SVRKEY").cloned().unwrap_or_default(),
@@ -747,6 +985,9 @@ fn register_with_server(debug: bool, ccfg: &HashMap<String, String>) {
 		"clientver": VER,
 		"ipv4": ip_address
 	});
+	if let Some(csr) = tls_csr {
+		data["tls_csr"] = serde_json::json!(csr);
+	}
 
 	let mut msg = new_envelope("client", "0", "core", "register", "noreg", Some(data));
 	sign_envelope(&mut msg, &seed);
@@ -814,6 +1055,21 @@ fn register_with_server(debug: bool, ccfg: &HashMap<String, String>) {
 					config_set("SID", sid);
 				} else {
 					dbout(debug, 1, "Registration response did not include a server ID (SID).");
+				}
+				// Client TLS certificate (protocol §7.1 v1.1): the server
+				// signed the presented CSR into the P2P channel
+				// certificate. Absent when the server could not issue one
+				// (e.g. no CA material) - certrenew covers that later.
+				if let Some(b64cert) = data.and_then(|d| d.get("clientcert")).and_then(|v| v.as_str()) {
+					match base64ct::Base64::decode_vec(b64cert) {
+						Ok(raw) => {
+							let pem = String::from_utf8_lossy(&raw).into_owned();
+							if let Err(err) = store_client_cert(debug, &pem) {
+								dbout(debug, 1, &format!("Client TLS certificate not stored: {}", err));
+							}
+						}
+						Err(_) => dbout(debug, 1, "Client TLS certificate in the registration response is not valid base64."),
+					}
 				}
 			} else {
 				dbout(debug, 1, &format!("Registration failed: {} {}", response.status, response.err.unwrap_or_default()));
@@ -2377,6 +2633,14 @@ async fn main() {
 	// Re-read the configuration: registration (above) writes UID/SID/MQTT* to
 	// the config DB, which the in-memory snapshot does not reflect.
 	let ccfg = parse_clientconfig(debug);
+
+	// Client TLS certificate (protocol §7.1 v1.1): a registered endpoint
+	// without a channel certificate on file (fleet upgrade to P2P, or a
+	// registration the server could not certificate) requests a re-issue.
+	if ccfg.get("UID").is_some() && !Path::new(&client_crt_path()).exists() {
+		dbout(debug, 4, "No client TLS certificate on file. Requesting a certificate re-issue...");
+		certrenew_with_server(debug, &ccfg);
+	}
 
 	// Sensor definitions table (protocol §7.3): the home for sensor scripts
 	// pushed by the server in core/config commands.

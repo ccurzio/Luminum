@@ -1,6 +1,6 @@
 [package]
 name = "LuminumClient"
-version = "0.0.6"
+version = "0.0.7"
 edition = "2021"
 
 [dependencies]
@@ -25,6 +25,12 @@ rumqttc = "0.25.1"
 # read the server signing certificate. ring is already a transitive
 # dependency (via rustls/rumqttc), so this adds no new build burden.
 ring = "0.17"
+# Client TLS keypair + CSR (protocol §7.1 v1.1): already in the tree via
+# rustls (rumqttc); used directly for the P-256 keypair and CSR signature.
+# default-features = false (as rustls uses it): the default ring-io /
+# ring-sig-verify features would pull in untrusted, which is not in the
+# offline crate cache.
+aws-lc-rs = { version = "1.19", default-features = false, features = ["aws-lc-sys", "alloc"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { version = "0.59", features = [
