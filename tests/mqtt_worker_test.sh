@@ -300,6 +300,18 @@ EOF
 chmod 600 "$HOME_TEST/config/client.conf.db"
 cp "$CERTDIR/ca.pem" "$HOME_TEST/config/server.crt"
 
+# A provisioned install also carries the client TLS certificate pair
+# (Phase 2). Seed one (P-256, CA-signed, CN bound to the UID): without
+# client.crt the client's startup certrenew path would fire and consume
+# the one-shot fake bootstrap's single connection before the
+# deregistration probe below can use it.
+openssl ecparam -name prime256v1 -genkey -noout -out "$HOME_TEST/config/client.key" 2>/dev/null
+openssl req -new -key "$HOME_TEST/config/client.key" \
+    -subj "/CN=luminum-client-$UID_TEST" -out "$SCRATCH/cl.csr" 2>/dev/null
+openssl x509 -req -in "$SCRATCH/cl.csr" -CA "$CERTDIR/ca.pem" -CAkey "$CERTDIR/ca.key" \
+    -set_serial 0x0100 -days 30 -out "$HOME_TEST/config/client.crt" 2>/dev/null
+chmod 600 "$HOME_TEST/config/client.key" "$HOME_TEST/config/client.crt"
+
 # --- worker driver (runs Luminum::MQTT::worker against the scratch DB) -------
 # cmd_timeout is 5s (vs the 120s production default) so the TIMEDOUT check
 # below does not have to wait out CMDTIMEOUT.

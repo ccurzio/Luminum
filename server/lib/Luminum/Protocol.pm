@@ -114,9 +114,10 @@ sub validate_envelope {
 	}
 
 # Build an unsigned response/protocol envelope (protocol 5.1).
+# $a{data} (a hashref) and $a{err} are optional.
 sub new_envelope {
 	my %a = @_;
-	return {
+	my $env = {
 		v => "1.0",
 		id => new_uuid4(),
 		ts => time(),
@@ -126,6 +127,9 @@ sub new_envelope {
 		action => $a{action},
 		status => $a{status},
 		};
+	$env->{err} = $a{err} if defined $a{err};
+	$env->{data} = $a{data} if defined $a{data} && ref($a{data}) eq "HASH";
+	return $env;
 	}
 
 # Length-prefixed frame (protocol 8.2): 4-byte big-endian length

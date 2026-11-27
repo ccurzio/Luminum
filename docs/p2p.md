@@ -232,6 +232,7 @@ validate a grant.
     "token": "c1a0...-uuid",
     "pkgid": 17,
     "os": "Linux",
+    "aid": "cmd-...-uuid",
     "files": [
       { "fileid": 311, "path": "scripts/apply.sh", "size": 48213, "sha256": "ab12..." },
       { "fileid": 312, "path": "content/policy.xml", "size": 90211, "sha256": "cd34..." }
@@ -262,6 +263,9 @@ validate a grant.
   raising it for large packages.
 - `token` is single-use per grant (one completed transfer session; the requester
   may walk the source list with it, §6.1) and tracked server-side (§7.3).
+- `aid` is the deploy command's action id, carried in the grant so the
+  requester's `p2p_progress` reports can name the action without a second
+  channel (the grant is the only thing the requester is handed).
 - **Piece-ready:** each `files[]` entry carries `size` + whole-file `sha256` in
   v1. The structure reserves a `pieces` member (piece size + per-piece SHA-256
   array) for a later minor version; per protocol §10 a v1 client ignores the
@@ -366,7 +370,11 @@ harmless, the next report is ≤ 5 s away): one per in-flight file when ≥ 5 s 
 ≥ 10 % of that file has passed since the previous report, plus a final report at
 100 %. Payload: `aid`, `fileid`, `state` (`FETCHING` / `VERIFYING`), `received`,
 `total`, `srcuid`. The server folds each into `CLIENTS.P2PTRANSFERS` (§7.5); the
-terminal `p2p_fetch_ok` / `p2p_fetch_fail` reports close the row.
+terminal `p2p_fetch_ok` / `p2p_fetch_fail` reports close the row. The terminal
+reports are published on the resp topic; when the client is not connected at
+that moment they queue locally and are flushed on the events topic, and the
+server folds both topics, so a report cannot be lost to a transient
+disconnection.
 
 ---
 
@@ -575,9 +583,9 @@ service account).
 | c→s (bootstrap) | core | `register` | + `tls_csr` (base64 PEM) | Existing, extended (§4.1) |
 | s→c (bootstrap) | core | `register` | + `clientcert` (base64 PEM) | Existing, extended (§4.1) |
 | c→s (bootstrap) | core | `certrenew` | `fingerprint`, `tls_csr` (base64 PEM) | Re-issue client certificate for an existing fingerprint (UID unchanged); the server signs the presented CSR |
-| s→c | core | `p2pgrant` | `token`, `pkgid`, `os`, `files[]`, `sources[]`, `exp` | The transfer grant (§5.1); server-signed, forwarded to the source verbatim |
+| s→c | core | `p2pgrant` | `token`, `pkgid`, `os`, `aid`, `files[]`, `sources[]`, `exp` | The transfer grant (§5.1); server-signed, forwarded to the source verbatim |
 | c→s | core | `deploy` (resp) | — | Unchanged; the command's `ref` carries the grant |
-| c→s | core | `report` | `event: "p2p_fetch_ok"` / `"p2p_fetch_fail"`, `pkgid`, `srcuid`, `files[]` (ok) or `err` (fail) | Terminal transfer outcome; drives holder bookkeeping and re-routing |
+| c→s | core | `report` | `event: "p2p_fetch_ok"` / `"p2p_fetch_fail"`, `token`, `pkgid`, `srcuid`, `files[]` (ok) or `err` (fail) | Terminal transfer outcome; drives holder bookkeeping and re-routing. Published on the resp topic; when the client is not connected it queues and is flushed on the events topic, and the server folds both (§6.2) |
 | c→s | core | `report` | `event: "p2p_progress"`, `aid`, `fileid`, `state`, `received`, `total`, `srcuid` | Throttled in-transfer progress (QoS 0, §6.2); drives `P2PTRANSFERS` |
 | c→s (events) | core | `p2p/have` | `files` (array of fileids) | One-shot startup sync of the local manifest |
 | peer | core | `p2pfetch` | req: `token`, `fileid`; resp: `token`, `fileid`, `status`, `size`/`err` | Per-file handshake inside a grant session (§6) |
@@ -623,6 +631,16 @@ New client config DB values: none (certificates are files: `config/client.crt`,
 
 Each phase is independently verifiable; Phases 3–5 give a working (server-seeded)
 deploy before any peer-to-peer traffic exists.
+
+**Status (2026-11-27): Phases 0–3 are complete.** Phase 3 (the seed path) landed
+as: the client's inbound data handler on 10704 (rustls acceptor, chain-to-root
+peer verification per §4.4, staging/verify/install/manifest, terminal reports),
+the broker's grant minting and the push session (`Luminum::P2P::mint_grant` /
+`push_grant`, run in a forked child), and the terminal-report folding
+(`Luminum::P2P::on_report`, on both the resp and the events topic). Verified
+end-to-end by `tests/p2p_seed_test.sh` (deploy command → grant mint → push over
+10704 → install → `p2p_fetch_ok` → token consumed, holders recorded) and
+`tests/p2p_grant_test.pl` (minting and report folding in isolation).
 
 ---
 

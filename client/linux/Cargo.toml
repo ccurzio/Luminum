@@ -1,6 +1,6 @@
 [package]
 name = "LuminumClient"
-version = "0.0.7"
+version = "0.1.0"
 edition = "2021"
 
 [target.'cfg(target_os = "linux")'.dependencies]
@@ -23,6 +23,13 @@ sha2 = "0.10"
 ed25519-dalek = "2.2"
 base64ct = { version = "1.6", features = ["alloc"] }
 rumqttc = "0.25.1"
+# P2P data channel (docs/p2p.md 4.4): the 10704 acceptor is rustls (already
+# linked via rumqttc) because the cached native-tls acceptor cannot request
+# or validate client certificates. The default aws-lc-rs provider matches
+# the one rumqttc's tokio-rustls already compiles.
+rustls = "0.23"
+rustls-pemfile = "2"
+rustls-pki-types = "1"
 
 [dependencies]
 futures = "0.3"

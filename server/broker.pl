@@ -407,6 +407,10 @@ sub startmqtt {
 			user => $MQTTUSER, secret => $MQTTPASS, seed => $srvseed,
 			dbname => "CLIENTS", dbuser => $dbuser, dbpass => $dbpass, dbsock => $dbsock, dbhost => $dbhost,
 			content_root => "$mgrpath/content",
+			# Seed-path push material (docs/p2p.md 3): the server TLS
+			# certificate/key the push presents on 10704, and the address
+			# recorded in the grant's server source entry.
+			sslcert => $sslcert, sslprvkey => $sslprvkey, server_ip => ($SHOST || $LADDR),
 			poll_secs => 1,
 			cmd_timeout => $CMDTIMEOUT, depl_timeout => $DEPLTIMEOUT,
 			passwd_file => $MQTTPASSWD, pid_file => $MQTTPIDFILE,

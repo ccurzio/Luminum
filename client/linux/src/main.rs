@@ -37,8 +37,8 @@ use local_ip_address::local_ip;
 use std::net::{TcpListener, SocketAddr, ToSocketAddrs, TcpStream};
 use native_tls::{TlsConnector, TlsStream};
 use std::error::Error;
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::collections::{HashMap, VecDeque};
+use std::sync::{Arc, Mutex};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::io::{self, Read, Write};
@@ -51,7 +51,7 @@ use base64ct::Encoding;
 use ed25519_dalek::{Signer, Verifier, SigningKey, VerifyingKey, Signature};
 use sha2::{Digest, Sha256};
 
-const VER: &str = "0.0.7";
+const VER: &str = "0.1.0";
 const IPORT: u16 = 10704;
 const DPORT: u16 = 10465;
 const LPORT: u16 = 10461;
@@ -1321,22 +1321,70 @@ fn build_checkin(uid: &str, seed: &[u8; 32], checkin: u64) -> Vec<u8> {
 	serde_json::to_vec(&build_checkin_envelope(uid, seed, checkin)).expect("Error: unable to serialize check-in envelope")
 }
 
+// Build the MQTT control channel client (protocol §4): connection
+// parameters, the pre-signed offline LWT, and the TLS trust anchor. Returns
+// the AsyncClient (cloneable; shared with the data channel's report path),
+// the event loop that drives it, and the shared connection flag. None when
+// the control channel cannot start (missing parameters or trust anchor);
+// the client keeps running (IPC, Lumys, data listener).
+fn mqtt_client(debug: bool, ccfg: &HashMap<String, String>) -> Option<(rumqttc::AsyncClient, rumqttc::EventLoop, Arc<AtomicBool>)> {
+	use rumqttc::{AsyncClient, LastWill, MqttOptions, QoS, Transport};
+
+	// MQTT connection parameters (protocol §4.1). A missing value means the
+	// control channel cannot start.
+	let uid = match ccfg.get("UID") { Some(v) => v.clone(), None => return None };
+	let sid = match ccfg.get("SID") { Some(v) => v.clone(), None => { dbout(debug, 1, "No server ID (SID) on file; MQTT control channel unavailable."); return None; } };
+	let secret = match ccfg.get("MQTTSECRET") { Some(v) => v.clone(), None => { dbout(debug, 1, "No MQTT secret on file; MQTT control channel unavailable."); return None; } };
+	let host = match ccfg.get("MQTTHOST") { Some(v) => v.clone(), None => { dbout(debug, 1, "No MQTT host on file; MQTT control channel unavailable."); return None; } };
+	let port: u16 = match ccfg.get("MQTTPORT").and_then(|p| p.parse().ok()) { Some(p) => p, None => { dbout(debug, 1, "No valid MQTT port on file; MQTT control channel unavailable."); return None; } };
+
+	let (seed, _clpub) = client_keypair(debug, ccfg);
+
+	// LWT: a pre-signed offline envelope (protocol §7.5), retained, QoS 1.
+	// Re-sent in the CONNECT packet on every (re)connect.
+	let status_topic = format!("luminum/{}/{}/status", sid, uid);
+	let mut offline = new_envelope("client", &uid, "core", "checkin", "offline", None);
+	sign_envelope(&mut offline, &seed);
+	let offline_payload = serde_json::to_vec(&offline).expect("Error: unable to serialize LWT envelope");
+	let will = LastWill::new(&status_topic, offline_payload, QoS::AtLeastOnce, true);
+
+	// TLS trust anchor: the server certificate (config/server.crt).
+	let ca = match fs::read(crt_path()) {
+		Ok(c) => c,
+		Err(_) => { dbout(debug, 1, "Server certificate not found (config/server.crt); MQTT control channel unavailable."); return None; }
+	};
+
+	let mut mopts = MqttOptions::new(&uid, &host, port);
+	mopts.set_transport(Transport::tls(ca, None, None));
+	mopts.set_credentials(&uid, &secret);
+	mopts.set_clean_session(false);
+	mopts.set_keep_alive(Duration::from_secs(60));
+	mopts.set_max_packet_size(65536, 65536);
+	mopts.set_last_will(will);
+
+	let (client, eventloop) = AsyncClient::new(mopts, 100);
+	let connected = Arc::new(AtomicBool::new(false));
+	Some((client, eventloop, connected))
+}
+
 // The client's long-lived MQTT control channel (protocol §4): connects to the
 // broker over TLS with username/password auth, a persistent session, and a
 // pre-signed offline LWT; subscribes to its command topic; publishes periodic
 // check-ins on the status topic; and processes incoming commands. Reconnects
 // automatically on failure (poll() re-establishes the connection).
-async fn mqtt_run(debug: bool, ccfg: HashMap<String, String>) {
-	use rumqttc::{AsyncClient, ConnectReturnCode, ConnectionError, Event, LastWill, MqttOptions, Packet, QoS, Transport};
-	use std::collections::VecDeque;
+async fn mqtt_run(debug: bool, ccfg: HashMap<String, String>, mqtt: Option<(rumqttc::AsyncClient, rumqttc::EventLoop, Arc<AtomicBool>)>) {
+	use rumqttc::{ConnectReturnCode, ConnectionError, Event, Packet, QoS};
 
-	// MQTT connection parameters (protocol §4.1). A missing value means the
-	// control channel cannot start; the client keeps running (IPC, Lumys).
+	// A missing control channel (unregistered endpoint, missing parameters)
+	// is a no-op: the client keeps running (IPC, Lumys, data listener).
+	let (client, mut eventloop, connected) = match mqtt {
+		Some(m) => m,
+		None => return,
+	};
+
+	// MQTT connection parameters (protocol §4.1).
 	let uid = match ccfg.get("UID") { Some(v) => v.clone(), None => return };
-	let sid = match ccfg.get("SID") { Some(v) => v.clone(), None => { dbout(debug, 1, "No server ID (SID) on file; MQTT control channel unavailable."); return; } };
-	let secret = match ccfg.get("MQTTSECRET") { Some(v) => v.clone(), None => { dbout(debug, 1, "No MQTT secret on file; MQTT control channel unavailable."); return; } };
-	let host = match ccfg.get("MQTTHOST") { Some(v) => v.clone(), None => { dbout(debug, 1, "No MQTT host on file; MQTT control channel unavailable."); return; } };
-	let port: u16 = match ccfg.get("MQTTPORT").and_then(|p| p.parse().ok()) { Some(p) => p, None => { dbout(debug, 1, "No valid MQTT port on file; MQTT control channel unavailable."); return; } };
+	let sid = match ccfg.get("SID") { Some(v) => v.clone(), None => return };
 
 	let (seed, _clpub) = client_keypair(debug, &ccfg);
 	let srvpub = server_pubkey(&ccfg);
@@ -1359,32 +1407,6 @@ async fn mqtt_run(debug: bool, ccfg: HashMap<String, String>) {
 			cmd_topics.push(format!("luminum/{}/grp/{}/cmd", sid, g));
 		}
 	}
-
-	// LWT: a pre-signed offline envelope (protocol §7.5), retained, QoS 1.
-	// Re-sent in the CONNECT packet on every (re)connect.
-	let mut offline = new_envelope("client", &uid, "core", "checkin", "offline", None);
-	sign_envelope(&mut offline, &seed);
-	let offline_payload = serde_json::to_vec(&offline).expect("Error: unable to serialize LWT envelope");
-	let will = LastWill::new(&status_topic, offline_payload, QoS::AtLeastOnce, true);
-
-	// TLS trust anchor: the server certificate (config/server.crt).
-	let ca = match fs::read(crt_path()) {
-		Ok(c) => c,
-		Err(_) => { dbout(debug, 1, "Server certificate not found (config/server.crt); MQTT control channel unavailable."); return; }
-	};
-
-	let mut mopts = MqttOptions::new(&uid, &host, port);
-	mopts.set_transport(Transport::tls(ca, None, None));
-	mopts.set_credentials(&uid, &secret);
-	mopts.set_clean_session(false);
-	mopts.set_keep_alive(Duration::from_secs(60));
-	mopts.set_max_packet_size(65536, 65536);
-	mopts.set_last_will(will);
-
-	let (client, mut eventloop) = AsyncClient::new(mopts, 100);
-
-	// Shared connection state for the check-in subtask.
-	let connected = Arc::new(AtomicBool::new(false));
 
 	// Check-in interval (seconds), shared with the check-in subtask. The
 	// server can change it via core/setcheckinint (protocol §7.2); the
@@ -1424,6 +1446,8 @@ async fn mqtt_run(debug: bool, ccfg: HashMap<String, String>) {
 	let mut last_probe: Option<Instant> = None;
 	let mut last_verdict: DeregProbe = DeregProbe::Unknown;
 
+	let host = ccfg.get("MQTTHOST").map(|s| s.as_str()).unwrap_or("?");
+	let port = ccfg.get("MQTTPORT").map(|s| s.as_str()).unwrap_or("?");
 	dbout(debug, 3, &format!("MQTT control channel starting ({}:{}, UID {})", host, port, uid));
 	loop {
 		match eventloop.poll().await {
@@ -1577,7 +1601,21 @@ async fn handle_command(
 		},
 		// A query whose conditions do not match is answered NO_MATCH (§7.3).
 		"query" => apply_query(env, uid, debug).await,
-		"deploy" => Some(cmd_error(uid, &env.lumy, &env.action, "NOT_IMPLEMENTED")),
+		// The transfer runs on the data channel (10704, docs/p2p.md 3): the
+		// server pushes under the grant embedded in the command's ref, and
+		// the data session reports the outcome (p2p_fetch_ok/fail). The
+		// command is acknowledged here; a command without the grant form is
+		// rejected.
+		"deploy" => {
+			let refv = env.data.as_ref().and_then(|d| d.get("ref"));
+			let ok = refv.and_then(|r| r.get("channel")).and_then(|c| c.as_str()) == Some("p2p")
+				&& refv.and_then(|r| r.get("grant")).is_some();
+			if ok {
+				Some(cmd_ok(uid, &env.lumy, &env.action))
+			} else {
+				Some(cmd_error(uid, &env.lumy, &env.action, "INVALID_DATA"))
+			}
+		}
 		// Client-originated actions (protocol §6.1): never valid on a cmd topic.
 		"register" | "checkin" | "unregister" | "report" | "answer" => {
 			Some(cmd_error(uid, &env.lumy, &env.action, "INVALID_DIRECTION"))
@@ -1840,6 +1878,586 @@ async fn drain_outqueue(
 		dbout(debug, 3, &format!("Flushed {} queued event(s) to the events topic", flushed));
 	}
 	conn.close().ok();
+}
+
+// ---------------------------------------------------------------------------
+// P2P data channel (10704) - the seed path (docs/p2p.md 3, 6, 8)
+// ---------------------------------------------------------------------------
+//
+// The server (source) connects to this endpoint's 10704 listener, presents
+// the signed transfer grant as the first frame, and streams the grant's
+// files in order. The session is self-contained: the grant is
+// self-authenticating (server-signed, verified under the stored SRVPUB), so
+// it does not depend on the deploy command having been processed. Files are
+// staged under Downloads/{token}/, verified (size + SHA-256), moved to
+// Packages/{pkgid}/{path}, and recorded in the local manifest
+// (config/p2p.db). The terminal outcome is reported to the server as a
+// core/report envelope (p2p_fetch_ok / p2p_fetch_fail); throttled
+// p2p_progress reports ride the same path (docs/p2p.md 6.2).
+
+const P2P_IO_TIMEOUT: Duration = Duration::from_secs(60);
+const P2P_CHUNK_MAX: usize = 16 * 1024 * 1024;
+const P2P_PROGRESS_EVERY_SECS: u64 = 5;
+const P2P_PROGRESS_EVERY_PCT: u64 = 10;
+
+fn p2p_db_path() -> String { format!("{}/config/p2p.db", base_path()) }
+
+// --- Local file manifest (docs/p2p.md 8.1) ----------------------------------
+
+// Open the manifest database (config/p2p.db, 0600), creating the table when
+// absent. The manifest is the endpoint's record of what it holds.
+fn manifest_conn() -> Option<Connection> {
+	let path = p2p_db_path();
+	if let Some(parent) = Path::new(&path).parent() {
+		fs::create_dir_all(parent).ok();
+	}
+	let conn = Connection::open(&path).ok()?;
+	conn.execute_batch(
+		"create table if not exists MANIFEST ( FILEID integer primary key, PKGID integer not null, OS text not null, PATH text not null, SIZE integer not null, SHA256 text not null, TS integer not null )",
+	).ok()?;
+	// The manifest names servable content; keep it owner-only like the
+	// configuration database.
+	if let Ok(md) = fs::metadata(&path) {
+		if md.permissions().mode() & 0o777 != 0o600 {
+			fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).ok();
+		}
+	}
+	Some(conn)
+}
+
+fn manifest_upsert(fileid: i64, pkgid: i64, os: &str, path: &str, size: i64, sha: &str) {
+	if let Some(conn) = manifest_conn() {
+		let _ = conn.execute(
+			"insert into MANIFEST (FILEID,PKGID,OS,PATH,SIZE,SHA256,TS) values (?1,?2,?3,?4,?5,?6,?7)
+			 on conflict(FILEID) do update set PKGID=excluded.PKGID, OS=excluded.OS, PATH=excluded.PATH, SIZE=excluded.SIZE, SHA256=excluded.SHA256, TS=excluded.TS",
+			params![fileid, pkgid, os, path, size, sha, Local::now().timestamp()],
+		);
+		conn.close().ok();
+	}
+}
+
+// --- Used-token ring (docs/p2p.md 5.3 item 5) --------------------------------
+
+// In-memory bounded ring of consumed grant tokens: a token completed (or
+// failed) on this endpoint is never accepted again here.
+type TokenRing = Arc<Mutex<VecDeque<String>>>;
+
+fn token_ring_new() -> TokenRing {
+	Arc::new(Mutex::new(VecDeque::with_capacity(1000)))
+}
+
+fn token_seen(ring: &TokenRing, token: &str) -> bool {
+	ring.lock().unwrap().contains(&token.to_string())
+}
+
+fn token_consume(ring: &TokenRing, token: &str) {
+	let mut q = ring.lock().unwrap();
+	q.push_back(token.to_string());
+	while q.len() > 1000 {
+		q.pop_front();
+	}
+}
+
+// --- rustls acceptor (docs/p2p.md 4.4) ----------------------------------------
+
+// Client-certificate verifier for the 10704 acceptor: the connecting peer
+// is the server, and its certificate is verified chain-to-root + validity
+// against the stored anchor (config/server.crt) - the same trust anchor as
+// the bootstrap channel (docs/p2p.md 4.4). In generate mode the anchor is
+// the Luminum CA and the server presents the leaf it issued; in import mode
+// the anchor is the self-signed server certificate, which is its own end
+// entity. Hostname verification is replaced by this anchor check: peers are
+// addressed by IP, and the identity binding is "the peer is the server this
+// endpoint already trusts".
+#[derive(Debug)]
+struct ServerChainVerifier {
+	roots: rustls::RootCertStore,
+	algs: rustls::crypto::WebPkiSupportedAlgorithms,
+}
+
+impl rustls::server::danger::ClientCertVerifier for ServerChainVerifier {
+	fn root_hint_subjects(&self) -> &[rustls::DistinguishedName] {
+		&[]
+	}
+	fn verify_client_cert(
+		&self,
+		end_entity: &rustls::pki_types::CertificateDer<'_>,
+		intermediates: &[rustls::pki_types::CertificateDer<'_>],
+		now: rustls::pki_types::UnixTime,
+	) -> Result<rustls::server::danger::ClientCertVerified, rustls::Error> {
+		let parsed = rustls::server::ParsedCertificate::try_from(end_entity)?;
+		rustls::client::verify_server_cert_signed_by_trust_anchor(
+			&parsed, &self.roots, intermediates, now, &self.algs.all,
+		)?;
+		Ok(rustls::server::danger::ClientCertVerified::assertion())
+	}
+	fn verify_tls12_signature(
+		&self,
+		message: &[u8],
+		cert: &rustls::pki_types::CertificateDer<'_>,
+		dss: &rustls::DigitallySignedStruct,
+	) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+		rustls::crypto::verify_tls12_signature(message, cert, dss, &self.algs)
+	}
+	fn verify_tls13_signature(
+		&self,
+		message: &[u8],
+		cert: &rustls::pki_types::CertificateDer<'_>,
+		dss: &rustls::DigitallySignedStruct,
+	) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+		rustls::crypto::verify_tls13_signature(message, cert, dss, &self.algs)
+	}
+	fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+		self.algs.supported_schemes()
+	}
+}
+
+// Build the 10704 acceptor configuration: the server-issued client
+// certificate (config/client.crt + client.key) plus the anchor verifier.
+// None when the endpoint is not yet certificated (the listener stays bound;
+// sessions are refused until the certificate exists).
+fn p2p_acceptor_config(debug: bool) -> Option<Arc<rustls::ServerConfig>> {
+	// The default crypto provider (aws-lc-rs, matching rumqttc's
+	// tokio-rustls) must be installed before any rustls object is built.
+	let _ = rustls::crypto::CryptoProvider::install_default(rustls::crypto::aws_lc_rs::default_provider());
+
+	let crt_pem = match fs::read(client_crt_path()) {
+		Ok(p) => p,
+		Err(_) => {
+			dbout(debug, 3, "No client TLS certificate on file (config/client.crt); the data channel will refuse sessions until the endpoint is certificated.");
+			return None;
+		}
+	};
+	let key_pem = match fs::read(client_key_path()) {
+		Ok(p) => p,
+		Err(err) => { dbout(debug, 1, &format!("Client TLS key unreadable (config/client.key): {}", err)); return None; }
+	};
+	let mut rd = std::io::Cursor::new(crt_pem);
+	let certs: Vec<rustls::pki_types::CertificateDer<'static>> = rustls_pemfile::certs(&mut rd).filter_map(|c| c.ok()).collect();
+	if certs.is_empty() {
+		dbout(debug, 1, "Client TLS certificate is not a valid PEM certificate (config/client.crt); the data channel is unavailable.");
+		return None;
+	}
+	let mut rd = std::io::Cursor::new(key_pem);
+	let key = match rustls_pemfile::pkcs8_private_keys(&mut rd).next() {
+		Some(Ok(k)) => k,
+		_ => { dbout(debug, 1, "Client TLS key is not a valid PKCS#8 PEM (config/client.key); the data channel is unavailable."); return None; }
+	};
+	let anchor_pem = match fs::read(crt_path()) {
+		Ok(p) => p,
+		Err(_) => { dbout(debug, 1, "Server certificate not found (config/server.crt); the data channel is unavailable."); return None; }
+	};
+	let mut rd = std::io::Cursor::new(anchor_pem);
+	let anchor = match rustls_pemfile::certs(&mut rd).next() {
+		Some(Ok(a)) => a,
+		_ => { dbout(debug, 1, "Server certificate is not a valid PEM certificate (config/server.crt); the data channel is unavailable."); return None; }
+	};
+	let mut roots = rustls::RootCertStore::empty();
+	if roots.add(anchor).is_err() {
+		dbout(debug, 1, "Server certificate is not a usable trust anchor (config/server.crt); the data channel is unavailable.");
+		return None;
+	}
+	// The signature-verification algorithms come from the installed crypto
+	// provider (aws-lc-rs, the same one rumqttc's tokio-rustls uses).
+	let provider = match rustls::crypto::CryptoProvider::get_default() {
+		Some(p) => p,
+		None => { dbout(debug, 1, "No default rustls crypto provider; the data channel is unavailable."); return None; }
+	};
+	let algs = provider.signature_verification_algorithms;
+	let config = rustls::ServerConfig::builder()
+		.with_client_cert_verifier(Arc::new(ServerChainVerifier { roots, algs }))
+		.with_single_cert(certs, key.into())
+		.ok()?;
+	Some(Arc::new(config))
+}
+
+// --- Grant validation (docs/p2p.md 5.3, client side) ---------------------------
+
+#[derive(Debug)]
+struct GrantFile {
+	fileid: u64,
+	path: String,
+	size: u64,
+	sha256: String,
+}
+
+#[derive(Debug)]
+struct ValidGrant {
+	token: String,
+	pkgid: u64,
+	aid: String,
+	files: Vec<GrantFile>,
+}
+
+// The grant's install paths are server-assigned and sanitized at upload;
+// this is the client-side re-validation (docs/p2p.md 11): relative, no
+// ".." components, no absolute paths.
+fn is_safe_rel_path(p: &str) -> bool {
+	if p.is_empty() || p.starts_with('/') {
+		return false;
+	}
+	!p.split('/').any(|c| c == "..")
+}
+
+// Validate a received transfer grant. Returns the parsed grant or a
+// machine-readable error code (docs/p2p.md 5.3).
+fn validate_grant(env: &Envelope, uid: &str, srvpub: &[u8; 32], ring: &TokenRing, now: i64) -> Result<ValidGrant, String> {
+	if env.src != "server" || env.lumy != "core" || env.action != "p2pgrant" || env.status != "OK" {
+		return Err(String::from("BAD_GRANT"));
+	}
+	if !verify_envelope(env, srvpub) {
+		return Err(String::from("BAD_GRANT"));
+	}
+	if env.uid != uid {
+		return Err(String::from("UID_MISMATCH"));
+	}
+	let data = match &env.data {
+		Some(d) => d,
+		None => return Err(String::from("BAD_GRANT")),
+	};
+	let token = data.get("token").and_then(|v| v.as_str()).unwrap_or("").to_string();
+	if !is_uuid4(&token) {
+		return Err(String::from("BAD_GRANT"));
+	}
+	if token_seen(ring, &token) {
+		return Err(String::from("GRANT_USED"));
+	}
+	let exp = data.get("exp").and_then(|v| v.as_u64()).unwrap_or(0) as i64;
+	if exp <= now {
+		return Err(String::from("GRANT_EXPIRED"));
+	}
+	let pkgid = match data.get("pkgid").and_then(|v| v.as_u64()) {
+		Some(p) if p > 0 => p,
+		_ => return Err(String::from("BAD_GRANT")),
+	};
+	let aid = data.get("aid").and_then(|v| v.as_str()).unwrap_or("").to_string();
+	let files_arr = match data.get("files").and_then(|v| v.as_array()) {
+		Some(a) if !a.is_empty() => a,
+		_ => return Err(String::from("BAD_GRANT")),
+	};
+	let mut files = Vec::new();
+	for f in files_arr {
+		let fileid = match f.get("fileid").and_then(|v| v.as_u64()) {
+			Some(id) => id,
+			None => return Err(String::from("BAD_GRANT")),
+		};
+		let path = f.get("path").and_then(|v| v.as_str()).unwrap_or("").to_string();
+		if !is_safe_rel_path(&path) {
+			return Err(String::from("BAD_GRANT"));
+		}
+		let size = match f.get("size").and_then(|v| v.as_u64()) {
+			Some(s) => s,
+			None => return Err(String::from("BAD_GRANT")),
+		};
+		let sha = f.get("sha256").and_then(|v| v.as_str()).unwrap_or("").to_string();
+		if sha.len() != 64 || !sha.chars().all(|c| c.is_ascii_hexdigit()) {
+			return Err(String::from("BAD_GRANT"));
+		}
+		files.push(GrantFile { fileid, path, size, sha256: sha.to_ascii_lowercase() });
+	}
+	Ok(ValidGrant { token, pkgid, aid, files })
+}
+
+// --- Reports (docs/p2p.md 6.2, 10) ---------------------------------------------
+
+// Publish a core/report envelope on the per-UID resp topic. Terminal
+// reports (qos1) fall back to the out-queue when the control channel is
+// down (protocol §9.1); progress reports are loss-tolerant and dropped.
+fn publish_report(
+	mqtt: &Option<rumqttc::AsyncClient>,
+	handle: &tokio::runtime::Handle,
+	connected: &Arc<AtomicBool>,
+	resp_topic: &str,
+	uid: &str,
+	seed: &[u8; 32],
+	data: serde_json::Value,
+	qos1: bool,
+	debug: bool,
+) {
+	let mut env = new_envelope("client", uid, "core", "report", "OK", Some(data));
+	sign_envelope(&mut env, seed);
+	let bytes = match serde_json::to_vec(&env) {
+		Ok(b) => b,
+		Err(err) => { dbout(debug, 1, &format!("Unable to serialize report: {}", err)); return; }
+	};
+	if let Some(client) = mqtt {
+		if connected.load(Ordering::SeqCst) {
+			let qos = if qos1 { rumqttc::QoS::AtLeastOnce } else { rumqttc::QoS::AtMostOnce };
+			let client = client.clone();
+			let topic = resp_topic.to_string();
+			if handle.block_on(client.publish(topic, qos, false, bytes)).is_ok() {
+				return;
+			}
+		}
+	}
+	if qos1 {
+		queue_alert(&env, debug);
+	}
+}
+
+// --- The session ----------------------------------------------------------------
+
+// Read one raw data frame: 4-byte big-endian length + bytes. A zero-length
+// frame terminates the file's stream (docs/p2p.md 6). Returns Ok(None) at
+// EOF, Ok(Some(bytes)) for a chunk, Err on failure.
+fn raw_frame_read<R: Read>(r: &mut R) -> io::Result<Option<Vec<u8>>> {
+	let mut lenbuf = [0u8; 4];
+	r.read_exact(&mut lenbuf)?;
+	let len = u32::from_be_bytes(lenbuf) as usize;
+	if len == 0 {
+		return Ok(None);
+	}
+	if len > P2P_CHUNK_MAX {
+		return Err(io::Error::new(io::ErrorKind::InvalidData, "raw frame exceeds the maximum size"));
+	}
+	let mut buf = vec![0u8; len];
+	r.read_exact(&mut buf)?;
+	Ok(Some(buf))
+}
+
+// Receive one file: read the source's signed p2pfetch response, stream the
+// raw frames into the staging path, verify size + SHA-256, and move the
+// file to its final path under Packages/. Returns Ok(()) on success,
+// Err(code) otherwise; the staging tree is deleted on failure.
+fn receive_file(
+	tls: &mut rustls::StreamOwned<rustls::ServerConnection, TcpStream>,
+	base: &str,
+	token: &str,
+	pkgid: u64,
+	file: &GrantFile,
+	seed: &[u8; 32],
+	srvpub: &[u8; 32],
+	uid: &str,
+	mqtt: &Option<rumqttc::AsyncClient>,
+	handle: &tokio::runtime::Handle,
+	connected: &Arc<AtomicBool>,
+	resp_topic: &str,
+	aid: &str,
+	debug: bool,
+) -> Result<(), String> {
+	// Per-file handshake: the source's signed p2pfetch response.
+	let resp = match frame_read(tls) {
+		Ok(e) => e,
+		Err(err) => return Err(format!("STREAM_ERROR: {}", err)),
+	};
+	if resp.lumy != "core" || resp.action != "p2pfetch" || resp.status != "OK"
+		|| !verify_envelope(&resp, srvpub)
+		|| resp.data.as_ref().and_then(|d| d.get("token")).and_then(|v| v.as_str()) != Some(token)
+		|| resp.data.as_ref().and_then(|d| d.get("fileid")).and_then(|v| v.as_u64()) != Some(file.fileid)
+	{
+		return Err(String::from("BAD_GRANT"));
+	}
+
+	// Stage under Downloads/{token}/{path}.
+	let stage_dir = format!("{}/Downloads/{}", base, token);
+	let stage_path = format!("{}/{}", stage_dir, file.path);
+	if let Some(parent) = Path::new(&stage_path).parent() {
+		fs::create_dir_all(parent).map_err(|e| format!("STAGING_ERROR: {}", e))?;
+	}
+	let mut out = fs::File::create(&stage_path).map_err(|e| format!("STAGING_ERROR: {}", e))?;
+	let mut hasher = Sha256::new();
+	let mut received: u64 = 0;
+	let mut last_report = Instant::now();
+	let mut last_report_pct: u64 = 0;
+	loop {
+		match raw_frame_read(tls) {
+			Ok(Some(chunk)) => {
+				out.write_all(&chunk).map_err(|e| format!("STAGING_ERROR: {}", e))?;
+				hasher.update(&chunk);
+				received += chunk.len() as u64;
+				let pct = if file.size > 0 { received * 100 / file.size } else { 100 };
+				let due = last_report.elapsed() >= Duration::from_secs(P2P_PROGRESS_EVERY_SECS)
+					|| pct.saturating_sub(last_report_pct) >= P2P_PROGRESS_EVERY_PCT;
+				if due {
+					last_report = Instant::now();
+					last_report_pct = pct;
+					publish_report(
+						mqtt, handle, connected, resp_topic, uid, seed,
+						serde_json::json!({
+							"event": "p2p_progress",
+							"aid": aid,
+							"fileid": file.fileid,
+							"state": "FETCHING",
+							"received": received,
+							"total": file.size,
+							"srcuid": 0,
+						}),
+						false, debug,
+					);
+				}
+			}
+			Ok(None) => break,   // zero-length frame: EOF
+			Err(err) => return Err(format!("STREAM_ERROR: {}", err)),
+		}
+	}
+	out.flush().ok();
+	drop(out);
+
+	// Verify total size and SHA-256 (docs/p2p.md 6). A mismatch aborts the
+	// session: the staged file is deleted, nothing is installed.
+	let digest = hex_of(&hasher.finalize());
+	if received != file.size || digest != file.sha256 {
+		let _ = fs::remove_file(&stage_path);
+		return Err(String::from("HASH_MISMATCH"));
+	}
+
+	// Install under Packages/{pkgid}/{path} and record the manifest row.
+	let final_dir = format!("{}/Packages/{}", base, pkgid);
+	let final_path = format!("{}/{}", final_dir, file.path);
+	if let Some(parent) = Path::new(&final_path).parent() {
+		fs::create_dir_all(parent).map_err(|e| format!("INSTALL_ERROR: {}", e))?;
+	}
+	fs::rename(&stage_path, &final_path).map_err(|e| format!("INSTALL_ERROR: {}", e))?;
+	manifest_upsert(file.fileid as i64, pkgid as i64, OSPLAT, &file.path, file.size as i64, &file.sha256);
+	Ok(())
+}
+
+// Lowercase hex of a digest.
+fn hex_of(bytes: &[u8]) -> String {
+	let mut s = String::with_capacity(bytes.len() * 2);
+	for b in bytes {
+		s.push_str(&format!("{:02x}", b));
+	}
+	s
+}
+
+// The 10704 inbound data session (docs/p2p.md 3, 6; protocol 8.3, 8.4).
+// Runs on its own thread per connection.
+fn handle_data_session(
+	stream: TcpStream,
+	config: Arc<rustls::ServerConfig>,
+	uid: String,
+	seed: [u8; 32],
+	srvpub: [u8; 32],
+	mqtt: Option<rumqttc::AsyncClient>,
+	handle: tokio::runtime::Handle,
+	connected: Arc<AtomicBool>,
+	ring: TokenRing,
+	resp_topic: String,
+	debug: bool,
+) {
+	let base = base_path();
+	stream.set_read_timeout(Some(P2P_IO_TIMEOUT)).ok();
+	stream.set_write_timeout(Some(P2P_IO_TIMEOUT)).ok();
+	// The TLS handshake (1.2 or 1.3) completes transparently on the first
+	// read/write through the StreamOwned (rustls 0.23 has no blocking
+	// acceptor helper).
+	let conn = match rustls::ServerConnection::new(config) {
+		Ok(c) => c,
+		Err(err) => {
+			dbout(debug, 2, &format!("Data channel: unable to start the TLS session: {}", err));
+			return;
+		}
+	};
+	let mut tls = rustls::StreamOwned::new(conn, stream);
+
+	// The grant: server-signed, presented verbatim as the first frame.
+	let grant = match frame_read(&mut tls) {
+		Ok(e) => e,
+		Err(err) => {
+			dbout(debug, 2, &format!("Data channel: unable to read the grant frame: {}", err));
+			return;
+		}
+	};
+	let valid = match validate_grant(&grant, &uid, &srvpub, &ring, Local::now().timestamp()) {
+		Ok(g) => g,
+		Err(code) => {
+			dbout(debug, 1, &format!("Data channel: grant rejected ({}); closing the session", code));
+			let token = grant.data.as_ref().and_then(|d| d.get("token")).and_then(|v| v.as_str()).unwrap_or("");
+			let mut resp = new_envelope("client", &uid, "core", "p2pfetch", "ERR", Some(serde_json::json!({ "token": token })));
+			resp.err = Some(code.clone());
+			sign_envelope(&mut resp, &seed);
+			frame_write(&mut tls, &resp).ok();
+			return;
+		}
+	};
+	dbout(debug, 3, &format!("Data channel: grant {} accepted ({} file(s), package {})", valid.token, valid.files.len(), valid.pkgid));
+
+	// Handshake response: the file sizes, signed by this endpoint.
+	let sizes: Vec<u64> = valid.files.iter().map(|f| f.size).collect();
+	let mut resp = new_envelope("client", &uid, "core", "p2pfetch", "OK", Some(serde_json::json!({ "token": valid.token, "files": sizes })));
+	sign_envelope(&mut resp, &seed);
+	if frame_write(&mut tls, &resp).is_err() {
+		dbout(debug, 2, "Data channel: unable to write the handshake response");
+		return;
+	}
+
+	// Receive the files in grant order.
+	for file in &valid.files {
+		// Per-file request: signed by this endpoint (the requester).
+		let mut req = new_envelope("client", &uid, "core", "p2pfetch", "OK", Some(serde_json::json!({ "token": valid.token, "fileid": file.fileid })));
+		sign_envelope(&mut req, &seed);
+		if frame_write(&mut tls, &req).is_err() {
+			fail_session(&mut tls, &uid, &seed, &valid.token, valid.pkgid, "STREAM_ERROR", &mqtt, &handle, &connected, &resp_topic, &ring, debug);
+			return;
+		}
+		if let Err(code) = receive_file(
+			&mut tls, &base, &valid.token, valid.pkgid, file, &seed, &srvpub, &uid,
+			&mqtt, &handle, &connected, &resp_topic, &valid.aid, debug,
+		) {
+			fail_session(&mut tls, &uid, &seed, &valid.token, valid.pkgid, &code, &mqtt, &handle, &connected, &resp_topic, &ring, debug);
+			return;
+		}
+	}
+
+	// Session complete: report the outcome and consume the token.
+	let fileids: Vec<u64> = valid.files.iter().map(|f| f.fileid).collect();
+	publish_report(
+		&mqtt, &handle, &connected, &resp_topic, &uid, &seed,
+		serde_json::json!({
+			"event": "p2p_fetch_ok",
+			"token": valid.token,
+			"pkgid": valid.pkgid,
+			"srcuid": 0,
+			"files": fileids,
+		}),
+		true, debug,
+	);
+	token_consume(&ring, &valid.token);
+	// The staging tree is per token; the files are installed now, remove it.
+	let stage_dir = format!("{}/Downloads/{}", base, &valid.token);
+	fs::remove_dir_all(&stage_dir).ok();
+	dbout(debug, 0, &format!("Data channel: package {} received ({} file(s), grant {})", valid.pkgid, valid.files.len(), valid.token));
+}
+
+// Fail the session: answer the source's ERR, clean the per-token staging
+// tree, report p2p_fetch_fail (terminal, out-queue backed), and consume the
+// token (a failed walk consumes the grant, docs/p2p.md 7.2; a re-pushed
+// grant with the same token is refused on this endpoint).
+fn fail_session(
+	tls: &mut rustls::StreamOwned<rustls::ServerConnection, TcpStream>,
+	uid: &str,
+	seed: &[u8; 32],
+	token: &str,
+	pkgid: u64,
+	err: &str,
+	mqtt: &Option<rumqttc::AsyncClient>,
+	handle: &tokio::runtime::Handle,
+	connected: &Arc<AtomicBool>,
+	resp_topic: &str,
+	ring: &TokenRing,
+	debug: bool,
+) {
+	dbout(debug, 1, &format!("Data channel: session failed ({}); reporting p2p_fetch_fail", err));
+	let mut resp = new_envelope("client", uid, "core", "p2pfetch", "ERR", Some(serde_json::json!({ "token": token })));
+	resp.err = Some(err.to_string());
+	sign_envelope(&mut resp, seed);
+	frame_write(tls, &resp).ok();
+	// The staging tree is per token; remove it whole.
+	let stage_dir = format!("{}/Downloads/{}", base_path(), token);
+	fs::remove_dir_all(&stage_dir).ok();
+	publish_report(
+		mqtt, handle, connected, resp_topic, uid, seed,
+		serde_json::json!({
+			"event": "p2p_fetch_fail",
+			"token": token,
+			"pkgid": pkgid,
+			"srcuid": 0,
+			"err": err,
+		}),
+		true, debug,
+	);
+	token_consume(ring, token);
 }
 
 // ---------------------------------------------------------------------------
@@ -2286,9 +2904,16 @@ async fn main() {
 	ensure_sensors_table(debug);
 
 	// MQTT control channel (protocol §4): persistent session, LWT, periodic
-	// check-ins, and command handling. Returns immediately (no-op) when the
-	// client is not yet registered or lacks MQTT parameters.
-	spawn(mqtt_run(debug, ccfg));
+	// check-ins, and command handling. The client is built here so the data
+	// channel's report path can share it; None when the endpoint is not yet
+	// registered or lacks MQTT parameters (the client keeps running: IPC,
+	// Lumys, data listener).
+	let mqtt = mqtt_client(debug, &ccfg);
+	// The data channel shares the MQTT client for transfer reports; extract
+	// the clones before the control channel takes ownership of the client.
+	let p2p_mqtt = mqtt.as_ref().map(|(c, _, _)| c.clone());
+	let p2p_connected = mqtt.as_ref().map(|(_, _, f)| f.clone()).unwrap_or_else(|| Arc::new(AtomicBool::new(false)));
+	spawn(mqtt_run(debug, ccfg.clone(), mqtt));
 
 	// Local IPC listener (Lumy channel)
 	let ipc_addr: SocketAddr = format!("127.0.0.1:{}", LPORT).parse().expect("Invalid IPC socket address");
@@ -2303,11 +2928,12 @@ async fn main() {
 		}
 	};
 
-	// Inbound data listener (server -> client bulk data, protocol §2)
+	// Inbound data listener (server -> client bulk data, protocol §2, §8.3;
+	// the P2P seed path, docs/p2p.md 3). Bound at startup like the IPC
+	// listener; each connection is served on its own thread.
 	let ip_address = local_ip().map(|a| a.to_string()).unwrap_or_default();
 	let data_addr: SocketAddr = format!("{}:{}", ip_address, IPORT).parse().expect("Invalid data socket address");
-	// TODO: data channel handler (server -> client bulk transfer, protocol §8.3)
-	let _datalistener = match TcpListener::bind(data_addr) {
+	let datalistener = match TcpListener::bind(data_addr) {
 		Ok(l) => {
 			dbout(debug, 3, &format!("Incoming data connection configured on port {}", IPORT));
 			l
@@ -2317,6 +2943,46 @@ async fn main() {
 			process::exit(1);
 		}
 	};
+	// Session state shared with the data handler: the rustls acceptor
+	// configuration (needs the client certificate), the MQTT client for
+	// transfer reports, and the used-token ring. An unregistered endpoint
+	// (no UID) or one without the server signing key cannot validate a
+	// grant; its sessions are refused.
+	let p2p_cfg = p2p_acceptor_config(debug);
+	let (p2p_uid, p2p_seed, p2p_srvpub) = match (ccfg.get("UID"), server_pubkey(&ccfg)) {
+		(Some(uid), Some(srvpub)) => {
+			let (seed, _pubb) = client_keypair(debug, &ccfg);
+			(uid.clone(), seed, srvpub)
+		}
+		_ => (String::new(), [0u8; 32], [0u8; 32]),
+	};
+	let p2p_ring = token_ring_new();
+	let p2p_resp_topic = format!("luminum/{}/{}/resp", ccfg.get("SID").cloned().unwrap_or_default(), p2p_uid);
+	let p2p_handle = tokio::runtime::Handle::current();
+	let dbc = debug;
+	thread::spawn(move || {
+		for stream in datalistener.incoming() {
+			match stream {
+				Ok(stream) => {
+					let (cfg, uid, seed, srvpub, mqtt, connected, ring, topic, handle) = (
+						p2p_cfg.clone(), p2p_uid.clone(), p2p_seed, p2p_srvpub,
+						p2p_mqtt.clone(), p2p_connected.clone(), p2p_ring.clone(),
+						p2p_resp_topic.clone(), p2p_handle.clone(),
+					);
+					thread::spawn(move || {
+						if let Some(cfg) = cfg {
+							handle_data_session(stream, cfg, uid, seed, srvpub, mqtt, handle, connected, ring, topic, dbc);
+						} else {
+							dbout(dbc, 2, "Data channel connection dropped: no client TLS certificate on file (the P2P channel is unavailable until the endpoint is certificated).");
+						}
+					});
+				}
+				Err(err) => {
+					dbout(dbc, 2, &format!("Error establishing data connection: {}", err));
+				}
+			}
+		}
+	});
 
 	// Discover and launch Lumys
 	let lumys = discover_lumys(debug);
@@ -2327,7 +2993,6 @@ async fn main() {
 
 	// IPC accept loop. Runs on its own thread so the main task can keep
 	// the tokio runtime alive (worker threads run the check-in task).
-	let dbc = debug;
 	thread::spawn(move || {
 		for stream in ipclistener.incoming() {
 			match stream {
@@ -2496,5 +3161,192 @@ mod connect_any_tests {
 		let a: SocketAddr = format!("127.0.0.1:{}", port).parse().expect("parse addr");
 		let b: SocketAddr = format!("[::1]:{}", port).parse().expect("parse addr");
 		assert!(connect_any(&[a, b], false).is_err());
+	}
+}
+
+#[cfg(test)]
+mod p2p_tests {
+	use super::*;
+
+	const SEED: [u8; 32] = [7u8; 32];
+	const OTHER_SEED: [u8; 32] = [9u8; 32];
+
+	fn pub_of(seed: [u8; 32]) -> [u8; 32] {
+		SigningKey::from_bytes(&seed).verifying_key().to_bytes()
+	}
+
+	fn valid_files() -> serde_json::Value {
+		serde_json::json!([
+			{ "fileid": 1, "path": "bin/tool", "size": 100, "sha256": "ab".repeat(32) },
+			{ "fileid": 2, "path": "lib/helper.so", "size": 200, "sha256": "cd".repeat(32) },
+		])
+	}
+
+	// A grant envelope of the seed form (server-only source list), signed by
+	// $seed.
+	fn grant(uid: &str, token: &str, exp: i64, files: serde_json::Value, seed: &[u8; 32]) -> Envelope {
+		let mut env = new_envelope("server", uid, "core", "p2pgrant", "OK", Some(serde_json::json!({
+			"token": token,
+			"pkgid": 7,
+			"os": "Linux",
+			"aid": "cmd-123",
+			"files": files,
+			"sources": [{ "uid": 0, "ip": "10.0.0.1", "port": 10704 }],
+			"exp": exp,
+		})));
+		sign_envelope(&mut env, seed);
+		env
+	}
+
+	#[test]
+	fn safe_rel_path_cases() {
+		assert!(is_safe_rel_path("bin/tool"));
+		assert!(is_safe_rel_path("a/b/c"));
+		assert!(is_safe_rel_path("a/..b/c"));   // a component that merely starts with ".."
+		assert!(!is_safe_rel_path(""));
+		assert!(!is_safe_rel_path("/abs"));
+		assert!(!is_safe_rel_path("a/../b"));
+		assert!(!is_safe_rel_path(".."));
+	}
+
+	#[test]
+	fn grant_valid() {
+		let ring = token_ring_new();
+		let now = Local::now().timestamp();
+		let env = grant("42", &uuid4(), now + 300, valid_files(), &SEED);
+		let g = validate_grant(&env, "42", &pub_of(SEED), &ring, now).expect("valid grant");
+		assert_eq!(g.pkgid, 7);
+		assert_eq!(g.aid, "cmd-123");
+		assert_eq!(g.files.len(), 2);
+		assert_eq!(g.files[0].fileid, 1);
+		assert_eq!(g.files[1].path, "lib/helper.so");
+	}
+
+	#[test]
+	fn grant_bad_signature() {
+		let ring = token_ring_new();
+		let now = Local::now().timestamp();
+		let env = grant("42", &uuid4(), now + 300, valid_files(), &OTHER_SEED);
+		let err = validate_grant(&env, "42", &pub_of(SEED), &ring, now).unwrap_err();
+		assert_eq!(err, "BAD_GRANT");
+	}
+
+	#[test]
+	fn grant_wrong_uid() {
+		let ring = token_ring_new();
+		let now = Local::now().timestamp();
+		let env = grant("99", &uuid4(), now + 300, valid_files(), &SEED);
+		let err = validate_grant(&env, "42", &pub_of(SEED), &ring, now).unwrap_err();
+		assert_eq!(err, "UID_MISMATCH");
+	}
+
+	#[test]
+	fn grant_expired() {
+		let ring = token_ring_new();
+		let now = Local::now().timestamp();
+		let env = grant("42", &uuid4(), now - 1, valid_files(), &SEED);
+		let err = validate_grant(&env, "42", &pub_of(SEED), &ring, now).unwrap_err();
+		assert_eq!(err, "GRANT_EXPIRED");
+	}
+
+	#[test]
+	fn grant_used() {
+		let ring = token_ring_new();
+		let now = Local::now().timestamp();
+		let token = uuid4();
+		token_consume(&ring, &token);
+		let env = grant("42", &token, now + 300, valid_files(), &SEED);
+		let err = validate_grant(&env, "42", &pub_of(SEED), &ring, now).unwrap_err();
+		assert_eq!(err, "GRANT_USED");
+	}
+
+	#[test]
+	fn grant_unsafe_path() {
+		let ring = token_ring_new();
+		let now = Local::now().timestamp();
+		let files = serde_json::json!([{ "fileid": 1, "path": "a/../../etc/passwd", "size": 10, "sha256": "ab".repeat(32) }]);
+		let env = grant("42", &uuid4(), now + 300, files, &SEED);
+		let err = validate_grant(&env, "42", &pub_of(SEED), &ring, now).unwrap_err();
+		assert_eq!(err, "BAD_GRANT");
+	}
+
+	#[test]
+	fn grant_wrong_action() {
+		let ring = token_ring_new();
+		let now = Local::now().timestamp();
+		let mut env = grant("42", &uuid4(), now + 300, valid_files(), &SEED);
+		env.action = String::from("p2pfetch");
+		let err = validate_grant(&env, "42", &pub_of(SEED), &ring, now).unwrap_err();
+		assert_eq!(err, "BAD_GRANT");
+	}
+
+	#[test]
+	fn grant_empty_files() {
+		let ring = token_ring_new();
+		let now = Local::now().timestamp();
+		let env = grant("42", &uuid4(), now + 300, serde_json::json!([]), &SEED);
+		let err = validate_grant(&env, "42", &pub_of(SEED), &ring, now).unwrap_err();
+		assert_eq!(err, "BAD_GRANT");
+	}
+
+	#[test]
+	fn grant_bad_sha() {
+		let ring = token_ring_new();
+		let now = Local::now().timestamp();
+		let files = serde_json::json!([{ "fileid": 1, "path": "bin/tool", "size": 10, "sha256": "zz".repeat(32) }]);
+		let env = grant("42", &uuid4(), now + 300, files, &SEED);
+		let err = validate_grant(&env, "42", &pub_of(SEED), &ring, now).unwrap_err();
+		assert_eq!(err, "BAD_GRANT");
+	}
+
+	#[test]
+	fn raw_frame_chunk_and_eof() {
+		let mut buf = Vec::new();
+		buf.extend_from_slice(&3u32.to_be_bytes());
+		buf.extend_from_slice(b"abc");
+		buf.extend_from_slice(&0u32.to_be_bytes());   // zero-length frame: EOF
+		let mut r = std::io::Cursor::new(buf);
+		assert_eq!(raw_frame_read(&mut r).unwrap(), Some(vec![b'a', b'b', b'c']));
+		assert_eq!(raw_frame_read(&mut r).unwrap(), None);
+	}
+
+	#[test]
+	fn raw_frame_oversized() {
+		let mut buf = Vec::new();
+		buf.extend_from_slice(&u32::MAX.to_be_bytes());
+		let mut r = std::io::Cursor::new(buf);
+		assert!(raw_frame_read(&mut r).is_err());
+	}
+
+	#[test]
+	fn token_ring_consume() {
+		let ring = token_ring_new();
+		assert!(!token_seen(&ring, "t1"));
+		token_consume(&ring, "t1");
+		assert!(token_seen(&ring, "t1"));
+		assert!(!token_seen(&ring, "t2"));
+	}
+
+	#[test]
+	fn manifest_upsert_roundtrip() {
+		// LUMINUM_HOME is process-global; this is the only test using it.
+		let home = format!("/tmp/luminum_p2p_manifest_{}", std::process::id());
+		std::env::set_var("LUMINUM_HOME", &home);
+		manifest_upsert(11, 7, "Linux", "bin/tool", 100, &"ab".repeat(32));
+		let conn = manifest_conn().expect("manifest db");
+		let (pkgid, path, size, sha): (i64, String, i64, String) = conn.query_row(
+			"select PKGID, PATH, SIZE, SHA256 from MANIFEST where FILEID = 11",
+			[], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+		).expect("row");
+		assert_eq!((pkgid, path, size, sha), (7, "bin/tool".to_string(), 100, "ab".repeat(32)));
+		// Re-upsert with a different package: the row is updated, not duplicated.
+		manifest_upsert(11, 8, "Linux", "bin/tool2", 101, &"cd".repeat(32));
+		let n: i64 = conn.query_row("select count(*) from MANIFEST where FILEID = 11", [], |r| r.get(0)).unwrap();
+		assert_eq!(n, 1);
+		let pkgid2: i64 = conn.query_row("select PKGID from MANIFEST where FILEID = 11", [], |r| r.get(0)).unwrap();
+		assert_eq!(pkgid2, 8);
+		conn.close().ok();
+		fs::remove_dir_all(&home).ok();
+		std::env::remove_var("LUMINUM_HOME");
 	}
 }

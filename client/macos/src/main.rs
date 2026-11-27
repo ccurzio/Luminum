@@ -50,7 +50,7 @@ use base64ct::Encoding;
 use ed25519_dalek::{Signer, Verifier, SigningKey, VerifyingKey, Signature};
 use sha2::{Digest, Sha256};
 
-const VER: &str = "0.0.7";
+const VER: &str = "0.1.0";
 const IPORT: u16 = 10704;
 const DPORT: u16 = 10465;
 const LPORT: u16 = 10461;

@@ -26,9 +26,11 @@ use warnings;
 use DBI;
 use JSON::PP;
 use MIME::Base64;
+use POSIX qw(WNOHANG);
 use IO::Socket::SSL qw(SSL_VERIFY_PEER);
 use Net::MQTT::Simple::SSL;
 use Luminum::Protocol;
+use Luminum::P2P;
 use Luminum::Repo;
 
 # --- Pure helpers -------------------------------------------------------------
@@ -335,20 +337,49 @@ sub _sweep_missing {
 	}
 }
 
+# Fold a P2P transfer report (docs/p2p.md 10) into the bookkeeping tables.
+# Terminal reports (p2p_fetch_ok/fail) consume the token and upsert the
+# holders; the folding is idempotent (a redelivered report for a consumed
+# token changes nothing). Progress reports are logged until the
+# P2PTRANSFERS folding lands (Phase 5). Returns 1 when the message was a
+# P2P report (handled), 0 otherwise.
+sub _on_p2p_report {
+	my ($db, $contentdb, $uid, $data, $log) = @_;
+	my $event = $data->{event} // "";
+	if ($event eq "p2p_fetch_ok" || $event eq "p2p_fetch_fail") {
+		# on_report takes live DBI handles; the worker passes the lazily
+		# maintained connection specs.
+		Luminum::P2P::on_report(_dbh($db), _dbh($contentdb), $uid, $data, $log);
+		return 1;
+	}
+	if ($event eq "p2p_progress") {
+		$log->("p2p: progress from UID $uid: fileid " . ($data->{fileid} // "?") . " " . ($data->{state} // "?") . " " . ($data->{received} // 0) . "/" . ($data->{total} // 0) . " bytes (source " . ($data->{srcuid} // "?") . ")");
+		return 1;
+	}
+	return 0;
+}
+
 # Handle a response (resp) message. An answer to a query is correlated by
 # data.qid (protocol 7.3: the client echoes the query's qid, which is the
 # outbox QID, the command envelope id, and data.qid in one value); its
 # per-sensor results are stored in QUERYRESULTS. Other responses (setgroups,
 # config, ...) carry no qid, so correlation stays by (uid, lumy, action):
 # the client echoes lumy/action but does not carry the command's message id.
+# P2P transfer reports (docs/p2p.md 10) are client-originated core/report
+# messages: p2p_fetch_ok/fail are folded into the token and holder tables
+# (Phase 3); p2p_progress is logged until the P2PTRANSFERS folding lands
+# (Phase 5).
 sub _on_resp {
-	my ($db, $sid, $topic, $payload, $log) = @_;
+	my ($db, $contentdb, $sid, $topic, $payload, $log) = @_;
 	my ($uid) = $topic =~ m{^luminum/$sid/(\d+)/resp$} or do { $log->("resp: unparseable topic $topic"); return; };
 	my $env = eval { JSON::PP->new->utf8->decode($payload) };
 	return unless ref($env) eq "HASH";
 	my $lumy = $env->{lumy} // "";
 	my $action = $env->{action} // "";
 	my $data = (ref($env->{data}) eq "HASH") ? $env->{data} : undef;
+	if ($action eq "report" && defined $data && _on_p2p_report($db, $contentdb, $uid, $data, $log)) {
+		return;
+	}
 	if ($action eq "answer" && defined $data) {
 		_on_answer($db, $uid, $data, $env->{status}, $log);
 		return;
@@ -446,12 +477,21 @@ sub _on_answer {
 	$log->("answer: UID $uid answered query $qid (command $id, $stored result(s) stored)");
 }
 
-# Handle an event message (logged only for now).
+# Handle an event message. Terminal P2P transfer reports queued on the
+# client's out-queue while the control channel was down (protocol 9.1) are
+# flushed to the events topic on reconnect, so the report folding runs here
+# as well as on the resp topic (it is idempotent). Everything else is
+# logged.
 sub _on_events {
-	my ($db, $sid, $topic, $payload, $log) = @_;
+	my ($db, $contentdb, $sid, $topic, $payload, $log) = @_;
 	my ($uid) = $topic =~ m{^luminum/$sid/(\d+)/events$} or return;
 	my $env = eval { JSON::PP->new->utf8->decode($payload) };
 	return unless ref($env) eq "HASH";
+	my $data = (ref($env->{data}) eq "HASH") ? $env->{data} : undef;
+	if (($env->{action} // "") eq "report" && defined $data
+		&& _on_p2p_report($db, $contentdb, $uid, $data, $log)) {
+		return;
+	}
 	$log->("events: UID $uid " . ($env->{action} // "?") . " " . ($env->{status} // ""));
 }
 
@@ -469,8 +509,16 @@ sub _action_timeout {
 # not republished (a redelivered query would be deduplicated client-side and
 # never re-answered); the console re-enqueues it if it wants a retry. Other
 # actions are republished past their deadline.
+#
+# Deploy commands (docs/p2p.md 5, 7.1) are published in the grant form: each
+# publish attempt mints a fresh single-use grant (a redelivered command must
+# carry a grant that has not expired) and embeds it in the command's ref, and
+# the seed path pushes the package files to the target's 10704 in a forked
+# child (the session is blocking and can last as long as the download).
+# $ssl is {cert, key, server_ip} or undef (tests without TLS material);
+# $push_children is an arrayref the worker reaps.
 sub _pump_outbox {
-	my ($db, $m, $sid, $seed, $cmd_timeout, $depl_timeout, $log) = @_;
+	my ($db, $contentdb, $m, $sid, $seed, $cmd_timeout, $depl_timeout, $ssl, $content_root, $push_children, $log) = @_;
 	my $dbh = _dbh($db);
 	my $sth = $dbh->prepare("select ID, TARGET, LUMY, ACTION, DATA, QID, STATUS from COMMANDS where STATUS = 'PENDING' or (STATUS = 'SENT' and DEADLINE is not null and DEADLINE < now()) order by ID asc limit 50");
 	$sth->execute();
@@ -489,6 +537,83 @@ sub _pump_outbox {
 		}
 		my $uid = ($target =~ /^[0-9]+$/) ? $target : "0";
 		my $datahash = (defined $data && length($data)) ? eval { JSON::PP->new->utf8->decode($data) } : undef;
+		$datahash = {} unless ref($datahash) eq "HASH";
+
+		if ($action eq "deploy") {
+			# The grant is per target (it names the requester UID and the
+			# target's OS), so a deploy must target a single endpoint.
+			unless ($target =~ /^[0-9]+$/) {
+				$dbh->do("update COMMANDS set STATUS = 'EXPIRED' where ID = ?", undef, $id);
+				$log->("outbox: deploy command $id targets '$target'; deploys require a single endpoint (the grant is per target); expired");
+				next;
+			}
+			my $pkgid = $datahash->{pkgid};
+			unless (defined $pkgid && "$pkgid" =~ /^[0-9]+$/) {
+				$dbh->do("update COMMANDS set STATUS = 'EXPIRED' where ID = ?", undef, $id);
+				$log->("outbox: deploy command $id has no valid pkgid; expired");
+				next;
+			}
+			my @osrow = $dbh->selectrow_array("select OSPLATFORM from STATUS where ID = ?", undef, $target);
+			my $os = $osrow[0];
+			unless (defined $os && length $os) {
+				$dbh->do("update COMMANDS set STATUS = 'EXPIRED' where ID = ?", undef, $id);
+				$log->("outbox: deploy command $id: no OS on record for UID $target; expired");
+				next;
+			}
+			my ($mok, $grant, $token) = Luminum::P2P::mint_grant(
+				contentdbh => _dbh($contentdb), dbh => $dbh, seed => $seed,
+				uid => $target, pkgid => $pkgid, os => $os,
+				aid => (defined $datahash->{aid} && length($datahash->{aid})) ? $datahash->{aid} : $qid,
+				server_ip => $ssl ? $ssl->{server_ip} : undef, log => $log,
+				);
+			unless ($mok) {
+				$dbh->do("update COMMANDS set STATUS = 'EXPIRED' where ID = ?", undef, $id);
+				$log->("outbox: deploy command $id: $grant (grant minting failed); expired");
+				next;
+			}
+			$datahash->{ref} = { channel => "p2p", grant => $grant };
+			my $payload = sign_command($seed, $uid, $lumy, $action, $datahash, $qid);
+			$m->publish($topic, $payload);
+			my $timeout = _action_timeout($action, $cmd_timeout, $depl_timeout);
+			$dbh->do("update COMMANDS set STATUS = 'SENT', SENT = now(), DEADLINE = date_add(now(), interval $timeout second) where ID = ?", undef, $id);
+			$log->("outbox: published deploy command $id to $topic (grant $token, deadline ${timeout}s)");
+			# Seed path (docs/p2p.md 3): push the files to the target's
+			# inbound data channel. The client's 10704 listener is bound at
+			# startup, so the push may race the command delivery - the grant
+			# is self-authenticating, the session does not depend on the
+			# command having been processed.
+			my @iprow = $dbh->selectrow_array("select IPV4 from STATUS where ID = ?", undef, $target);
+			my $ip = $iprow[0];
+			if ($ssl && defined $ip && length $ip) {
+				my @pubrow = $dbh->selectrow_array("select PUBKEY from AUTH where ID = ?", undef, $target);
+				my $clpubraw = (defined $pubrow[0] && length $pubrow[0])
+					? Luminum::Protocol::spki_to_raw(decode_base64($pubrow[0]))
+					: undef;
+				my $pid = fork();
+				if (!defined $pid) {
+					$log->("outbox: deploy command $id: unable to fork the push child: $!");
+				}
+				elsif ($pid == 0) {
+					my ($pok, $perr) = Luminum::P2P::push_grant(
+						grant => $grant, uid => $target, ip => $ip,
+						seed => $seed,
+						sslcert => $ssl->{cert}, sslprvkey => $ssl->{key},
+						clpubraw => $clpubraw, content_root => $content_root, log => $log,
+						);
+					$log->("outbox: deploy command $id: push session failed: $perr") unless $pok;
+					exit($pok ? 0 : 1);
+				}
+				else {
+					push @$push_children, $pid;
+					$log->("outbox: deploy command $id: push child $pid started (grant $token to $ip)");
+				}
+			}
+			else {
+				$log->("outbox: deploy command $id: no push attempted (no TLS material or no IP on record for UID $target)");
+			}
+			next;
+		}
+
 		my $payload = sign_command($seed, $uid, $lumy, $action, $datahash, $qid);
 		$m->publish($topic, $payload);
 		my $timeout = _action_timeout($action, $cmd_timeout, $depl_timeout);
@@ -573,6 +698,55 @@ sub _ensure_schema {
 			key IDX_DEREGS_STATUS (STATUS)
 		) engine=InnoDB default charset=utf8mb4
 	});
+	# P2P transfer bookkeeping (docs/p2p.md 9): single-use grants and live
+	# transfer progress.
+	$dbh->do(qq{
+		create table if not exists P2PTOKENS (
+			TOKEN char(36) not null,
+			PKGID int(20) not null,
+			REQUID int(20) not null,
+			SOURCES tinytext not null,
+			EXPIRES datetime not null,
+			USED datetime default null,
+			primary key (TOKEN),
+			key IDX_P2PTOKENS_EXPIRES (EXPIRES)
+		) engine=InnoDB default charset=utf8mb4
+	});
+	$dbh->do(qq{
+		create table if not exists P2PTRANSFERS (
+			ID int(20) not null auto_increment,
+			AID char(36) not null,
+			UID int(20) not null,
+			FILEID int(20) not null,
+			STATE tinytext not null,
+			RECEIVED bigint(20) not null default 0,
+			TOTAL bigint(20) not null default 0,
+			SRCUID int(20) default null,
+			ERR tinytext default null,
+			TS datetime not null,
+			primary key (ID),
+			unique key UQ_P2PTRANSFERS (AID,UID,FILEID)
+		) engine=InnoDB default charset=utf8mb4
+	});
+}
+
+# Ensure the CONTENT database's P2P table exists (docs/p2p.md 9). schema.sql
+# creates it for installed databases; this covers a worker pointed at a
+# database that predates it.
+sub _ensure_content_schema {
+	my ($contentdb) = @_;
+	my $dbh = _dbh($contentdb);
+	$dbh->do(qq{
+		create table if not exists PKGHOLDERS (
+			ID int(20) not null auto_increment,
+			FILEID int(20) not null,
+			UID int(20) not null,
+			SOURCE tinytext not null,
+			TS datetime not null,
+			primary key (ID),
+			unique key UQ_PKGHOLDERS (FILEID,UID)
+		) engine=InnoDB default charset=utf8mb4
+	});
 }
 
 # The main worker loop. Runs forever in a forked child.
@@ -591,6 +765,11 @@ sub _ensure_schema {
 #                                               deregistrations remove the
 #                                               client's secret and reload
 #                                               the broker)
+#   sslcert, sslprvkey, server_ip             - the server TLS certificate,
+#                                               its key, and the address
+#                                               recorded in seed-path grants
+#                                               (docs/p2p.md 3); absent in
+#                                               tests, where no push is made
 #   log                                       - coderef($msg) for logging
 sub worker {
 	my (%a) = @_;
@@ -616,17 +795,26 @@ sub worker {
 	};
 	my $cmd_timeout = ($a{cmd_timeout} && $a{cmd_timeout} =~ /^[0-9]+$/) ? $a{cmd_timeout} : 120;
 	my $depl_timeout = ($a{depl_timeout} && $a{depl_timeout} =~ /^[0-9]+$/) ? $a{depl_timeout} : 3600;
+	# Seed-path push material (docs/p2p.md 3): the server TLS certificate and
+	# key the push presents, plus the address recorded in the grant's server
+	# source entry. Absent in tests, where deploys publish but never push.
+	my $ssl = (defined $a{sslcert} && defined $a{sslprvkey})
+		? { cert => $a{sslcert}, key => $a{sslprvkey}, server_ip => $a{server_ip} }
+		: undef;
 
 	my $m = Net::MQTT::Simple::SSL->new("$a{host}:$a{port}", { SSL_ca_file => $a{ca}, SSL_verify_mode => SSL_VERIFY_PEER });
 	$m->login($a{user}, $a{secret});
 
 	my $base = "luminum/$a{sid}";
-	$m->subscribe("$base/+/resp",   sub { _on_resp($db, $a{sid}, $_[0], $_[1], $log); });
+	$m->subscribe("$base/+/resp",   sub { _on_resp($db, $contentdb, $a{sid}, $_[0], $_[1], $log); });
 	$m->subscribe("$base/+/status", sub { _on_status($db, $sysdb, $m, $a{seed}, $a{sid}, $_[0], $_[1], $log); });
-	$m->subscribe("$base/+/events", sub { _on_events($db, $a{sid}, $_[0], $_[1], $log); });
+	$m->subscribe("$base/+/events", sub { _on_events($db, $contentdb, $a{sid}, $_[0], $_[1], $log); });
 
 	my $schema_ok = 0;
 	my $last = 0;
+	# Forked seed-path push children (docs/p2p.md 3), reaped non-blocking so
+	# a long transfer never blocks the tick loop and no zombie accumulates.
+	my @push_children;
 	# The missing-client sweep (protocol 7.5) runs hourly; the zero start
 	# value makes the first sweep happen at startup, so clients that went
 	# dark while the server was down are caught as soon as it comes back.
@@ -639,10 +827,23 @@ sub worker {
 	while (1) {
 		eval {
 			$m->tick(0.25);
-			unless ($schema_ok) { _ensure_schema($db); $schema_ok = 1; }
+			unless ($schema_ok) {
+				_ensure_schema($db);
+				eval { _ensure_content_schema($contentdb); } or do { $log->("worker: content schema: $@"); };
+				$schema_ok = 1;
+			}
+			# Reap finished push children (WNOHANG: a transfer in flight is
+			# not waited for).
+			while (@push_children) {
+				my $pid = waitpid($push_children[0], WNOHANG);
+				last unless $pid > 0;
+				shift @push_children;
+				my $code = ($? >> 8);
+				$log->("p2p: push child $pid exited (status $code)") if $code != 0;
+			}
 			if (time() - $last >= ($a{poll_secs} // 1)) {
 				$last = time();
-				_pump_outbox($db, $m, $a{sid}, $a{seed}, $cmd_timeout, $depl_timeout, $log);
+				_pump_outbox($db, $contentdb, $m, $a{sid}, $a{seed}, $cmd_timeout, $depl_timeout, $ssl, $a{content_root}, \@push_children, $log);
 				# Console-queued deregistrations need the mosquitto
 				# password_file to remove the client's secret; a worker
 				# started without it (tests) skips the pump.
