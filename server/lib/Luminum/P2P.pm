@@ -382,4 +382,32 @@ sub on_report {
 	}
 }
 
+# --- p2p/have startup sync (docs/p2p.md 8.1, 10) -----------------------------
+
+# Fold a p2p/have startup sync into the holder table: the client re-asserts
+# the fileids in its local manifest so the server can rebuild PKGHOLDERS
+# after a client or server restart. The source is 'local' (the client is
+# re-asserting holdings; the original source is not recorded in the manifest);
+# an existing row keeps its source (only the timestamp is refreshed), so a
+# sync never downgrades a 'server'/peer-source row.
+sub on_have {
+	my ($contentdbh, $uid, $data, $log) = @_;
+	$log = $log || sub { };
+	my $files = (ref($data->{files}) eq "ARRAY") ? $data->{files} : [];
+	my $ins = $contentdbh->prepare(qq{
+		insert into PKGHOLDERS (FILEID,UID,SOURCE,TS) values (?,?,?,now())
+		on duplicate key update TS = now()
+	});
+	my $n = 0;
+	for my $fileid (@$files) {
+		next unless defined $fileid && "$fileid" =~ /^[0-9]+$/;
+		$ins->execute(0 + $fileid, $uid, "local") or do {
+			$log->("p2p: PKGHOLDERS upsert failed for fileid $fileid: " . $contentdbh->errstr);
+			next;
+		};
+		$n++;
+	}
+	$log->("p2p: UID $uid p2p/have sync ($n file(s) re-asserted)");
+}
+
 1;

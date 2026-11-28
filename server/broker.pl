@@ -846,12 +846,15 @@ sub routemessage {
 			my $clientver = validstr($data->{clientver},'^[0-9]+\.[0-9]+\.[0-9]+[ab]?$');
 			$clientver = "Unknown" unless defined $clientver;
 			my $ipv4 = validstr($data->{ipv4},'^[0-9]{1,3}(\.[0-9]{1,3}){3}$');
+			# P2P capability (docs/p2p.md 7.4): an absent field means not
+			# capable (pre-P2P clients), so it defaults to 0.
+			my $p2p = (defined $data->{p2p} && $data->{p2p}) ? 1 : 0;
 			if (!$EPNAME || !$osplat || !$osrel) {
 				Broker::debugout(2,"Attempted check-in with missing data from $EPADDR");
 				sendresponse($cs,$env,"ERR","MISSING_DATA",undef);
 				return;
 				}
-			checkin($cs,$env,$uid,$ipv4,$EPNAME,$osplat,$osrel,$clientver,$EPADDR);
+			checkin($cs,$env,$uid,$ipv4,$EPNAME,$osplat,$osrel,$clientver,$EPADDR,$p2p);
 			return;
 			}
 		elsif ($action eq "unregister") {
@@ -1262,18 +1265,23 @@ sub checkin {
 	my $osrel = shift;
 	my $clientver = shift;
 	my $EPADDR = shift;
+	my $p2p = shift;
+	$p2p = ($p2p ? 1 : 0);
 
 	if ($EPID =~ /^[0-9]+$/) {
 		my $dbh = dbconnect("CLIENTS");
 		my $sth;
 		# A live check-in also clears the missing flag (protocol 7.5), so a
 		# client swept into the Missing Clients list that comes back returns
-		# to the live list without any console action.
+		# to the live list without any console action. The P2P capability
+		# (docs/p2p.md 7.4) is refreshed on every check-in so a client that
+		# loses the peer channel (or a pre-P2P client) is not selected as a
+		# source.
 		if (defined $ipv4) {
-			$sth = $dbh->prepare("update STATUS set HOSTNAME = '$EPNAME', IPV4 = '$ipv4', OSPLATFORM = '$osplat', OSRELEASE = '$osrel', CLIENTVER = '$clientver', CSTATE = 'OK', LASTSEEN = now(), MISSING = 0 where ID = $EPID");
+			$sth = $dbh->prepare("update STATUS set HOSTNAME = '$EPNAME', IPV4 = '$ipv4', OSPLATFORM = '$osplat', OSRELEASE = '$osrel', CLIENTVER = '$clientver', P2P = $p2p, CSTATE = 'OK', LASTSEEN = now(), MISSING = 0 where ID = $EPID");
 			}
 		else {
-			$sth = $dbh->prepare("update STATUS set HOSTNAME = '$EPNAME', OSPLATFORM = '$osplat', OSRELEASE = '$osrel', CLIENTVER = '$clientver', CSTATE = 'OK', LASTSEEN = now(), MISSING = 0 where ID = $EPID");
+			$sth = $dbh->prepare("update STATUS set HOSTNAME = '$EPNAME', OSPLATFORM = '$osplat', OSRELEASE = '$osrel', CLIENTVER = '$clientver', P2P = $p2p, CSTATE = 'OK', LASTSEEN = now(), MISSING = 0 where ID = $EPID");
 			}
 		$sth->execute();
 		Broker::debugout(0,"Received check-in from client on $EPADDR (ID $EPID)");

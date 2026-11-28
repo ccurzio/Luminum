@@ -25,7 +25,7 @@ use clap::{Arg, App};
 use colored::Colorize;
 use chrono::Local;
 use chrono::format::strftime::StrftimeItems;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::process;
 use std::process::{Command, Stdio};
 use std::thread;
@@ -53,6 +53,9 @@ use sha2::{Digest, Sha256};
 
 const VER: &str = "0.1.0";
 const IPORT: u16 = 10704;
+// The P2P peer listener (docs/p2p.md 2): client<->client file transfer under a
+// server-signed grant. Bound at startup like IPORT; mutual TLS.
+const PPORT: u16 = 10464;
 const DPORT: u16 = 10465;
 const LPORT: u16 = 10461;
 const CHECKIN_SECS: u64 = 300;
@@ -1309,7 +1312,10 @@ fn build_checkin_envelope(uid: &str, seed: &[u8; 32], checkin: u64) -> Envelope 
 		"osrel": get_os_release(),
 		"clientver": VER,
 		"ipv4": ip_address,
-		"checkin_secs": checkin
+		"checkin_secs": checkin,
+		// P2P capability (docs/p2p.md 7.4): this build carries the peer
+		// channel, so the broker may select the endpoint as a source.
+		"p2p": true
 	});
 	let mut msg = new_envelope("client", uid, "core", "checkin", "OK", Some(data));
 	sign_envelope(&mut msg, seed);
@@ -1372,7 +1378,7 @@ fn mqtt_client(debug: bool, ccfg: &HashMap<String, String>) -> Option<(rumqttc::
 // pre-signed offline LWT; subscribes to its command topic; publishes periodic
 // check-ins on the status topic; and processes incoming commands. Reconnects
 // automatically on failure (poll() re-establishes the connection).
-async fn mqtt_run(debug: bool, ccfg: HashMap<String, String>, mqtt: Option<(rumqttc::AsyncClient, rumqttc::EventLoop, Arc<AtomicBool>)>) {
+async fn mqtt_run(debug: bool, ccfg: HashMap<String, String>, mqtt: Option<(rumqttc::AsyncClient, rumqttc::EventLoop, Arc<AtomicBool>)>, p2p_ring: TokenRing) {
 	use rumqttc::{ConnectReturnCode, ConnectionError, Event, Packet, QoS};
 
 	// A missing control channel (unregistered endpoint, missing parameters)
@@ -1463,6 +1469,9 @@ async fn mqtt_run(debug: bool, ccfg: HashMap<String, String>, mqtt: Option<(rumq
 				// promptly and overwrites any stale retained offline status.
 				let payload = build_checkin(&uid, &seed, checkin_interval.load(Ordering::SeqCst));
 				let _ = client.publish(&status_topic, QoS::AtMostOnce, true, payload).await;
+				// One-shot P2P manifest sync (docs/p2p.md 8.1): let the server
+				// rebuild PKGHOLDERS from what this endpoint holds.
+				publish_p2p_have(&client, &events_topic, &uid, &seed, debug).await;
 				// Flush any events queued while the control channel was down
 				// (protocol §9.1): re-publish to the per-UID events topic, then
 				// mark them sent.
@@ -1498,6 +1507,19 @@ async fn mqtt_run(debug: bool, ccfg: HashMap<String, String>, mqtt: Option<(rumq
 					if let Err(err) = client.publish(&resp_topic, QoS::AtLeastOnce, false, payload).await {
 						dbout(debug, 1, &format!("MQTT response publish failed: {}", err));
 					}
+				}
+				// P2P fetcher (docs/p2p.md 8.1): a grant-form deploy whose
+				// grant carries peer sources triggers the in-session source
+				// walk on a blocking thread. A server-only grant (the seed
+				// path) is served by the broker's 10704 push instead. srvpub
+				// is &[u8; 32] here (the command-verification guard above
+				// already established the anchor exists).
+				if env.lumy == "core" && env.action == "deploy" {
+					spawn_p2p_fetch(
+						&env, seed, *srvpub, p2p_ring.clone(),
+						Some(client.clone()), connected.clone(), resp_topic.clone(), uid.clone(),
+						tokio::runtime::Handle::current(), debug,
+					);
 				}
 			}
 			Ok(_) => {}
@@ -2071,6 +2093,153 @@ fn p2p_acceptor_config(debug: bool) -> Option<Arc<rustls::ServerConfig>> {
 	Some(Arc::new(config))
 }
 
+// --- rustls client (10464 dial-out, docs/p2p.md 4.4) --------------------------
+
+// Server-certificate verifier for the 10464 dial-out (the fetcher): the peer
+// is another Luminum client, and its certificate is verified chain-to-root +
+// validity against the stored anchor (config/server.crt) - the same trust
+// anchor as the 10704 acceptor (docs/p2p.md 4.4). Hostname verification is
+// replaced by this anchor check: peers are addressed by IP, and the identity
+// binding is "the peer's certificate CN equals the source entry's UID"
+// (checked by the caller from the peer certificate, docs/p2p.md 4.2).
+#[derive(Debug)]
+struct PeerChainVerifier {
+	roots: rustls::RootCertStore,
+	algs: rustls::crypto::WebPkiSupportedAlgorithms,
+}
+
+impl rustls::client::danger::ServerCertVerifier for PeerChainVerifier {
+	fn verify_server_cert(
+		&self,
+		end_entity: &rustls::pki_types::CertificateDer<'_>,
+		intermediates: &[rustls::pki_types::CertificateDer<'_>],
+		_server_name: &rustls::pki_types::ServerName<'_>,
+		_ocsp: &[u8],
+		now: rustls::pki_types::UnixTime,
+	) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
+		let parsed = rustls::server::ParsedCertificate::try_from(end_entity)?;
+		rustls::client::verify_server_cert_signed_by_trust_anchor(
+			&parsed, &self.roots, intermediates, now, &self.algs.all,
+		)?;
+		Ok(rustls::client::danger::ServerCertVerified::assertion())
+	}
+	fn verify_tls12_signature(
+		&self,
+		message: &[u8],
+		cert: &rustls::pki_types::CertificateDer<'_>,
+		dss: &rustls::DigitallySignedStruct,
+	) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+		rustls::crypto::verify_tls12_signature(message, cert, dss, &self.algs)
+	}
+	fn verify_tls13_signature(
+		&self,
+		message: &[u8],
+		cert: &rustls::pki_types::CertificateDer<'_>,
+		dss: &rustls::DigitallySignedStruct,
+	) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+		rustls::crypto::verify_tls13_signature(message, cert, dss, &self.algs)
+	}
+	fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+		self.algs.supported_schemes()
+	}
+}
+
+// Build the 10464 dial-out configuration: the server-issued client
+// certificate (config/client.crt + client.key) plus the anchor verifier.
+// None when the endpoint is not yet certificated (the fetcher is unavailable
+// until then; the 10704 seed path is unaffected).
+fn p2p_client_config(debug: bool) -> Option<Arc<rustls::ClientConfig>> {
+	// The default crypto provider (aws-lc-rs, matching rumqttc's
+	// tokio-rustls) must be installed before any rustls object is built.
+	let _ = rustls::crypto::CryptoProvider::install_default(rustls::crypto::aws_lc_rs::default_provider());
+
+	let crt_pem = match fs::read(client_crt_path()) {
+		Ok(p) => p,
+		Err(_) => {
+			dbout(debug, 3, "No client TLS certificate on file (config/client.crt); the P2P dial-out is unavailable.");
+			return None;
+		}
+	};
+	let key_pem = match fs::read(client_key_path()) {
+		Ok(p) => p,
+		Err(err) => { dbout(debug, 1, &format!("Client TLS key unreadable (config/client.key): {}", err)); return None; }
+	};
+	let mut rd = std::io::Cursor::new(crt_pem);
+	let certs: Vec<rustls::pki_types::CertificateDer<'static>> = rustls_pemfile::certs(&mut rd).filter_map(|c| c.ok()).collect();
+	if certs.is_empty() {
+		dbout(debug, 1, "Client TLS certificate is not a valid PEM certificate (config/client.crt); the P2P dial-out is unavailable.");
+		return None;
+	}
+	let mut rd = std::io::Cursor::new(key_pem);
+	let key = match rustls_pemfile::pkcs8_private_keys(&mut rd).next() {
+		Some(Ok(k)) => k,
+		_ => { dbout(debug, 1, "Client TLS key is not a valid PKCS#8 PEM (config/client.key); the P2P dial-out is unavailable."); return None; }
+	};
+	let anchor_pem = match fs::read(crt_path()) {
+		Ok(p) => p,
+		Err(_) => { dbout(debug, 1, "Server certificate not found (config/server.crt); the P2P dial-out is unavailable."); return None; }
+	};
+	let mut rd = std::io::Cursor::new(anchor_pem);
+	let anchor = match rustls_pemfile::certs(&mut rd).next() {
+		Some(Ok(a)) => a,
+		_ => { dbout(debug, 1, "Server certificate is not a valid PEM certificate (config/server.crt); the P2P dial-out is unavailable."); return None; }
+	};
+	let mut roots = rustls::RootCertStore::empty();
+	if roots.add(anchor).is_err() {
+		dbout(debug, 1, "Server certificate is not a usable trust anchor (config/server.crt); the P2P dial-out is unavailable.");
+		return None;
+	}
+	let provider = match rustls::crypto::CryptoProvider::get_default() {
+		Some(p) => p,
+		None => { dbout(debug, 1, "No default rustls crypto provider; the P2P dial-out is unavailable."); return None; }
+	};
+	let algs = provider.signature_verification_algorithms;
+	let config = rustls::ClientConfig::builder()
+		.dangerous()
+		.with_custom_certificate_verifier(Arc::new(PeerChainVerifier { roots, algs }))
+		.with_client_auth_cert(certs, key.into())
+		.ok()?;
+	Some(Arc::new(config))
+}
+
+// The UID bound to a peer's channel certificate (CN = luminum-client-{UID},
+// docs/p2p.md 4.2). $peer_certs is the rustls connection's peer certificate
+// chain (the end entity is first); returns the UID, or None when the chain is
+// absent or carries no luminum-client- CN.
+fn peer_cert_uid(peer_certs: Option<&[rustls::pki_types::CertificateDer<'_>]>) -> Option<String> {
+	use openssl::nid::Nid;
+	use openssl::x509::X509;
+	let ee = peer_certs?.first()?;
+	let cert = X509::from_der(ee.as_ref()).ok()?;
+	for entry in cert.subject_name().entries() {
+		if entry.object().nid() == Nid::COMMONNAME {
+			if let Ok(cn) = entry.data().to_string() {
+				if let Some(uid) = cn.strip_prefix("luminum-client-") {
+					if !uid.is_empty() && uid.chars().all(|c| c.is_ascii_digit()) {
+						return Some(uid.to_string());
+					}
+				}
+			}
+		}
+	}
+	None
+}
+
+// --- Manifest lookup (docs/p2p.md 8.1) ----------------------------------------
+
+// The manifest row for a fileid: (pkgid, os, path, size, sha256). The manifest
+// is the single source of truth for what this endpoint can serve; a file on
+// disk without a row is not served.
+fn manifest_lookup(fileid: i64) -> Option<(i64, String, String, i64, String)> {
+	let conn = manifest_conn()?;
+	let row = conn
+		.prepare("select PKGID, OS, PATH, SIZE, SHA256 from MANIFEST where FILEID = ?1")
+		.ok()
+		.and_then(|mut sth| sth.query_row(params![fileid], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))).ok())?;
+	conn.close().ok();
+	Some(row)
+}
+
 // --- Grant validation (docs/p2p.md 5.3, client side) ---------------------------
 
 #[derive(Debug)]
@@ -2215,18 +2384,37 @@ fn raw_frame_read<R: Read>(r: &mut R) -> io::Result<Option<Vec<u8>>> {
 	Ok(Some(buf))
 }
 
-// Receive one file: read the source's signed p2pfetch response, stream the
-// raw frames into the staging path, verify size + SHA-256, and move the
-// file to its final path under Packages/. Returns Ok(()) on success,
-// Err(code) otherwise; the staging tree is deleted on failure.
-fn receive_file(
-	tls: &mut rustls::StreamOwned<rustls::ServerConnection, TcpStream>,
+// Write one raw data frame: 4-byte big-endian length + bytes. A zero-length
+// frame terminates the file's stream (docs/p2p.md 6).
+fn raw_frame_write<W: Write>(w: &mut W, bytes: &[u8]) -> io::Result<()> {
+	let len = (bytes.len() as u32).to_be_bytes();
+	w.write_all(&len)?;
+	if !bytes.is_empty() {
+		w.write_all(bytes)?;
+	}
+	w.flush()?;
+	Ok(())
+}
+
+// Receive one file: read the source's p2pfetch response, stream the raw
+// frames into the staging path, verify size + SHA-256, and move the file to
+// its final path under Packages/. Returns Ok(()) on success, Err(code)
+// otherwise; the staged file is deleted on a hash mismatch. Generic over the
+// stream so both the 10704 seed path (ServerConnection) and the 10464 peer
+// path (ClientConnection) share it. $verify_resp is Some(pubkey) when the
+// source's response must be signature-verified (the 10704 server), None when
+// the response is authenticated by the mutual-TLS channel identity instead
+// (a 10464 peer, whose key this endpoint does not hold - docs/p2p.md 4.2,
+// 5.3). $srcuid is the source's UID for the progress reports (0 = server).
+fn receive_file<R: Read + Write>(
+	tls: &mut R,
 	base: &str,
 	token: &str,
 	pkgid: u64,
 	file: &GrantFile,
 	seed: &[u8; 32],
-	srvpub: &[u8; 32],
+	verify_resp: Option<&[u8; 32]>,
+	srcuid: u64,
 	uid: &str,
 	mqtt: &Option<rumqttc::AsyncClient>,
 	handle: &tokio::runtime::Handle,
@@ -2235,13 +2423,17 @@ fn receive_file(
 	aid: &str,
 	debug: bool,
 ) -> Result<(), String> {
-	// Per-file handshake: the source's signed p2pfetch response.
+	// Per-file handshake: the source's p2pfetch response.
 	let resp = match frame_read(tls) {
 		Ok(e) => e,
 		Err(err) => return Err(format!("STREAM_ERROR: {}", err)),
 	};
+	let sig_ok = match verify_resp {
+		Some(pk) => verify_envelope(&resp, pk),
+		None => true,
+	};
 	if resp.lumy != "core" || resp.action != "p2pfetch" || resp.status != "OK"
-		|| !verify_envelope(&resp, srvpub)
+		|| !sig_ok
 		|| resp.data.as_ref().and_then(|d| d.get("token")).and_then(|v| v.as_str()) != Some(token)
 		|| resp.data.as_ref().and_then(|d| d.get("fileid")).and_then(|v| v.as_u64()) != Some(file.fileid)
 	{
@@ -2280,7 +2472,7 @@ fn receive_file(
 							"state": "FETCHING",
 							"received": received,
 							"total": file.size,
-							"srcuid": 0,
+							"srcuid": srcuid,
 						}),
 						false, debug,
 					);
@@ -2392,7 +2584,7 @@ fn handle_data_session(
 			return;
 		}
 		if let Err(code) = receive_file(
-			&mut tls, &base, &valid.token, valid.pkgid, file, &seed, &srvpub, &uid,
+			&mut tls, &base, &valid.token, valid.pkgid, file, &seed, Some(&srvpub), 0, &uid,
 			&mqtt, &handle, &connected, &resp_topic, &valid.aid, debug,
 		) {
 			fail_session(&mut tls, &uid, &seed, &valid.token, valid.pkgid, &code, &mqtt, &handle, &connected, &resp_topic, &ring, debug);
@@ -2458,6 +2650,512 @@ fn fail_session(
 		true, debug,
 	);
 	token_consume(ring, token);
+}
+
+// ---------------------------------------------------------------------------
+// P2P peer channel (10464) - the serving and fetching paths (docs/p2p.md 6,
+// 8.1; protocol 8.4). The 10704 handler above is the seed path (this endpoint
+// is the requester, the server is the source). On 10464 both roles exist:
+// this endpoint serves a peer's grant (handle_peer_session) and fetches from
+// a peer source (fetch_from_source / p2p_fetch_walk). Identity is bound by
+// mutual TLS: the peer's certificate CN must equal the grant's requester UID
+// (serving) or the source entry's UID (fetching) - docs/p2p.md 4.2.
+// ---------------------------------------------------------------------------
+
+// Validate a transfer grant on the serving side (docs/p2p.md 5.3, items 3-5):
+// server-signed, unexpired, token unused on this endpoint. Unlike the
+// requester-side validate_grant, the grant's uid is the REQUESTER's (not this
+// endpoint's), so the uid==local check is omitted; the channel-identity check
+// (peer cert UID == grant uid) is done by the caller.
+fn validate_grant_for_serving(env: &Envelope, srvpub: &[u8; 32], ring: &TokenRing, now: i64) -> Result<ValidGrant, String> {
+	if env.src != "server" || env.lumy != "core" || env.action != "p2pgrant" || env.status != "OK" {
+		return Err(String::from("BAD_GRANT"));
+	}
+	if !verify_envelope(env, srvpub) {
+		return Err(String::from("BAD_GRANT"));
+	}
+	let data = match &env.data {
+		Some(d) => d,
+		None => return Err(String::from("BAD_GRANT")),
+	};
+	let token = data.get("token").and_then(|v| v.as_str()).unwrap_or("").to_string();
+	if !is_uuid4(&token) {
+		return Err(String::from("BAD_GRANT"));
+	}
+	if token_seen(ring, &token) {
+		return Err(String::from("GRANT_USED"));
+	}
+	let exp = data.get("exp").and_then(|v| v.as_u64()).unwrap_or(0) as i64;
+	if exp <= now {
+		return Err(String::from("GRANT_EXPIRED"));
+	}
+	let pkgid = match data.get("pkgid").and_then(|v| v.as_u64()) {
+		Some(p) if p > 0 => p,
+		_ => return Err(String::from("BAD_GRANT")),
+	};
+	let aid = data.get("aid").and_then(|v| v.as_str()).unwrap_or("").to_string();
+	let files_arr = match data.get("files").and_then(|v| v.as_array()) {
+		Some(a) if !a.is_empty() => a,
+		_ => return Err(String::from("BAD_GRANT")),
+	};
+	let mut files = Vec::new();
+	for f in files_arr {
+		let fileid = match f.get("fileid").and_then(|v| v.as_u64()) {
+			Some(id) => id,
+			None => return Err(String::from("BAD_GRANT")),
+		};
+		let path = f.get("path").and_then(|v| v.as_str()).unwrap_or("").to_string();
+		if !is_safe_rel_path(&path) {
+			return Err(String::from("BAD_GRANT"));
+		}
+		let size = match f.get("size").and_then(|v| v.as_u64()) {
+			Some(s) => s,
+			None => return Err(String::from("BAD_GRANT")),
+		};
+		let sha = f.get("sha256").and_then(|v| v.as_str()).unwrap_or("").to_string();
+		if sha.len() != 64 || !sha.chars().all(|c| c.is_ascii_hexdigit()) {
+			return Err(String::from("BAD_GRANT"));
+		}
+		files.push(GrantFile { fileid, path, size, sha256: sha.to_ascii_lowercase() });
+	}
+	Ok(ValidGrant { token, pkgid, aid, files })
+}
+
+// Answer a source-side refusal on 10464: a p2pfetch ERR envelope carrying the
+// machine-readable code, then close.
+fn peer_refuse(tls: &mut rustls::StreamOwned<rustls::ServerConnection, TcpStream>, uid: &str, seed: &[u8; 32], token: &str, code: &str) {
+	let mut resp = new_envelope("client", uid, "core", "p2pfetch", "ERR", Some(serde_json::json!({ "token": token })));
+	resp.err = Some(code.to_string());
+	sign_envelope(&mut resp, seed);
+	frame_write(tls, &resp).ok();
+}
+
+// The 10464 peer session: this endpoint is the SOURCE. A peer (requester)
+// dials in over mutual TLS and presents the server-signed grant; this
+// endpoint runs the source-side checklist (docs/p2p.md 5.3) and serves the
+// grant's files from the local Packages/ tree. Runs on its own thread per
+// connection. $serving is the shared 1-concurrent-session gate.
+fn handle_peer_session(
+	stream: TcpStream,
+	config: Arc<rustls::ServerConfig>,
+	uid: String,
+	seed: [u8; 32],
+	srvpub: [u8; 32],
+	ring: TokenRing,
+	serving: Arc<AtomicUsize>,
+	debug: bool,
+) {
+	stream.set_read_timeout(Some(P2P_IO_TIMEOUT)).ok();
+	stream.set_write_timeout(Some(P2P_IO_TIMEOUT)).ok();
+	let conn = match rustls::ServerConnection::new(config) {
+		Ok(c) => c,
+		Err(err) => { dbout(debug, 2, &format!("P2P: unable to start the TLS session: {}", err)); return; }
+	};
+	let mut tls = rustls::StreamOwned::new(conn, stream);
+
+	// One concurrent serving session (docs/p2p.md 8.1): excess connections are
+	// refused with ERR BUSY. The slot is held for the whole session.
+	if serving.fetch_add(1, Ordering::SeqCst) >= 1 {
+		dbout(debug, 3, "P2P: a serving session is already in progress; refusing the connection (BUSY)");
+		peer_refuse(&mut tls, &uid, &seed, "", "BUSY");
+		serving.fetch_sub(1, Ordering::SeqCst);
+		return;
+	}
+
+	// The grant: server-signed, presented by the requester as the first frame.
+	let grant = match frame_read(&mut tls) {
+		Ok(e) => e,
+		Err(err) => {
+			dbout(debug, 2, &format!("P2P: unable to read the grant frame: {}", err));
+			serving.fetch_sub(1, Ordering::SeqCst);
+			return;
+		}
+	};
+	let grant_token = grant.data.as_ref().and_then(|d| d.get("token")).and_then(|v| v.as_str()).unwrap_or("").to_string();
+
+	// Item 2: the channel identity is bound to the grant - the peer's
+	// certificate CN must equal the grant's requester UID (docs/p2p.md 4.2).
+	let peer_uid = peer_cert_uid(tls.conn.peer_certificates());
+	if peer_uid.as_deref() != Some(grant.uid.as_str()) {
+		dbout(debug, 1, &format!("P2P: peer certificate UID {:?} != grant requester UID {}; refusing", peer_uid, grant.uid));
+		peer_refuse(&mut tls, &uid, &seed, &grant_token, "UID_MISMATCH");
+		serving.fetch_sub(1, Ordering::SeqCst);
+		return;
+	}
+
+	// Items 3-5: the grant is server-signed, unexpired, and the token is
+	// unused on this endpoint.
+	let valid = match validate_grant_for_serving(&grant, &srvpub, &ring, Local::now().timestamp()) {
+		Ok(g) => g,
+		Err(code) => {
+			dbout(debug, 1, &format!("P2P: grant rejected ({})", code));
+			peer_refuse(&mut tls, &uid, &seed, &grant_token, &code);
+			serving.fetch_sub(1, Ordering::SeqCst);
+			return;
+		}
+	};
+
+	// Item 6: every fileid in the grant is in the local manifest with matching
+	// size + sha256 (a holder whose copy was modified locally cannot serve
+	// it). Resolve each file to its on-disk path (Packages/{pkgid}/{path}).
+	let base = base_path();
+	let mut resolved: Vec<(u64, String)> = Vec::new();   // (fileid, on-disk path)
+	for file in &valid.files {
+		match manifest_lookup(file.fileid as i64) {
+			Some((mpkgid, _mos, mpath, msize, msha)) => {
+				if msize as u64 != file.size || msha != file.sha256 {
+					dbout(debug, 1, &format!("P2P: manifest mismatch for fileid {} (size {} vs {}, sha {} vs {}); refusing", file.fileid, file.size, msize, file.sha256, msha));
+					peer_refuse(&mut tls, &uid, &seed, &valid.token, "FILE_MISMATCH");
+					serving.fetch_sub(1, Ordering::SeqCst);
+					return;
+				}
+				let full = format!("{}/Packages/{}/{}", base, mpkgid, mpath);
+				if !Path::new(&full).is_file() {
+					dbout(debug, 1, &format!("P2P: manifest row for fileid {} but no file at {}; refusing", file.fileid, full));
+					peer_refuse(&mut tls, &uid, &seed, &valid.token, "FILE_MISSING");
+					serving.fetch_sub(1, Ordering::SeqCst);
+					return;
+				}
+				resolved.push((file.fileid, full));
+			}
+			None => {
+				dbout(debug, 1, &format!("P2P: fileid {} not in the local manifest; refusing", file.fileid));
+				peer_refuse(&mut tls, &uid, &seed, &valid.token, "FILE_MISSING");
+				serving.fetch_sub(1, Ordering::SeqCst);
+				return;
+			}
+		}
+	}
+	dbout(debug, 3, &format!("P2P: grant {} accepted as source ({} file(s), package {})", valid.token, valid.files.len(), valid.pkgid));
+
+	// Handshake response: the file sizes, signed by this endpoint.
+	let sizes: Vec<u64> = valid.files.iter().map(|f| f.size).collect();
+	let mut resp = new_envelope("client", &uid, "core", "p2pfetch", "OK", Some(serde_json::json!({ "token": valid.token, "files": sizes })));
+	sign_envelope(&mut resp, &seed);
+	if frame_write(&mut tls, &resp).is_err() {
+		dbout(debug, 2, "P2P: unable to write the handshake response");
+		serving.fetch_sub(1, Ordering::SeqCst);
+		return;
+	}
+
+	// Serve the files in grant order.
+	let mut served = 0;
+	for (fileid, full) in &resolved {
+		// Per-file request from the requester: {token, fileid}. The requester's
+		// identity is already bound by the mutual-TLS channel (item 2), so the
+		// request's signature is not re-verified here (docs/p2p.md 5.3).
+		let req = match frame_read(&mut tls) {
+			Ok(e) => e,
+			Err(err) => { dbout(debug, 2, &format!("P2P: unable to read the per-file request: {}", err)); break; }
+		};
+		if req.lumy != "core" || req.action != "p2pfetch"
+			|| req.data.as_ref().and_then(|d| d.get("token")).and_then(|v| v.as_str()) != Some(valid.token.as_str())
+			|| req.data.as_ref().and_then(|d| d.get("fileid")).and_then(|v| v.as_u64()) != Some(*fileid)
+		{
+			dbout(debug, 1, "P2P: per-file request out of sequence or malformed; closing");
+			break;
+		}
+		// Per-file response: {token, fileid, status, size}.
+		let size = fs::metadata(full).map(|m| m.len()).unwrap_or(0);
+		let mut okresp = new_envelope("client", &uid, "core", "p2pfetch", "OK", Some(serde_json::json!({ "token": valid.token, "fileid": fileid, "size": size })));
+		sign_envelope(&mut okresp, &seed);
+		if frame_write(&mut tls, &okresp).is_err() {
+			dbout(debug, 2, "P2P: unable to write the per-file response");
+			break;
+		}
+		// Stream the file in raw chunks (<= 1 MiB), then the zero-length EOF.
+		let mut fh = match fs::File::open(full) {
+			Ok(f) => f,
+			Err(err) => { dbout(debug, 1, &format!("P2P: unable to open {} for serving: {}", full, err)); break; }
+		};
+		let mut buf = vec![0u8; 1024 * 1024];
+		let mut stream_ok = true;
+		loop {
+			match fh.read(&mut buf) {
+				Ok(0) => break,   // EOF
+				Ok(n) => {
+					if raw_frame_write(&mut tls, &buf[..n]).is_err() {
+						dbout(debug, 2, "P2P: chunk write failed (requester disconnected?)");
+						stream_ok = false;
+						break;
+					}
+				}
+				Err(err) => { dbout(debug, 1, &format!("P2P: read error serving {}: {}", full, err)); stream_ok = false; break; }
+			}
+		}
+		if !stream_ok { break; }
+		if raw_frame_write(&mut tls, &[]).is_err() {
+			dbout(debug, 2, "P2P: EOF frame write failed");
+			break;
+		}
+		served += 1;
+	}
+
+	// Consume the token (a completed serving session uses the grant) and
+	// release the session slot.
+	token_consume(&ring, &valid.token);
+	serving.fetch_sub(1, Ordering::SeqCst);
+	dbout(debug, 0, &format!("P2P: served package {} to requester {} ({} file(s), grant {})", valid.pkgid, grant.uid, served, valid.token));
+}
+
+// Dial out to a peer source's 10464 and run the grant session (this endpoint
+// is the REQUESTER, docs/p2p.md 6, 8.1; protocol 8.4): present the grant,
+// receive the files, verify, and install. Returns Ok(()) on success,
+// Err(code) otherwise; the per-token staging tree is removed by the caller on
+// failure.
+fn fetch_from_source(
+	config: &Arc<rustls::ClientConfig>,
+	src_ip: &str,
+	src_port: u16,
+	expected_uid: &str,
+	grant: &Envelope,
+	valid: &ValidGrant,
+	seed: &[u8; 32],
+	mqtt: &Option<rumqttc::AsyncClient>,
+	handle: &tokio::runtime::Handle,
+	connected: &Arc<AtomicBool>,
+	resp_topic: &str,
+	uid: &str,
+	debug: bool,
+) -> Result<(), String> {
+	let addr: SocketAddr = match format!("{}:{}", src_ip, src_port).parse() {
+		Ok(a) => a,
+		Err(err) => return Err(format!("BAD_SOURCE: {}", err)),
+	};
+	let stream = match TcpStream::connect_timeout(&addr, CONNECT_TIMEOUT) {
+		Ok(s) => s,
+		Err(err) => return Err(format!("CONNECT_REFUSED: {}", err)),
+	};
+	stream.set_read_timeout(Some(P2P_IO_TIMEOUT)).ok();
+	stream.set_write_timeout(Some(P2P_IO_TIMEOUT)).ok();
+
+	let server_name = match rustls::pki_types::ServerName::try_from(src_ip.to_string()) {
+		Ok(n) => n,
+		Err(err) => return Err(format!("BAD_SOURCE: {}", err)),
+	};
+	let conn = match rustls::ClientConnection::new(config.clone(), server_name) {
+		Ok(c) => c,
+		Err(err) => return Err(format!("TLS_ERROR: {}", err)),
+	};
+	let mut tls = rustls::StreamOwned::new(conn, stream);
+
+	// Present the grant (server-signed, forwarded verbatim).
+	if frame_write(&mut tls, grant).is_err() {
+		return Err(String::from("STREAM_ERROR"));
+	}
+
+	// The source's handshake response: {token, status, files: [sizes]}. A
+	// source-side refusal carries the machine-readable code in err.
+	let resp = match frame_read(&mut tls) {
+		Ok(e) => e,
+		Err(err) => return Err(format!("STREAM_ERROR: {}", err)),
+	};
+	if resp.lumy != "core" || resp.action != "p2pfetch" || resp.status != "OK"
+		|| resp.data.as_ref().and_then(|d| d.get("token")).and_then(|v| v.as_str()) != Some(valid.token.as_str())
+	{
+		return Err(resp.err.clone().unwrap_or_else(|| String::from("BAD_GRANT")));
+	}
+
+	// The channel identity is bound to the source: the peer's certificate CN
+	// must equal the source entry's UID (docs/p2p.md 4.2).
+	let peer_uid = peer_cert_uid(tls.conn.peer_certificates());
+	if peer_uid.as_deref() != Some(expected_uid) {
+		return Err(String::from("UID_MISMATCH"));
+	}
+
+	// Receive the files in grant order.
+	for file in &valid.files {
+		// Per-file request: {token, fileid}, signed by this endpoint.
+		let mut req = new_envelope("client", uid, "core", "p2pfetch", "OK", Some(serde_json::json!({ "token": valid.token, "fileid": file.fileid })));
+		sign_envelope(&mut req, seed);
+		if frame_write(&mut tls, &req).is_err() {
+			return Err(String::from("STREAM_ERROR"));
+		}
+		if let Err(code) = receive_file(
+			&mut tls, &base_path(), &valid.token, valid.pkgid, file, seed, None, expected_uid.parse::<u64>().unwrap_or(0), uid,
+			mqtt, handle, connected, resp_topic, &valid.aid, debug,
+		) {
+			return Err(code);
+		}
+	}
+	Ok(())
+}
+
+// Walk the grant's peer sources in order (docs/p2p.md 6.1): the first source
+// that completes the session wins; a source that is down, busy, or fails
+// mid-transfer is skipped to the next (the per-token staging tree is
+// discarded on each failure). The server entry (uid 0, port 10704) is never
+// dialed - it is the broker's push, served by the 10704 handler. On success
+// the token is consumed and p2p_fetch_ok reported; on exhausting the peer
+// list the token is consumed and p2p_fetch_fail reported (the broker re-mints
+// and pushes, docs/p2p.md 7.2).
+fn p2p_fetch_walk(
+	grant: &Envelope,
+	valid: &ValidGrant,
+	seed: &[u8; 32],
+	mqtt: &Option<rumqttc::AsyncClient>,
+	handle: &tokio::runtime::Handle,
+	connected: &Arc<AtomicBool>,
+	ring: &TokenRing,
+	resp_topic: &str,
+	uid: &str,
+	debug: bool,
+) {
+	let client_cfg = match p2p_client_config(debug) {
+		Some(c) => c,
+		None => {
+			dbout(debug, 1, "P2P: the dial-out is unavailable (no client certificate); the peer sources cannot be fetched");
+			return;
+		}
+	};
+	// The peer sources are the grant's sources[] entries with uid != 0 (the
+	// server entry is the broker's push, not a dial-out target).
+	let sources = grant.data.as_ref().and_then(|d| d.get("sources")).and_then(|v| v.as_array()).cloned().unwrap_or_default();
+	let peers: Vec<serde_json::Value> = sources.iter().filter(|s| s.get("uid").and_then(|v| v.as_u64()).unwrap_or(0) != 0).cloned().collect();
+
+	let mut last_err = String::from("NO_PEER_SOURCES");
+	for src in &peers {
+		let src_uid = src.get("uid").and_then(|v| v.as_u64()).unwrap_or(0);
+		let src_ip = src.get("ip").and_then(|v| v.as_str()).unwrap_or("").to_string();
+		let src_port = src.get("port").and_then(|v| v.as_u64()).unwrap_or(PPORT as u64) as u16;
+		dbout(debug, 3, &format!("P2P: fetching from peer source UID {} at {}:{}", src_uid, src_ip, src_port));
+		match fetch_from_source(
+			&client_cfg, &src_ip, src_port, &format!("{}", src_uid), grant, valid, seed,
+			mqtt, handle, connected, resp_topic, uid, debug,
+		) {
+			Ok(()) => {
+				// Success: report the outcome and consume the token.
+				let fileids: Vec<u64> = valid.files.iter().map(|f| f.fileid).collect();
+				publish_report(
+					mqtt, handle, connected, resp_topic, uid, seed,
+					serde_json::json!({
+						"event": "p2p_fetch_ok",
+						"token": valid.token,
+						"pkgid": valid.pkgid,
+						"srcuid": src_uid,
+						"files": fileids,
+					}),
+					true, debug,
+				);
+				token_consume(ring, &valid.token);
+				let stage_dir = format!("{}/Downloads/{}", base_path(), &valid.token);
+				fs::remove_dir_all(&stage_dir).ok();
+				dbout(debug, 0, &format!("P2P: package {} received from peer UID {} ({} file(s), grant {})", valid.pkgid, src_uid, valid.files.len(), valid.token));
+				return;
+			}
+			Err(err) => {
+				dbout(debug, 1, &format!("P2P: source UID {} failed ({}); trying the next source", src_uid, err));
+				last_err = err;
+				// Discard this source's staged data before the next attempt.
+				let stage_dir = format!("{}/Downloads/{}", base_path(), &valid.token);
+				fs::remove_dir_all(&stage_dir).ok();
+			}
+		}
+	}
+
+	// Every peer source failed (or there were none): consume the token and
+	// report the failure. The broker re-mints a replacement grant (docs/p2p.md
+	// 7.2); when no peer remains its list is the server entry alone, which the
+	// broker pushes over 10704.
+	publish_report(
+		mqtt, handle, connected, resp_topic, uid, seed,
+		serde_json::json!({
+			"event": "p2p_fetch_fail",
+			"token": valid.token,
+			"pkgid": valid.pkgid,
+			"srcuid": 0,
+			"err": last_err,
+		}),
+		true, debug,
+	);
+	token_consume(ring, &valid.token);
+	let stage_dir = format!("{}/Downloads/{}", base_path(), &valid.token);
+	fs::remove_dir_all(&stage_dir).ok();
+	dbout(debug, 1, &format!("P2P: all peer sources failed for grant {} ({}); reported p2p_fetch_fail", valid.token, last_err));
+}
+
+// Trigger the P2P fetcher for a grant-form deploy command (docs/p2p.md 8.1):
+// parse the grant embedded in the command's ref, run the requester-side
+// validation, and - when the grant carries peer sources (uid != 0) - walk
+// them on a blocking thread. A server-only grant (the Phase 4 broker's form)
+// has no peer sources, so the fetcher does nothing: the broker's 10704 push
+// serves it via the inbound data handler.
+fn spawn_p2p_fetch(
+	cmd: &Envelope,
+	seed: [u8; 32],
+	srvpub: [u8; 32],
+	ring: TokenRing,
+	mqtt: Option<rumqttc::AsyncClient>,
+	connected: Arc<AtomicBool>,
+	resp_topic: String,
+	uid: String,
+	handle: tokio::runtime::Handle,
+	debug: bool,
+) {
+	// The grant is embedded in the command's ref (protocol 8.4).
+	let grant_val = cmd.data.as_ref().and_then(|d| d.get("ref")).and_then(|r| r.get("grant"));
+	let Some(gv) = grant_val else { return; };
+	let grant: Envelope = match serde_json::from_value(gv.clone()) {
+		Ok(g) => g,
+		Err(err) => { dbout(debug, 1, &format!("P2P: unable to parse the deploy grant: {}", err)); return; }
+	};
+	// Requester-side validation (docs/p2p.md 5.3): server-signed, uid matches,
+	// unexpired, token unused, file set well-formed.
+	let valid = match validate_grant(&grant, &uid, &srvpub, &ring, Local::now().timestamp()) {
+		Ok(g) => g,
+		Err(code) => { dbout(debug, 1, &format!("P2P: deploy grant rejected ({}); the fetcher will not run", code)); return; }
+	};
+	// Peer sources only (uid != 0); a server-only grant is the seed path.
+	let has_peers = grant.data.as_ref().and_then(|d| d.get("sources")).and_then(|v| v.as_array())
+		.map(|s| s.iter().any(|e| e.get("uid").and_then(|v| v.as_u64()).unwrap_or(0) != 0))
+		.unwrap_or(false);
+	if !has_peers {
+		return;   // seed path: the broker's 10704 push serves it
+	}
+	dbout(debug, 3, "P2P: the deploy grant carries peer sources; starting the fetcher");
+	// The walk is blocking (TCP + file I/O); keep it off the async runtime.
+	thread::spawn(move || {
+		p2p_fetch_walk(&grant, &valid, &seed, &mqtt, &handle, &connected, &ring, &resp_topic, &uid, debug);
+	});
+}
+
+// The one-shot p2p/have startup sync (docs/p2p.md 8.1, 10): after MQTT
+// connect, publish the local manifest's fileids on the per-UID events topic
+// so the server can rebuild CONTENT.PKGHOLDERS after a client or server
+// restart. Loss-tolerant (QoS 0): a missed sync is repaired by the next
+// restart, and the server's holder table is advisory (source selection).
+async fn publish_p2p_have(
+	client: &rumqttc::AsyncClient,
+	events_topic: &str,
+	uid: &str,
+	seed: &[u8; 32],
+	debug: bool,
+) {
+	let conn = match manifest_conn() {
+		Some(c) => c,
+		None => return,   // no manifest yet; nothing to sync
+	};
+	let fileids: Vec<i64> = match conn.prepare("select FILEID from MANIFEST").ok() {
+		Some(mut sth) => match sth.query_map([], |r| r.get(0)).ok() {
+			Some(it) => it.filter_map(|r| r.ok()).collect(),
+			None => return,
+		},
+		None => return,
+	};
+	conn.close().ok();
+	if fileids.is_empty() {
+		return;   // nothing held; no sync to publish
+	}
+	let mut env = new_envelope("client", uid, "core", "p2p/have", "OK", Some(serde_json::json!({ "files": fileids })));
+	sign_envelope(&mut env, seed);
+	let bytes = match serde_json::to_vec(&env) {
+		Ok(b) => b,
+		Err(err) => { dbout(debug, 1, &format!("Unable to serialize the p2p/have sync: {}", err)); return; }
+	};
+	match client.publish(events_topic, rumqttc::QoS::AtMostOnce, false, bytes).await {
+		Ok(_) => dbout(debug, 3, &format!("Published the p2p/have startup sync ({} file(s))", fileids.len())),
+		Err(err) => dbout(debug, 2, &format!("p2p/have sync publish failed: {}", err)),
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -2913,7 +3611,11 @@ async fn main() {
 	// the clones before the control channel takes ownership of the client.
 	let p2p_mqtt = mqtt.as_ref().map(|(c, _, _)| c.clone());
 	let p2p_connected = mqtt.as_ref().map(|(_, _, f)| f.clone()).unwrap_or_else(|| Arc::new(AtomicBool::new(false)));
-	spawn(mqtt_run(debug, ccfg.clone(), mqtt));
+	// The used-token ring is shared by the 10704 seed handler, the 10464
+	// serving handler, and the fetcher (docs/p2p.md 5.3 item 5): a token
+	// consumed on any path is refused on the others.
+	let p2p_ring = token_ring_new();
+	spawn(mqtt_run(debug, ccfg.clone(), mqtt, p2p_ring.clone()));
 
 	// Local IPC listener (Lumy channel)
 	let ipc_addr: SocketAddr = format!("127.0.0.1:{}", LPORT).parse().expect("Invalid IPC socket address");
@@ -2956,10 +3658,14 @@ async fn main() {
 		}
 		_ => (String::new(), [0u8; 32], [0u8; 32]),
 	};
-	let p2p_ring = token_ring_new();
 	let p2p_resp_topic = format!("luminum/{}/{}/resp", ccfg.get("SID").cloned().unwrap_or_default(), p2p_uid);
 	let p2p_handle = tokio::runtime::Handle::current();
 	let dbc = debug;
+	// Clones for the 10464 peer listener (below): the 10704 accept loop's
+	// move closure takes ownership of the originals.
+	let p2p_cfg_peer = p2p_cfg.clone();
+	let p2p_uid_peer = p2p_uid.clone();
+	let p2p_ring_peer = p2p_ring.clone();
 	thread::spawn(move || {
 		for stream in datalistener.incoming() {
 			match stream {
@@ -2979,6 +3685,46 @@ async fn main() {
 				}
 				Err(err) => {
 					dbout(dbc, 2, &format!("Error establishing data connection: {}", err));
+				}
+			}
+		}
+	});
+
+	// P2P peer listener (client<->client file transfer, docs/p2p.md 2, 8.1;
+	// protocol 8.4). Bound at startup like the data listener; this endpoint
+	// serves a peer's grant (handle_peer_session). The 1-concurrent-session
+	// gate is shared across all peer connections.
+	let peer_addr: SocketAddr = format!("{}:{}", ip_address, PPORT).parse().expect("Invalid P2P socket address");
+	let peerlistener = match TcpListener::bind(peer_addr) {
+		Ok(l) => {
+			dbout(debug, 3, &format!("P2P peer connection configured on port {}", PPORT));
+			l
+		}
+		Err(err) => {
+			dbout(debug, 1, &format!("Unable to configure P2P peer connection: {}", err));
+			process::exit(1);
+		}
+	};
+	let p2p_serving = Arc::new(AtomicUsize::new(0));
+	let dbc2 = debug;
+	thread::spawn(move || {
+		for stream in peerlistener.incoming() {
+			match stream {
+				Ok(stream) => {
+					let (cfg, uid, seed, srvpub, ring, serving) = (
+						p2p_cfg_peer.clone(), p2p_uid_peer.clone(), p2p_seed, p2p_srvpub,
+						p2p_ring_peer.clone(), p2p_serving.clone(),
+					);
+					thread::spawn(move || {
+						if let Some(cfg) = cfg {
+							handle_peer_session(stream, cfg, uid, seed, srvpub, ring, serving, dbc2);
+						} else {
+							dbout(dbc2, 2, "P2P connection dropped: no client TLS certificate on file (the P2P channel is unavailable until the endpoint is certificated).");
+						}
+					});
+				}
+				Err(err) => {
+					dbout(dbc2, 2, &format!("Error establishing P2P connection: {}", err));
 				}
 			}
 		}

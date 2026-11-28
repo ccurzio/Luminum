@@ -632,7 +632,19 @@ New client config DB values: none (certificates are files: `config/client.crt`,
 Each phase is independently verifiable; Phases 3–5 give a working (server-seeded)
 deploy before any peer-to-peer traffic exists.
 
-**Status (2026-11-27): Phases 0–3 are complete.** Phase 3 (the seed path) landed
+**Status (2026-11-28): Phases 0–4 are complete.** Phase 4 (client P2P, Linux)
+landed as: the client's 10464 (`PPORT`) serving side (mutual-TLS acceptor,
+chain-to-root peer verification, cert-UID == grant-UID check, the source-side
+checklist of §5.3, serve-from-local-`Packages/`, 1-concurrent-session gate),
+the fetcher (dial-out over the grant's `sources[]`, present the grant, receive
+and verify each file, discard staging and walk to the next source on failure
+per §6.1), the one-shot `p2p/have` startup manifest publish, and the `p2p`
+check-in flag (advertised on the status check-in so the worker sets
+`STATUS.P2P`). Verified end-to-end by `tests/p2p_peer_test.sh` (two-client P2P
+transfer, tampered-hash rejection, grant-replay rejection, `p2p/have` and the
+`p2p` check-in flag; one real client plus a Perl stand-in peer, since two real
+clients cannot share one host's fixed 10464/10704 ports), with
+`tests/p2p_peer_helper.pl` as the stand-in peer. Phase 3 (the seed path) landed
 as: the client's inbound data handler on 10704 (rustls acceptor, chain-to-root
 peer verification per §4.4, staging/verify/install/manifest, terminal reports),
 the broker's grant minting and the push session (`Luminum::P2P::mint_grant` /

@@ -264,11 +264,16 @@ sub _on_status {
 	}
 	else {
 		my $data = (ref($env->{data}) eq "HASH") ? $env->{data} : {};
+		# P2P capability (docs/p2p.md 7.4): refreshed on every check-in so a
+		# client that loses the peer channel (or a pre-P2P client) is not
+		# selected as a source. An absent field means not capable, so it
+		# defaults to 0 - the same rule as broker.pl's bootstrap checkin().
+		my $p2p = (defined $data->{p2p} && $data->{p2p}) ? 1 : 0;
 		# A live check-in also clears the missing flag (protocol 7.5): a
 		# client that was swept into the Missing Clients list and comes back
 		# returns to the live list without any console action.
-		my $sth = $dbh->prepare("update STATUS set HOSTNAME = ?, IPV4 = ?, OSPLATFORM = ?, OSRELEASE = ?, CLIENTVER = ?, CSTATE = 'OK', LASTSEEN = now(), MISSING = 0 where ID = ?");
-		$sth->execute($data->{hostname} // "", $data->{ipv4} // "", $data->{osplat} // "", $data->{osrel} // "", $data->{clientver} // "", $uid)
+		my $sth = $dbh->prepare("update STATUS set HOSTNAME = ?, IPV4 = ?, OSPLATFORM = ?, OSRELEASE = ?, CLIENTVER = ?, P2P = ?, CSTATE = 'OK', LASTSEEN = now(), MISSING = 0 where ID = ?");
+		$sth->execute($data->{hostname} // "", $data->{ipv4} // "", $data->{osplat} // "", $data->{osrel} // "", $data->{clientver} // "", $p2p, $uid)
 			or do { $log->("status: update failed for UID $uid: " . $dbh->errstr); return; };
 		$log->("status: UID $uid OK");
 		_sync_checkin_interval($sysdb, $m, $seed, $sid, $uid, $data, $log);
@@ -492,6 +497,12 @@ sub _on_events {
 		&& _on_p2p_report($db, $contentdb, $uid, $data, $log)) {
 		return;
 	}
+	# p2p/have startup sync (docs/p2p.md 8.1, 10): the client re-asserts its
+	# manifest so PKGHOLDERS can be rebuilt after a restart.
+	if (($env->{action} // "") eq "p2p/have" && defined $data) {
+		Luminum::P2P::on_have(_dbh($contentdb), $uid, $data, $log);
+		return;
+	}
 	$log->("events: UID $uid " . ($env->{action} // "?") . " " . ($env->{status} // ""));
 }
 
@@ -659,7 +670,8 @@ sub _pump_deregs {
 # them for installed databases; this covers a worker pointed at a database
 # that predates them.
 sub _ensure_schema {
-	my ($db) = @_;
+	my ($db, $log) = @_;
+	$log = $log || sub { };
 	my $dbh = _dbh($db);
 	$dbh->do(qq{
 		create table if not exists QUERYRESULTS (
@@ -728,6 +740,17 @@ sub _ensure_schema {
 			unique key UQ_P2PTRANSFERS (AID,UID,FILEID)
 		) engine=InnoDB default charset=utf8mb4
 	});
+	# The P2P capability column (docs/p2p.md 7.4) on STATUS: the check-in
+	# folds it on every status update, so a worker pointed at a database that
+	# predates it must add the column first (the broker's Setup migration
+	# covers installed databases). Pre-existing rows default to 0 (not
+	# capable), which is correct until the client checks in.
+	my ($have_p2p) = map { $_->[0] }
+		@{ $dbh->selectall_arrayref(qq{select COLUMN_NAME from information_schema.COLUMNS where TABLE_SCHEMA = 'CLIENTS' and TABLE_NAME = 'STATUS' and COLUMN_NAME = 'P2P'}) || [] };
+	unless (defined $have_p2p) {
+		$dbh->do("alter table STATUS add P2P tinyint(1) NOT NULL DEFAULT 0")
+			or $log->("worker: cannot add the STATUS.P2P column: " . $dbh->errstr);
+	}
 }
 
 # Ensure the CONTENT database's P2P table exists (docs/p2p.md 9). schema.sql
@@ -828,7 +851,7 @@ sub worker {
 		eval {
 			$m->tick(0.25);
 			unless ($schema_ok) {
-				_ensure_schema($db);
+				_ensure_schema($db, $log);
 				eval { _ensure_content_schema($contentdb); } or do { $log->("worker: content schema: $@"); };
 				$schema_ok = 1;
 			}
